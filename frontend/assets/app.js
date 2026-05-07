@@ -313,14 +313,26 @@ const DEFAULT_BRAND_LOGO = 'assets/logo.png';
 const DEFAULT_FAVICON = 'assets/favicon.ico';
 const DEFAULT_DASHBOARD_BANNER = 'assets/banniere.png';
 
+function normalizeStaticAssetPath(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(?:[a-z]+:)?\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) {
+    return raw;
+  }
+  if (raw.startsWith('/')) {
+    return raw.replace(/^\/+/, '');
+  }
+  return raw;
+}
+
 function currentLogoSrc() {
   const configured = (state.settings && state.settings.brandLogo) ? String(state.settings.brandLogo).trim() : '';
-  return configured || DEFAULT_BRAND_LOGO;
+  return normalizeStaticAssetPath(configured) || DEFAULT_BRAND_LOGO;
 }
 
 function currentDashboardBannerSrc() {
   const configured = (state.settings && state.settings.dashboardBanner) ? String(state.settings.dashboardBanner).trim() : '';
-  return configured || DEFAULT_DASHBOARD_BANNER;
+  return normalizeStaticAssetPath(configured) || DEFAULT_DASHBOARD_BANNER;
 }
 
 function refreshDashboardBanner() {
@@ -328,8 +340,9 @@ function refreshDashboardBanner() {
   const img = document.getElementById('dashboardBannerImage');
   if (!wrap || !img) return;
   const configured = (state.settings && state.settings.dashboardBanner) ? String(state.settings.dashboardBanner).trim() : '';
-  const fallbacks = configured
-    ? [configured, DEFAULT_DASHBOARD_BANNER, 'banniere.png']
+  const normalizedConfigured = normalizeStaticAssetPath(configured);
+  const fallbacks = normalizedConfigured
+    ? [normalizedConfigured, DEFAULT_DASHBOARD_BANNER, 'banniere.png']
     : [DEFAULT_DASHBOARD_BANNER, 'banniere.png'];
   let index = 0;
   img.dataset.fallback = '0';
@@ -362,7 +375,7 @@ function updateDashboardBannerThumb(src) {
 /** Retourne la source favicon courante */
 function currentFaviconSrc() {
   const configured = (state.settings && state.settings.favicon) ? String(state.settings.favicon).trim() : '';
-  return configured || DEFAULT_FAVICON;
+  return normalizeStaticAssetPath(configured) || DEFAULT_FAVICON;
 }
 
 function addLogoPreserved(doc, x, y, maxW, maxH) {
@@ -3333,8 +3346,8 @@ function ensureBrandingSettingsUI() {
 function loadSettingsForm() {
   const get = id => document.getElementById(id);
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
-  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = state.settings.dashboardBanner || '';
-  updateDashboardBannerThumb(state.settings.dashboardBanner || '');
+  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = normalizeStaticAssetPath(state.settings.dashboardBanner || '');
+  updateDashboardBannerThumb(normalizeStaticAssetPath(state.settings.dashboardBanner || ''));
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
@@ -3344,12 +3357,12 @@ function loadSettingsForm() {
 
   ensureBrandingSettingsUI();
   if (get('settingBrandLogo')) {
-    get('settingBrandLogo').value = state.settings.brandLogo || '';
+    get('settingBrandLogo').value = normalizeStaticAssetPath(state.settings.brandLogo || '');
     const logoPreview = get('settingBrandLogoPreview');
     if (logoPreview) { logoPreview.src = currentLogoSrc(); logoPreview.style.display = 'block'; }
   }
   if (get('settingFavicon')) {
-    get('settingFavicon').value = state.settings.favicon || '';
+    get('settingFavicon').value = normalizeStaticAssetPath(state.settings.favicon || '');
     const fav = currentFaviconSrc();
     const favPreview = get('settingFaviconPreview');
     if (fav && favPreview) { favPreview.src = fav; favPreview.style.display = 'block'; }
@@ -3384,7 +3397,7 @@ function loadSettingsForm() {
 function saveSettings() {
   const get = id => document.getElementById(id);
   state.settings.theme = get('settingTheme')?.value || 'light';
-  state.settings.dashboardBanner = (get('settingDashboardBanner')?.value || '').trim();
+  state.settings.dashboardBanner = normalizeStaticAssetPath((get('settingDashboardBanner')?.value || '').trim());
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
   state.settings.classification = get('settingClassification')?.value || 'Non protégé';
   state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
@@ -3401,8 +3414,8 @@ function saveSettings() {
   state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
   state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
   state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.brandLogo = (get('settingBrandLogo')?.value || '').trim();
-  state.settings.favicon = (get('settingFavicon')?.value || '').trim();
+  state.settings.brandLogo = normalizeStaticAssetPath((get('settingBrandLogo')?.value || '').trim());
+  state.settings.favicon = normalizeStaticAssetPath((get('settingFavicon')?.value || '').trim());
 
   const parseList = id => (get(id)?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   if (get('settingEventTypes')) window.SICODDataModel?.setReferenceLabels(state, 'eventTypes', parseList('settingEventTypes'));
@@ -3845,8 +3858,8 @@ function loadSettingsForm() {
   const activeTab = document.querySelector('.settings-tab.active')?.dataset.settingsTab || 'general';
   ensureSettingsEnhancements();
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
-  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = state.settings.dashboardBanner || '';
-  updateDashboardBannerThumb(state.settings.dashboardBanner || '');
+  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = normalizeStaticAssetPath(state.settings.dashboardBanner || '');
+  updateDashboardBannerThumb(normalizeStaticAssetPath(state.settings.dashboardBanner || ''));
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
@@ -3854,7 +3867,7 @@ function loadSettingsForm() {
   if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
   if (get('settingPsSignatureRole')) get('settingPsSignatureRole').value = state.settings.psSignatureRole || '';
   if (get('settingBrandLogo')) {
-    get('settingBrandLogo').value = state.settings.brandLogo || '';
+    get('settingBrandLogo').value = normalizeStaticAssetPath(state.settings.brandLogo || '');
     const logoPreview = get('settingBrandLogoPreview');
     if (logoPreview) {
       logoPreview.src = currentLogoSrc();
@@ -3862,7 +3875,7 @@ function loadSettingsForm() {
     }
   }
   if (get('settingFavicon')) {
-    get('settingFavicon').value = state.settings.favicon || '';
+    get('settingFavicon').value = normalizeStaticAssetPath(state.settings.favicon || '');
     const favPreview = get('settingFaviconPreview');
     if (favPreview) {
       favPreview.src = currentFaviconSrc();
@@ -3919,7 +3932,7 @@ function saveSettings() {
     }
   }
   state.settings.theme = get('settingTheme')?.value || 'light';
-  state.settings.dashboardBanner = (get('settingDashboardBanner')?.value || '').trim();
+  state.settings.dashboardBanner = normalizeStaticAssetPath((get('settingDashboardBanner')?.value || '').trim());
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
   state.settings.classification = get('settingClassification')?.value || 'Non protégé';
   state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
@@ -3936,8 +3949,8 @@ function saveSettings() {
   state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
   state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
   state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.brandLogo = (get('settingBrandLogo')?.value || '').trim();
-  state.settings.favicon = (get('settingFavicon')?.value || '').trim();
+  state.settings.brandLogo = normalizeStaticAssetPath((get('settingBrandLogo')?.value || '').trim());
+  state.settings.favicon = normalizeStaticAssetPath((get('settingFavicon')?.value || '').trim());
   state.settings.pdfAppearance = {
     primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
     accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
