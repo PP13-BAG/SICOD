@@ -2,6 +2,19 @@
   'use strict';
 
   const AUTH_SESSION_KEY = 'sicodSupabaseSessionV1';
+  const REFERENCE_TABLES = {
+    eventTypes: 'reference_event_types',
+    commandTypes: 'reference_command_types',
+    directoryGroups: 'reference_directory_groups',
+    directoryEntities: 'reference_directory_entities',
+    planTypes: 'reference_plan_types',
+    planRiskTypes: 'reference_plan_risk_types',
+    planPriorities: 'reference_plan_priorities',
+    planStatuses: 'reference_plan_statuses',
+    dutyRoles: 'reference_duty_roles',
+    dutyAgents: 'reference_duty_agents',
+    reflexFamilies: 'reference_reflex_families'
+  };
   const BLUEPRINT_FALLBACK = {
     storageMode: 'supabase-auth-required',
     frontend: {
@@ -173,8 +186,7 @@
   }
 
   function getStorageModeLabel() {
-    if (storageMode === 'supabase') return 'Supabase sécurisé';
-    if (isSupabaseConfigured()) return 'Supabase · connexion requise';
+    if (isSupabaseConfigured()) return 'Base de donnée';
     return 'Mode non configuré';
   }
 
@@ -328,6 +340,62 @@
     });
   }
 
+  async function getSupabaseReferenceCollection(tableName) {
+    const query = new URLSearchParams();
+    query.set('select', 'id,code,slug,status,label,sort_order,is_active,deleted_at,replaced_by_id,updated_at,created_at');
+    query.set('order', 'sort_order.asc,label.asc');
+    const payload = await supabaseRequest(`/rest/v1/${tableName}?${query.toString()}`, {}, true);
+    return Array.isArray(payload) ? payload : [];
+  }
+
+  async function getSupabaseReferenceCatalog() {
+    const entries = await Promise.all(Object.entries(REFERENCE_TABLES).map(async ([key, table]) => {
+      const rows = await getSupabaseReferenceCollection(table);
+      return [key, rows];
+    }));
+    return Object.fromEntries(entries);
+  }
+
+  async function upsertSupabaseReferenceCollection(tableName, rows) {
+    return supabaseRequest(`/rest/v1/${tableName}?on_conflict=id`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(rows)
+    }, true);
+  }
+
+  async function pushSupabaseReferenceCatalog(catalog) {
+    const source = catalog && typeof catalog === 'object' ? catalog : {};
+    await Promise.all(Object.entries(REFERENCE_TABLES).map(async ([key, table]) => {
+      const rows = Array.isArray(source[key]) ? source[key] : [];
+      const payload = rows.map((item, index) => ({
+        id: item.id,
+        label: item.label,
+        code: item.code || null,
+        slug: item.slug || null,
+        status: item.status || 'active',
+        sort_order: Number.isFinite(item.sortOrder) ? item.sortOrder : index,
+        is_active: item.isActive !== false,
+        deleted_at: item.deletedAt || null,
+        replaced_by_id: item.replacedById || null,
+        updated_at: item.updatedAt || new Date().toISOString(),
+        created_at: item.createdAt || new Date().toISOString()
+      }));
+      await upsertSupabaseReferenceCollection(table, payload);
+    }));
+    return true;
+  }
+
+  async function getSupabaseRoles() {
+    const query = new URLSearchParams();
+    query.set('select', 'role_key');
+    const payload = await supabaseRequest(`/rest/v1/app_user_roles?${query.toString()}`, {}, true);
+    return Array.isArray(payload) ? payload.map(item => item.role_key).filter(Boolean) : [];
+  }
+
   function scheduleRemoteSave(data) {
     if (!isSupabaseConfigured() || !authSession?.accessToken) return;
     const serialized = JSON.stringify(data || {});
@@ -469,6 +537,25 @@
         const items = await getSupabaseDocumentTemplates(type);
         setRemoteMode('supabase');
         return items;
+      },
+      async getReferenceCatalog() {
+        if (!isSupabaseConfigured()) return {};
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return getSupabaseReferenceCatalog();
+      },
+      async pushReferenceCatalog(catalog) {
+        if (!isSupabaseConfigured()) throw new Error('Supabase n’est pas configuré.');
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        await pushSupabaseReferenceCatalog(catalog);
+        return true;
+      },
+      async getRoles() {
+        if (!isSupabaseConfigured()) return [];
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return getSupabaseRoles();
       }
     }
   };

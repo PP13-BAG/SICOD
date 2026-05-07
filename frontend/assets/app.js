@@ -35,7 +35,7 @@ function isLikelyFilePath(src){
 //
 // ARCHITECTURE :
 //   1. Constantes de données (logoBase64, reflexLibrary, commandTypes)
-//   2. Couche Storage (isolée — prête pour migration Cloudflare D1)
+//   2. Couche Storage (isolée — synchronisation Supabase)
 //   3. État applicatif (state) — unique, initialisé une seule fois
 //   4. Utilitaires globaux
 //   5. Modules par page (Dashboard, Événements, PS, Command, Fiches,
@@ -295,6 +295,51 @@ function getReferenceSnapshot(type, label) {
     id: ref?.id || '',
     label: ref?.label || String(label || '').trim()
   };
+}
+
+function applyReferenceCatalogToState(referenceCatalog) {
+  if (!referenceCatalog || typeof referenceCatalog !== 'object') return;
+  Object.entries(referenceCatalog).forEach(([key, rows]) => {
+    if (!Array.isArray(rows) || !rows.length) return;
+    state.referenceData = state.referenceData || {};
+    state.referenceData[key] = rows.map((row, index) => ({
+      id: row.id,
+      type: key,
+      code: row.code || row.slug || row.id,
+      label: row.label,
+      slug: row.slug || window.SICODDataModel?.slugify?.(row.label) || '',
+      status: row.status || 'active',
+      sortOrder: Number.isFinite(row.sort_order) ? row.sort_order : (Number.isFinite(row.sortOrder) ? row.sortOrder : index),
+      isActive: row.is_active !== false && row.isActive !== false,
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+      updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+      deletedAt: row.deleted_at || row.deletedAt || null,
+      replacedById: row.replaced_by_id || row.replacedById || null
+    }));
+  });
+  window.SICODDataModel?.ensureReferenceData(state, DEFAULT_DYNAMIC_LISTS);
+}
+
+async function pushReferenceCatalogToSupabase() {
+  if (!window.SICODApi?.system?.pushReferenceCatalog) return;
+  try {
+    await window.SICODApi.system.pushReferenceCatalog(state.referenceData || {});
+  } catch (error) {
+    console.warn('[Settings] Synchronisation des listes de reference impossible :', error.message);
+  }
+}
+
+async function hydrateReferenceCatalogFromSupabase() {
+  if (!window.SICODApi?.system?.getReferenceCatalog) return false;
+  try {
+    const referenceCatalog = await window.SICODApi.system.getReferenceCatalog();
+    if (!referenceCatalog || typeof referenceCatalog !== 'object') return false;
+    applyReferenceCatalogToState(referenceCatalog);
+    return true;
+  } catch (error) {
+    console.warn('[Settings] Chargement des listes de reference impossible :', error.message);
+    return false;
+  }
 }
 
 /** Peuple un <select> avec des options */
@@ -992,7 +1037,7 @@ function renderEvents() {
     </div>`;
   };
 
-  eventList.innerHTML = active.length ? active.map(tmpl).join('') : '<p class="help">Aucun événement actif.</p>';
+  eventList.innerHTML = active.length ? active.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   archiveList.innerHTML = archived.length ? archived.map(tmpl).join('') : '<p class="help">Aucune archive.</p>';
   updatePSEventSelect();
   populateCommuneDatalist();
@@ -1015,32 +1060,33 @@ let psMediaRecorder = null, psChunks = [];
 function openPSForm(id) {
   updatePSEventSelect();
   const ps = id ? byId(state.ps, id) : null;
+  const draft = !ps ? window.SICODPS?.loadDraft?.() : null;
   const targetEventId = ps?.eventId || state.currentEventId || document.getElementById('psEvent')?.value || '';
   if (targetEventId && isEventArchived(targetEventId)) { alert('Les points de situation d’un événement archivé ne sont pas modifiables.'); return; }
   document.getElementById('psId').value = ps?.id || '';
 
   const psEvent = document.getElementById('psEvent');
   const firstActiveEvent = getActiveItems(state.events).find(e => e.status !== 'Archivé');
-  if (psEvent) psEvent.value = ps?.eventId || state.currentEventId || firstActiveEvent?.id || '';
+  if (psEvent) psEvent.value = ps?.eventId || draft?.eventId || state.currentEventId || firstActiveEvent?.id || '';
 
-  document.getElementById('psAuthor').value = ps?.author || state.settings?.author || 'SIRACEDPC';
-  document.getElementById('psStatus').value = ps?.status || 'Brouillon';
-  document.getElementById('psClassification').value = ps?.classification || state.settings?.classification || 'Non protégé';
-  document.getElementById('psFormat').value = ps?.format || state.settings?.psFormat || 'detail';
-  document.getElementById('psTitle').value = ps?.title || '';
-  document.getElementById('psSituation').value = ps?.situation || '';
-  document.getElementById('psAttention').value = ps?.attention ?? ps?.points ?? '';
-  document.getElementById('psMeans').value = ps?.means ?? ps?.moyens ?? '';
-  document.getElementById('psMeasures').value = ps?.measures ?? ps?.mesures ?? '';
-  document.getElementById('psCommunication').value = ps?.communication || '';
-  document.getElementById('psImage').value = ps?.image || '';
-  document.getElementById('psImageCaption').value = ps?.imageCaption || '';
-  document.getElementById('psTranscript').value = ps?.transcript || '';
-  document.getElementById('psDcd').value = ps?.bilan?.dcd ?? 0;
-  document.getElementById('psUa').value = ps?.bilan?.ua ?? 0;
-  document.getElementById('psUr').value = ps?.bilan?.ur ?? 0;
-  document.getElementById('psImpliques').value = ps?.bilan?.impliques ?? 0;
-  document.getElementById('psBilanNotes').value = ps?.bilan?.notes || '';
+  document.getElementById('psAuthor').value = ps?.author || draft?.author || state.settings?.author || 'SIRACEDPC';
+  document.getElementById('psStatus').value = ps?.status || draft?.status || 'Brouillon';
+  document.getElementById('psClassification').value = ps?.classification || draft?.classification || state.settings?.classification || 'Non protégé';
+  document.getElementById('psFormat').value = ps?.format || draft?.format || state.settings?.psFormat || 'detail';
+  document.getElementById('psTitle').value = ps?.title || draft?.title || '';
+  document.getElementById('psSituation').value = ps?.situation || draft?.situation || '';
+  document.getElementById('psAttention').value = ps?.attention ?? ps?.points ?? draft?.attention ?? '';
+  document.getElementById('psMeans').value = ps?.means ?? ps?.moyens ?? draft?.means ?? '';
+  document.getElementById('psMeasures').value = ps?.measures ?? ps?.mesures ?? draft?.measures ?? '';
+  document.getElementById('psCommunication').value = ps?.communication || draft?.communication || '';
+  document.getElementById('psImage').value = ps?.image || draft?.image || '';
+  document.getElementById('psImageCaption').value = ps?.imageCaption || draft?.imageCaption || '';
+  document.getElementById('psTranscript').value = ps?.transcript || draft?.transcript || '';
+  document.getElementById('psDcd').value = ps?.bilan?.dcd ?? draft?.bilan?.dcd ?? 0;
+  document.getElementById('psUa').value = ps?.bilan?.ua ?? draft?.bilan?.ua ?? 0;
+  document.getElementById('psUr').value = ps?.bilan?.ur ?? draft?.bilan?.ur ?? 0;
+  document.getElementById('psImpliques').value = ps?.bilan?.impliques ?? draft?.bilan?.impliques ?? 0;
+  document.getElementById('psBilanNotes').value = ps?.bilan?.notes || draft?.bilan?.notes || '';
 
   updatePSImageThumb(ps?.image || '');
 
@@ -1060,6 +1106,38 @@ function openPSForm(id) {
   if (stopBtn) stopBtn.style.display = 'none';
 
   document.getElementById('psDialog').showModal();
+  ['psEvent','psAuthor','psStatus','psClassification','psFormat','psTitle','psSituation','psAttention','psMeans','psMeasures','psCommunication','psImage','psImageCaption','psTranscript','psDcd','psUa','psUr','psImpliques','psBilanNotes']
+    .forEach((idField) => {
+      const el = document.getElementById(idField);
+      if (!el) return;
+      const persistDraft = () => {
+        window.SICODPS?.saveDraft?.({
+          eventId: document.getElementById('psEvent')?.value || '',
+          author: document.getElementById('psAuthor')?.value || '',
+          status: document.getElementById('psStatus')?.value || '',
+          classification: document.getElementById('psClassification')?.value || '',
+          format: document.getElementById('psFormat')?.value || '',
+          title: document.getElementById('psTitle')?.value || '',
+          situation: document.getElementById('psSituation')?.value || '',
+          attention: document.getElementById('psAttention')?.value || '',
+          means: document.getElementById('psMeans')?.value || '',
+          measures: document.getElementById('psMeasures')?.value || '',
+          communication: document.getElementById('psCommunication')?.value || '',
+          image: document.getElementById('psImage')?.value || '',
+          imageCaption: document.getElementById('psImageCaption')?.value || '',
+          transcript: document.getElementById('psTranscript')?.value || '',
+          bilan: {
+            dcd: document.getElementById('psDcd')?.value || '0',
+            ua: document.getElementById('psUa')?.value || '0',
+            ur: document.getElementById('psUr')?.value || '0',
+            impliques: document.getElementById('psImpliques')?.value || '0',
+            notes: document.getElementById('psBilanNotes')?.value || ''
+          }
+        });
+      };
+      el.oninput = persistDraft;
+      if (el.tagName === 'SELECT') el.onchange = persistDraft;
+    });
 }
 
 function savePS() {
@@ -1106,10 +1184,17 @@ function savePS() {
     }
   };
 
+  const validation = window.SICODPS?.validate?.(data);
+  if (validation && validation.ok === false) {
+    alert(validation.message);
+    return;
+  }
+
   if (existing) Object.assign(existing, data);
   else state.ps.unshift(data);
   state.selectedPSId = id;
   state.currentEventId = eventId;
+  window.SICODPS?.clearDraft?.();
   persist();
   document.getElementById('psDialog').close();
   renderAll();
@@ -1150,7 +1235,7 @@ function renderPSList() {
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : '<p class="help">Aucun point de situation.</p>';
+    : (window.SICODUI?.setEmptyState?.('Aucun point de situation. Créer un premier point de situation.', 'Ajouter un point de situation', 'openPSForm()') || '<p class="help">Aucun point de situation.</p>');
   renderPSPreview();
 }
 
@@ -1797,7 +1882,8 @@ function getDefaultCommandMessage() {
 function openCommandForm(id) {
   ensureCommandState();
   const existing = id ? byId(state.commandMessages, id) : null;
-  const d = existing ? JSON.parse(JSON.stringify(existing)) : getDefaultCommandMessage();
+  const draft = !existing ? window.SICODCommand?.loadDraft?.() : null;
+  const d = existing ? JSON.parse(JSON.stringify(existing)) : Object.assign(getDefaultCommandMessage(), draft || {});
   document.getElementById('commandId').value = d.id || '';
   document.getElementById('cmdType').innerHTML = commandTypes.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join('');
   populateCommandEventSelect(d.eventId || '');
@@ -1825,6 +1911,14 @@ function openCommandForm(id) {
   renderServiceRows();
   renderCommandPreview(getCommandData());
   document.getElementById('commandDialog').showModal();
+  ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdPlan','cmdSirenLabel','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdExercise','cmdOriginalSigned']
+    .forEach((fieldId) => {
+      const el = document.getElementById(fieldId);
+      if (!el) return;
+      const persistDraft = () => window.SICODCommand?.saveDraft?.(getCommandData());
+      if (el.type === 'checkbox' || el.tagName === 'SELECT') el.onchange = persistDraft;
+      else el.oninput = persistDraft;
+    });
 }
 
 function saveCommandMessage() {
@@ -1846,10 +1940,16 @@ function saveCommandMessage() {
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
+  const validation = window.SICODCommand?.validate?.(payload);
+  if (validation && validation.ok === false) {
+    alert(validation.message);
+    return;
+  }
   if (existing) Object.assign(existing, payload);
   else state.commandMessages.unshift(payload);
   state.selectedCommandId = id;
   injectCommandIntoEventLog(existing || payload);
+  window.SICODCommand?.clearDraft?.();
   persist();
   document.getElementById('commandDialog').close();
   renderAll();
@@ -1895,7 +1995,7 @@ function renderCommandList() {
   const items = [...getActiveItems(state.commandMessages)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   if (!items.length) {
-    el.innerHTML = '<p class="help">Aucun message de commandement enregistré.</p>';
+    el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. Créer un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistré.</p>';
     return;
   }
   el.innerHTML = `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
@@ -2205,13 +2305,30 @@ function formatFicheSections(sections) {
 function openFicheForm(code) {
   const fiches = getReflexFiches();
   const fiche = code ? fiches.find(f => f.code === code) : null;
+  const draft = !fiche ? (() => { try { return JSON.parse(sessionStorage.getItem('sicodDraftFicheV1') || 'null'); } catch { return null; } })() : null;
   const familySelect = document.getElementById('ficheFamily');
   const familyOptions = Array.from(new Set([...getDynamicList('reflexFamilies'), ...fiches.map(f => f.family).filter(Boolean), fiche?.family || ''])).filter(Boolean);
-  setSelectOptions(familySelect, familyOptions, fiche?.family || familyOptions[0] || 'Autres');
+  setSelectOptions(familySelect, familyOptions, fiche?.family || draft?.family || familyOptions[0] || 'Autres');
   document.getElementById('ficheId').value = fiche?.code || '';
-  document.getElementById('ficheCode').value = fiche?.code || '';
-  document.getElementById('ficheTitle').value = fiche?.title || '';
-  document.getElementById('ficheSections').value = formatFicheSections(fiche?.sections || []);
+  document.getElementById('ficheCode').value = fiche?.code || draft?.code || '';
+  document.getElementById('ficheTitle').value = fiche?.title || draft?.title || '';
+  document.getElementById('ficheSections').value = formatFicheSections(fiche?.sections || draft?.sections || []);
+  ['ficheFamily','ficheCode','ficheTitle','ficheSections'].forEach((idField) => {
+    const el = document.getElementById(idField);
+    if (!el) return;
+    const saveDraft = () => {
+      try {
+        sessionStorage.setItem('sicodDraftFicheV1', JSON.stringify({
+          family: document.getElementById('ficheFamily')?.value || '',
+          code: document.getElementById('ficheCode')?.value || '',
+          title: document.getElementById('ficheTitle')?.value || '',
+          sections: parseFicheSections(document.getElementById('ficheSections')?.value || '')
+        }));
+      } catch {}
+    };
+    if (el.tagName === 'SELECT') el.onchange = saveDraft;
+    else el.oninput = saveDraft;
+  });
   ficheDialog.showModal();
 }
 
@@ -2233,6 +2350,7 @@ function saveFiche() {
   fiches.sort((a, b) => `${a.family} ${a.code}`.localeCompare(`${b.family} ${b.code}`, 'fr'));
   state.reflexFiches = fiches;
   state.selectedFiche = code;
+  try { sessionStorage.removeItem('sicodDraftFicheV1'); } catch {}
   persist();
   ficheDialog.close();
   renderFiches();
@@ -2458,7 +2576,9 @@ function importContactsCSV(file) {
   if (!file) return;
   file.text().then(text => {
     const lines = text.replaceAll('\r', '').split('\n').filter(Boolean);
+    if (lines.length < 2) { alert("Le fichier CSV d'annuaire est vide ou invalide."); return; }
     const data = lines.slice(1).map(line => line.split(/[;,]/).map(v => v.replace(/^"|"$/g, '')));
+    let imported = 0;
     data.forEach(cols => {
       const isNewFormat = cols.length >= 8;
       const nameIndex = isNewFormat ? 3 : 1;
@@ -2474,9 +2594,12 @@ function importContactsCSV(file) {
         email1: cols[isNewFormat ? 6 : 4] || '',
         email2: cols[isNewFormat ? 7 : 5] || ''
       });
+      imported += 1;
     });
+    if (!imported) { alert("Aucun contact exploitable n'a été trouvé dans ce fichier CSV."); return; }
     persist();
     renderDirectory();
+    alert(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
   });
 }
 
@@ -2759,6 +2882,7 @@ function savePlanItem() {
     approvalDate: document.getElementById('planApproval').value,
     observation: document.getElementById('planObservation').value.trim()
   };
+  if (!data.item) { alert("L'item de planification est requis."); return; }
   if (existing) Object.assign(existing, data);
   else state.planItems.unshift(data);
   persist();
@@ -2794,7 +2918,7 @@ function renderPlanning() {
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : '<p class="help">Aucun item de planification.</p>';
+    : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter une planification', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
 
   if (planningSummary) {
     const counts = {};
@@ -3022,6 +3146,8 @@ function saveDutyAvailability() {
     end: document.getElementById('dutyEnd').value,
     note: document.getElementById('dutyNote').value.trim()
   };
+  if (!data.agent || !data.role) { alert("Sélectionnez un agent et un rôle d'astreinte."); return; }
+  if (!data.start || !data.end || data.end < data.start) { alert("Définissez une période de disponibilité valide."); return; }
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
@@ -3052,7 +3178,7 @@ function renderDutyAvailabilityList() {
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : '<p class="help">Aucune disponibilité saisie.</p>';
+    : (window.SICODUI?.setEmptyState?.('Aucune disponibilité saisie. Ajouter une disponibilité.', 'Ajouter une disponibilité', 'openDutyAvailabilityForm()') || '<p class="help">Aucune disponibilité saisie.</p>');
 }
 
 function renderDutyCalendar() {
@@ -3338,41 +3464,6 @@ function ensureSettingsNavigatorUI() {
   tabs.hidden = true;
 }
 
-function _legacyEnsureBrandingSettingsUI() {
-  return;
-  const generalPanel = document.querySelector('[data-settings-panel="general"] .settings-grid');
-  if (!generalPanel || document.getElementById('brandingCard')) return;
-  const card = document.createElement('div');
-  card.className = 'card'; card.id = 'brandingCard';
-  card.innerHTML = `<div class="card-header"><h2 class="card-title">Logo et favicon</h2></div>
-  <div class="card-body">
-    <label for="settingBrandLogo">Logo du site et des documents</label>
-    <input id="settingBrandLogo" placeholder="URL, chemin local ou data URI">
-    <div style="margin-top:.75rem"><label for="settingBrandLogoFile">Importer un logo</label><input id="settingBrandLogoFile" type="file" accept="image/*"></div>
-    <div class="branding-preview"><img id="settingBrandLogoPreview" alt="Aperçu logo" style="display:none"></div>
-    <div style="margin-top:1rem"><label for="settingFavicon">Favicon</label><input id="settingFavicon" placeholder="Laisser vide pour utiliser favicon.ico à la racine"></div>
-    <div style="margin-top:.75rem"><label for="settingFaviconFile">Importer un favicon</label><input id="settingFaviconFile" type="file" accept="image/*,.ico"></div>
-    <div class="branding-preview"><img id="settingFaviconPreview" alt="Aperçu favicon" style="display:none"></div>
-    
-    <div class="list-actions" style="margin-top:1rem"><button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramètres</button></div>
-  </div>`;
-  generalPanel.appendChild(card);
-
-  const readFile = (file, targetInputId, targetPreviewId) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const input = document.getElementById(targetInputId);
-      const preview = document.getElementById(targetPreviewId);
-      if (input) input.value = reader.result;
-      if (preview) { preview.src = reader.result; preview.style.display = 'block'; }
-    };
-    reader.readAsDataURL(file);
-  };
-  document.getElementById('settingBrandLogoFile').onchange = e => readFile(e.target.files[0], 'settingBrandLogo', 'settingBrandLogoPreview');
-  document.getElementById('settingFaviconFile').onchange = e => readFile(e.target.files[0], 'settingFavicon', 'settingFaviconPreview');
-}
-
 function ensureSettingsCleanupUI() {
   const generalPanel = document.querySelector('[data-settings-panel="general"]');
   if (generalPanel) {
@@ -3407,117 +3498,6 @@ function ensureSettingsFooterActions() {
   pageInner.appendChild(wrap);
 }
 
-function _legacyLoadSettingsForm() {
-  const get = id => document.getElementById(id);
-  if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
-  if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
-  if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
-  if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
-  if (get('settingPsSignatureMode')) get('settingPsSignatureMode').value = state.settings.psSignatureMode || 'prefet';
-  if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
-  if (get('settingPsSignatureRole')) get('settingPsSignatureRole').value = state.settings.psSignatureRole || '';
-
-  ensureBrandingSettingsUI();
-  if (get('settingBrandLogo')) {
-    get('settingBrandLogo').value = normalizeStaticAssetPath(state.settings.brandLogo || '');
-    const logoPreview = get('settingBrandLogoPreview');
-    if (logoPreview) { logoPreview.src = currentLogoSrc(); logoPreview.style.display = 'block'; }
-  }
-  if (get('settingFavicon')) {
-    get('settingFavicon').value = normalizeStaticAssetPath(state.settings.favicon || '');
-    const fav = currentFaviconSrc();
-    const favPreview = get('settingFaviconPreview');
-    if (fav && favPreview) { favPreview.src = fav; favPreview.style.display = 'block'; }
-  }
-
-  if (get('settingEventTypes')) get('settingEventTypes').value = getDynamicList('eventTypes').join('\n');
-  if (get('settingCommandTypes')) get('settingCommandTypes').value = getDynamicList('commandTypes').join('\n');
-  if (get('settingCommandSignatureMode')) get('settingCommandSignatureMode').value = state.settings.commandSignatureMode || 'delegation';
-  if (get('settingCommandSignatureName')) get('settingCommandSignatureName').value = state.settings.commandSignatureName || '';
-  if (get('settingCommandSignatureRole')) get('settingCommandSignatureRole').value = state.settings.commandSignatureRole || '';
-  if (get('settingCommandPhone')) get('settingCommandPhone').value = state.settings.commandPhone || '';
-  if (get('settingCommandFax')) get('settingCommandFax').value = state.settings.commandFax || '';
-  if (get('settingCommandEmail')) get('settingCommandEmail').value = state.settings.commandEmail || '';
-  if (get('settingCommandAudioConf')) get('settingCommandAudioConf').value = state.settings.commandAudioConf || '';
-  if (get('settingDirectoryGroups')) get('settingDirectoryGroups').value = getDynamicList('directoryGroups').join('\n');
-  if (get('settingDirectoryEntities')) get('settingDirectoryEntities').value = getDynamicList('directoryEntities').join('\n');
-  if (get('settingPlanTypes')) get('settingPlanTypes').value = getDynamicList('planTypes').join('\n');
-  if (get('settingPlanRiskTypes')) get('settingPlanRiskTypes').value = getDynamicList('planRiskTypes').join('\n');
-  if (get('settingPlanPriorities')) get('settingPlanPriorities').value = getDynamicList('planPriorities').join('\n');
-  if (get('settingPlanStatuses')) get('settingPlanStatuses').value = getDynamicList('planStatuses').join('\n');
-  if (get('settingDutyRoles')) get('settingDutyRoles').value = getDynamicList('dutyRoles').join('\n');
-  if (get('settingDutySignerLastName')) get('settingDutySignerLastName').value = state.settings.dutySignerLastName || '';
-  if (get('settingDutySignerFirstName')) get('settingDutySignerFirstName').value = state.settings.dutySignerFirstName || '';
-  if (get('settingDutySignerFunction')) get('settingDutySignerFunction').value = state.settings.dutySignerFunction || '';
-  if (get('settingDutyAgents')) get('settingDutyAgents').value = getDynamicList('dutyAgents').join('\n');
-  if (get('settingReflexFamilies')) get('settingReflexFamilies').value = getDynamicList('reflexFamilies').join('\n');
-  if (get('settingPlanExpiryRules')) get('settingPlanExpiryRules').value = Object.entries(state.settings.planExpiryYears || {}).map(([k,v]) => `${k} = ${v}`).join('\n');
-
-  showSettingsTab('general');
-}
-
-function _legacySaveSettings() {
-  const get = id => document.getElementById(id);
-  state.settings.theme = get('settingTheme')?.value || 'light';
-  state.settings.dashboardBanner = normalizeStaticAssetPath((get('settingDashboardBanner')?.value || '').trim());
-  state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
-  state.settings.classification = get('settingClassification')?.value || 'Non protégé';
-  state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
-  state.settings.dutySignerLastName = (get('settingDutySignerLastName')?.value || '').trim();
-  state.settings.dutySignerFirstName = (get('settingDutySignerFirstName')?.value || '').trim();
-  state.settings.dutySignerFunction = (get('settingDutySignerFunction')?.value || '').trim();
-  state.settings.commandSignatureMode = get('settingCommandSignatureMode')?.value || 'delegation';
-  state.settings.commandSignatureName = (get('settingCommandSignatureName')?.value || '').trim();
-  state.settings.commandSignatureRole = (get('settingCommandSignatureRole')?.value || '').trim();
-  state.settings.commandPhone = (get('settingCommandPhone')?.value || '').trim();
-  state.settings.commandFax = (get('settingCommandFax')?.value || '').trim();
-  state.settings.commandEmail = (get('settingCommandEmail')?.value || '').trim();
-  state.settings.commandAudioConf = (get('settingCommandAudioConf')?.value || '').trim();
-  state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
-  state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
-  state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.brandLogo = normalizeStaticAssetPath((get('settingBrandLogo')?.value || '').trim());
-  state.settings.favicon = normalizeStaticAssetPath((get('settingFavicon')?.value || '').trim());
-
-  const parseList = id => (get(id)?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  if (get('settingEventTypes')) window.SICODDataModel?.setReferenceLabels(state, 'eventTypes', parseList('settingEventTypes'));
-  if (get('settingCommandTypes')) window.SICODDataModel?.setReferenceLabels(state, 'commandTypes', parseList('settingCommandTypes'));
-  window.SICODDataModel?.setReferenceLabels(state, 'directoryGroups', parseList('settingDirectoryGroups'));
-  if (get('settingDirectoryEntities')) window.SICODDataModel?.setReferenceLabels(state, 'directoryEntities', parseList('settingDirectoryEntities'));
-  window.SICODDataModel?.setReferenceLabels(state, 'planTypes', parseList('settingPlanTypes'));
-  if (get('settingPlanRiskTypes')) window.SICODDataModel?.setReferenceLabels(state, 'planRiskTypes', parseList('settingPlanRiskTypes'));
-  window.SICODDataModel?.setReferenceLabels(state, 'planPriorities', parseList('settingPlanPriorities'));
-  window.SICODDataModel?.setReferenceLabels(state, 'planStatuses', parseList('settingPlanStatuses'));
-  window.SICODDataModel?.setReferenceLabels(state, 'dutyRoles', parseList('settingDutyRoles'));
-  window.SICODDataModel?.setReferenceLabels(state, 'dutyAgents', parseList('settingDutyAgents'));
-  window.SICODDataModel?.setReferenceLabels(state, 'reflexFamilies', parseList('settingReflexFamilies'));
-  if (get('settingPlanExpiryRules')) {
-    const rules = {};
-    parseList('settingPlanExpiryRules').forEach(line => {
-      const parts = line.split('=');
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        const value = Number(parts.slice(1).join('=').trim());
-        if (key && Number.isFinite(value) && value > 0) rules[key] = value;
-      }
-    });
-    state.settings.planExpiryYears = rules;
-  }
-
-  persist();
-  applyTheme(state.settings.theme);
-applySidebarState();
-  applyBrandAssets();
-  renderDirectory();
-  renderPlanning();
-  renderDutyCalendar();
-  renderDutyAvailabilityList();
-  renderDutySchedule();
-  renderPlanningStats();
-  renderDutyStats();
-  alert('Paramètres enregistrés.');
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 // 18. STYLES DYNAMIQUES (injected CSS pour les composants Stats/Branding)
 // ────────────────────────────────────────────────────────────────────────────
@@ -3545,13 +3525,6 @@ applySidebarState();
   `;
   document.head.appendChild(style);
 })();
-
-const settingsRuntime = {
-  blueprint: null
-};
-const authRuntime = {
-  hydratedOnce: false
-};
 
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
@@ -3715,45 +3688,6 @@ async function logoutSupabaseSession() {
   hydrateAuthAccessPanel();
 }
 
-function ensureBrandingSettingsUI() {
-  const generalPanel = document.querySelector('[data-settings-panel="general"] .settings-grid');
-  if (!generalPanel || document.getElementById('brandingCard')) return;
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.id = 'brandingCard';
-  card.innerHTML = `<div class="card-header"><h2 class="card-title">Logo et favicon</h2></div>
-  <div class="card-body">
-    <label for="settingBrandLogo">Logo du site et des documents</label>
-    <input id="settingBrandLogo" placeholder="URL, chemin local ou data URI">
-    <div class="field-stack"><label for="settingBrandLogoFile">Importer un logo</label><input id="settingBrandLogoFile" type="file" accept="image/*"></div>
-    <div class="branding-preview"><img id="settingBrandLogoPreview" alt="Aperçu logo" style="display:none"></div>
-    <div class="field-stack"><label for="settingFavicon">Favicon</label><input id="settingFavicon" placeholder="Laisser vide pour utiliser assets/favicon.ico"></div>
-    <div class="field-stack"><label for="settingFaviconFile">Importer un favicon</label><input id="settingFaviconFile" type="file" accept="image/*,.ico"></div>
-    <div class="branding-preview"><img id="settingFaviconPreview" alt="Aperçu favicon" style="display:none"></div>
-    <p class="help">Pour un hébergement statique simple, privilégier des assets dans <code>frontend/assets/</code> ou des data URI.</p>
-    <div class="list-actions"><button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramètres</button></div>
-  </div>`;
-  generalPanel.appendChild(card);
-
-  const readFile = (file, targetInputId, targetPreviewId) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const input = document.getElementById(targetInputId);
-      const preview = document.getElementById(targetPreviewId);
-      if (input) input.value = reader.result;
-      if (preview) {
-        preview.src = reader.result;
-        preview.style.display = 'block';
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  document.getElementById('settingBrandLogoFile').onchange = e => readFile(e.target.files[0], 'settingBrandLogo', 'settingBrandLogoPreview');
-  document.getElementById('settingFaviconFile').onchange = e => readFile(e.target.files[0], 'settingFavicon', 'settingFaviconPreview');
-}
-
 function ensureExportSettingsUI() {
   const tabs = document.querySelector('.settings-tabs');
   if (tabs && !tabs.querySelector('[data-settings-tab="exports"]')) {
@@ -3780,7 +3714,7 @@ function ensureExportSettingsUI() {
         <label for="settingDocumentTemplates">JSON des modèles</label>
         <textarea id="settingDocumentTemplates" class="code-area" spellcheck="false"></textarea>
         <p class="help">Pour créer un nouveau modèle, dupliquer un objet, changer <code>id</code>, <code>name</code>, <code>version</code>, <code>variant</code> et <code>layout.sections</code>, puis enregistrer.</p>
-        <div class="list-actions"><button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramètres</button></div>
+
       </div>
     </div>
     <div class="settings-grid">
@@ -3816,69 +3750,6 @@ function ensureExportSettingsUI() {
   </div>`;
   const usersPanel = pageInner.querySelector('[data-settings-panel="users"]');
   pageInner.insertBefore(panel, usersPanel || null);
-}
-
-function _legacyEnsureSystemSettingsUI() {
-  const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
-  if (!generalGrid || document.getElementById('systemCard')) return;
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.id = 'systemCard';
-  card.innerHTML = `<div class="card-header"><h2 class="card-title">Base de donnÃ©e</h2></div>
-  <div class="card-body">
-    <div id="systemBlueprintList" class="info-pairs">
-      <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise')}</span></div>
-      <div><strong>Cible</strong><span>GitHub Pages ou hebergement statique + Supabase</span></div>
-    </div>
-    <p class="help">L application utilise désormais Supabase comme source de vérité unique. Les données métier ne sont plus conservées dans le navigateur entre deux sessions.</p>
-  </div>`;
-  generalGrid.appendChild(card);
-  const cardBody = card.querySelector('.card-body');
-  if (cardBody) {
-    const title = card.querySelector('.card-title');
-    if (title) title.textContent = 'Base de donnée';
-    const blueprintMount = card.querySelector('#systemBlueprintList');
-    if (blueprintMount) blueprintMount.innerHTML = '';
-    const introHelp = cardBody.querySelector('.help');
-    if (introHelp) introHelp.remove();
-    const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
-    const providerGrid = document.createElement('div');
-    providerGrid.className = 'grid-2';
-    providerGrid.style.marginTop = '1rem';
-    providerGrid.innerHTML = `
-      <div><label>Fournisseur</label><input value="Supabase" readonly></div>
-      <div><label>Mode</label><input value="${remoteConfig.enabled ? 'Base de données active' : 'Configuration manquante'}" readonly></div>
-      <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
-      <div><label>Project ref</label><input value="${esc(remoteConfig.projectRef || '')}" readonly></div>
-    `;
-    const providerLabels = providerGrid.querySelectorAll('label');
-    if (providerLabels[0]) providerLabels[0].textContent = 'Fournisseur';
-    if (providerLabels[1]) providerLabels[1].textContent = 'Accès';
-    const providerInputs = providerGrid.querySelectorAll('input');
-    if (providerInputs[1]) providerInputs[1].value = remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante';
-    const actions = document.createElement('div');
-    actions.className = 'cloud-admin-grid';
-    actions.innerHTML = `
-      <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Verifier la connexion</button>
-      <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les donnees</button>
-      <button class="fr-btn secondary" type="button" onclick="pushCurrentStateToSupabase()">Pousser vers Supabase</button>
-      <button class="fr-btn secondary" type="button" onclick="reloadStateFromSupabase()">Recharger depuis Supabase</button>
-    `;
-    const importWrap = document.createElement('div');
-    importWrap.className = 'field-stack';
-    importWrap.innerHTML = `
-      <label for="cloudStateImportFile">Importer un export JSON dans Supabase</label>
-      <input id="cloudStateImportFile" type="file" accept="application/json,.json">
-    `;
-    const status = document.createElement('div');
-    status.id = 'cloudStateStatus';
-    status.className = 'cloud-status-panel help';
-    status.textContent = 'Aucun contrôle exécuté pour le moment.';
-    cardBody.appendChild(providerGrid);
-    cardBody.appendChild(actions);
-    cardBody.appendChild(importWrap);
-    cardBody.appendChild(status);
-  }
 }
 
 function countStateRecords(stateSnapshot) {
@@ -3954,6 +3825,7 @@ async function pushCurrentStateToSupabase() {
   updateCloudStateStatus('Envoi de l’état courant vers Supabase...', 'info');
   try {
     ensureStateIntegrity();
+    await pushReferenceCatalogToSupabase();
     await window.SICODApi.system.pushRemoteState(state);
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
@@ -3978,6 +3850,8 @@ async function reloadStateFromSupabase() {
       return;
     }
     applyRemoteStateSnapshot(payload.state);
+    await hydrateReferenceCatalogFromSupabase();
+    renderAll();
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
       <strong>État Supabase rechargé.</strong><br>
@@ -4006,6 +3880,7 @@ function bindCloudStateImport() {
       Object.keys(state).forEach((key) => delete state[key]);
       Object.assign(state, fresh);
       ensureStateIntegrity();
+      await pushReferenceCatalogToSupabase();
       applyTheme(state.settings.theme);
       renderAll();
       refreshStorageStatus();
@@ -4021,36 +3896,6 @@ function bindCloudStateImport() {
   });
 }
 
-function bindBrowserStateImport() {
-  const input = document.getElementById('browserStateImportFile');
-  if (!input || input.dataset.bound === '1') return;
-  input.dataset.bound = '1';
-  input.addEventListener('change', async (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (!file) return;
-    updateCloudStateStatus(`Restauration locale de ${esc(file.name)} en cours...`, 'info');
-    try {
-      const raw = await file.text();
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') throw new Error('Le fichier JSON ne contient pas un Ã©tat valide.');
-      applyRemoteStateSnapshot(parsed);
-      persist();
-      const counts = countStateRecords(state);
-      updateCloudStateStatus(`
-        <strong>Restauration locale terminÃ©e.</strong><br>
-        Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
-      `, 'success');
-      input.value = '';
-    } catch (error) {
-      updateCloudStateStatus(`Restauration locale impossible : ${esc(error.message || String(error))}`, 'warning');
-    }
-  });
-}
-
-async function checkCloudflareState() { return checkSupabaseState(); }
-async function pushCurrentStateToCloudflare() { return pushCurrentStateToSupabase(); }
-async function reloadStateFromCloudflare() { return reloadStateFromSupabase(); }
-
 function renderPdfTemplateGuide() {
   const mount = document.getElementById('pdfTemplateGuideList');
   if (!mount) return;
@@ -4058,86 +3903,6 @@ function renderPdfTemplateGuide() {
   mount.innerHTML = guide.length
     ? `<div class="info-pairs">${guide.map(item => `<div><strong>${esc(item.field)}</strong><span>${esc(item.label)} · ${esc(item.use)}</span></div>`).join('')}</div>`
     : '<p class="help">Guide indisponible.</p>';
-}
-
-function _legacyEnsureHostingInfoUI() {
-  const panel = document.querySelector('[data-settings-panel="users"] .card');
-  if (!panel) return;
-  const title = panel.querySelector('.card-title');
-  if (title) title.textContent = 'Accès et hébergement';
-  const body = panel.querySelector('.card-body');
-  if (!body) return;
-  body.innerHTML = `
-    <p class="help">Ce projet vise désormais un frontend statique publié sur GitHub Pages ou un autre hébergement simple, avec une synchronisation des données vers Supabase.</p>
-    <table class="table">
-      <thead><tr><th>Sujet</th><th>Référence</th><th>Usage</th></tr></thead>
-      <tbody>
-        <tr><td>Publication statique</td><td><code>docs/github-pages-supabase.md</code></td><td>Déploiement GitHub Pages</td></tr>
-        <tr><td>Base partagée</td><td><code>docs/supabase-setup.md</code></td><td>Configuration Supabase</td></tr>
-        <tr><td>Schéma SQL</td><td><code>supabase/schema.sql</code></td><td>Initialisation de la base</td></tr>
-      </tbody>
-    </table>
-  `;
-  body.innerHTML = `
-    <p class="help">Les comptes se gerent dans Supabase Auth. Le site peut rester public, mais les donnees restent protegees par l authentification et les regles RLS.</p>
-    <div class="info-pairs" id="accessInfoPairs"></div>
-  `;
-}
-
-function _legacyUpgradeHostingInfoUI() {
-  const panel = document.querySelector('[data-settings-panel="users"] .card');
-  if (!panel) return;
-  const title = panel.querySelector('.card-title');
-  if (title) title.textContent = 'Acces et securite';
-  const body = panel.querySelector('.card-body');
-  if (!body) return;
-  const authState = window.SICODApi?.system?.getAuthState?.() || {};
-  body.innerHTML = `
-    <div class="info-pairs">
-      <div><strong>Protection</strong><span>Supabase Auth</span></div>
-      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecté' : (authState.configured ? 'Connexion requise' : 'Non configuré'))}</span></div>
-      <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Aucun')}</span></div>
-      <div><strong>Administration</strong><span>Utilisateurs gérés dans Supabase Auth</span></div>
-    </div>
-    <table class="table" style="margin-top:1rem">
-      <thead><tr><th>Sujet</th><th>Reference</th><th>Usage</th></tr></thead>
-      <tbody>
-        <tr><td>Publication statique</td><td><code>docs/github-pages-supabase.md</code></td><td>Deploiement GitHub Pages</td></tr>
-        <tr><td>Base partagee</td><td><code>docs/supabase-setup.md</code></td><td>Configuration Supabase</td></tr>
-        <tr><td>Securite SQL</td><td><code>supabase/schema.sql</code></td><td>RLS et acces authentifie</td></tr>
-      </tbody>
-    </table>
-  `;
-}
-
-function _legacyHydrateAuthAccessPanel() {
-  upgradeHostingInfoUI();
-}
-
-async function _legacyHydrateSystemBlueprint() {
-  const mount = document.getElementById('systemBlueprintList');
-  if (!mount) return;
-  const authState = window.SICODApi?.system?.getAuthState?.() || {};
-  mount.innerHTML = `
-    <div><strong>Mode</strong><span>Base de donnée</span></div>
-    <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Connexion requise')}</span></div>
-  `;
-  return;
-  try {
-    settingsRuntime.blueprint = settingsRuntime.blueprint || await window.SICODApi.system.getBlueprint();
-  } catch (error) {
-    console.warn('[Settings] Blueprint indisponible :', error.message);
-  }
-  const blueprint = settingsRuntime.blueprint;
-  if (!blueprint) return;
-  mount.innerHTML = `
-    <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise')}</span></div>
-    <div><strong>Frontend cible</strong><span>${esc(blueprint.targetPlatform?.frontend || 'GitHub Pages ou hébergement statique')}</span></div>
-    <div><strong>Base cible</strong><span>${esc(blueprint.targetPlatform?.database || 'Supabase PostgreSQL')}</span></div>
-    <div><strong>Authentification</strong><span>${esc(blueprint.targetPlatform?.auth || 'Supabase Auth')}</span></div>
-    <div><strong>Objets / médias</strong><span>${esc(blueprint.targetPlatform?.objectStorage || 'Supabase Storage')}</span></div>
-    <div><strong>Entrée frontend</strong><code>${esc(blueprint.frontend?.entrypoint || '/index.html')}</code></div>
-  `;
 }
 
 function ensureSystemSettingsUI() {
@@ -4226,12 +3991,9 @@ async function hydrateSystemBlueprint() {
   `;
 }
 
-function ensureBrandingSettingsUI() {}
-
 function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
-  ensureBrandingSettingsUI();
   ensureSystemSettingsUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
@@ -4285,11 +4047,15 @@ function loadSettingsForm() {
   refreshStorageStatus();
 }
 
-function saveSettings() {
+async function saveSettings() {
   const get = id => document.getElementById(id);
   if (get('settingDocumentTemplates')) {
     try {
       const parsedTemplates = JSON.parse(get('settingDocumentTemplates').value || '[]');
+      const validation = window.SICODPdf?.validateTemplateList?.(parsedTemplates);
+      if (validation && validation.valid === false) {
+        throw new Error(validation.message || 'Modele PDF invalide.');
+      }
       window.SICODPdfTemplates?.setTemplates(state, parsedTemplates);
     } catch (error) {
       showSettingsTab('exports');
@@ -4353,6 +4119,7 @@ function saveSettings() {
     state.settings.planExpiryYears = rules;
   }
 
+  await pushReferenceCatalogToSupabase();
   persist();
   applyTheme(state.settings.theme);
   applySidebarState();
@@ -4419,15 +4186,20 @@ window.SICODApi?.auth?.restoreSession?.()
   .then(() => {
     refreshAuthGate();
     hydrateAuthAccessPanel();
-    return window.SICODApi?.system?.hydrateState?.();
+    return Promise.all([
+      window.SICODApi?.system?.hydrateState?.(),
+      hydrateReferenceCatalogFromSupabase()
+    ]);
   })
-  .then((remoteState) => {
+  .then(async ([remoteState]) => {
     if (remoteState && typeof remoteState === 'object') {
       applyRemoteStateSnapshot(remoteState);
-      authRuntime.hydratedOnce = true;
+      await hydrateReferenceCatalogFromSupabase();
+      renderAll();
     } else {
       refreshStorageStatus();
       persist();
+      renderAll();
     }
   })
   .catch((error) => {
