@@ -1,0 +1,18 @@
+{
+	"name": "sicod-pages",
+	"compatibility_date": "2026-05-06",
+	"pages_build_output_dir": "frontend",
+	"vars": {
+		"APP_NAME": "SICOD",
+		"APP_ENV": "production"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "sicod-prod",
+			"database_id": "2ac77ffa-ed02-4c11-8688-7657134eb1c7",
+			"preview_database_id": "e1403603-2efe-4f19-ba5b-0a8f49fdae39",
+			"migrations_dir": "cloudflare/migrations"
+		}
+	]
+}
