@@ -49,12 +49,9 @@ Dans l application :
 1. ouvrir `Parametres`
 2. section `Stockage et synchronisation`
 3. renseigner :
-   - `Fournisseur distant` : `Supabase`
-   - `Activation` : `Activer la synchronisation distante`
-   - `URL Supabase`
-   - `Project ref`
-   - `Cle publique Supabase`
-4. enregistrer les parametres
+   - aucun secret manuel a saisir si `frontend/assets/config.js` est deja renseigne
+   - verifier seulement que l URL Supabase publiee correspond bien au projet
+4. enregistrer les autres parametres applicatifs si besoin
 
 Ensuite :
 
@@ -64,7 +61,7 @@ Ensuite :
 
 Le bandeau doit ensuite afficher :
 
-- `Supabase + cache local`
+- `Supabase sécurisé`
 
 ## 5. Import initial des donnees existantes
 
@@ -74,9 +71,7 @@ Si tu as deja un export JSON :
 2. section `Stockage et synchronisation`
 3. utiliser `Importer un export JSON dans Supabase`
 
-Pour une restauration locale de secours :
-
-1. utiliser `Restaurer un export JSON dans le navigateur`
+Le JSON exporte sert de sauvegarde de secours ou de migration.
 
 ## 6. Ce qui est public et ce qui ne l est pas
 
@@ -105,7 +100,7 @@ Dans Supabase :
 Dans l application :
 
 - la connexion Supabase est verte
-- le bandeau passe sur `Supabase + cache local`
+- le bandeau passe sur `Supabase sécurisé`
 - les listes et exports restent fonctionnels
 
 ## 8. Depannage connexion

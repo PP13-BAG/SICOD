@@ -6,7 +6,7 @@ Cette cible remplace avantageusement `pages.dev` si ce domaine est filtre sur le
 
 - le frontend statique SICOD est publie sur GitHub Pages
 - les donnees et modeles PDF sont stockes dans Supabase
-- l application reste utilisable aussi en local
+- aucune donnee metier n est conservee durablement dans le navigateur
 - l acces aux donnees se fait apres authentification Supabase
 
 ## 1. Creer le depot GitHub
@@ -39,10 +39,9 @@ Une fois le site publie :
 1. ouvrir l application GitHub Pages
 2. se connecter avec un compte Supabase Auth
 3. aller dans `Parametres`
-4. configurer la section `Stockage et synchronisation`
-5. activer `Supabase`
-6. verifier la connexion
-7. pousser l etat courant
+4. verifier la section `Stockage et synchronisation`
+5. verifier la connexion
+6. pousser l etat courant
 
 ## 5. Securite
 

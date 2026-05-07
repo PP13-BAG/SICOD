@@ -140,12 +140,18 @@ function buildDefaultState() {
 }
 
 // Chargement unique de l'état
-const _saved = Storage.load();
+function isAuthLocked() {
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  return !!authState.configured && !authState.authenticated;
+}
+
+const _saved = isAuthLocked() ? null : Storage.load();
 const state = Object.assign(buildDefaultState(), _saved || {});
+if (isAuthLocked()) clearLocalStateCache();
 
 function ensureStateIntegrity() {
   state.settings = Object.assign({}, DEFAULT_SETTINGS, state.settings || {});
-  state.settings.remoteSync = Object.assign({}, DEFAULT_SETTINGS.remoteSync, state.settings.remoteSync || {});
+  state.settings.remoteSync = Object.assign({}, DEFAULT_SETTINGS.remoteSync, state.settings.remoteSync || {}, window.SICODApi?.system?.getRemoteConfig?.() || {});
   state.settings.dynamicLists = Object.assign({}, state.settings.dynamicLists || {});
   if (!Array.isArray(state.planItems)) state.planItems = [];
   if (!Array.isArray(state.dutyAvailabilities)) state.dutyAvailabilities = [];
@@ -164,11 +170,27 @@ function ensureStateIntegrity() {
 }
 
 ensureStateIntegrity();
+clearLocalStateCache();
 window.SICODApi?.system?.setRemoteConfig?.(state.settings.remoteSync);
 
 // persist() — unique, stable
 function persist() {
   Storage.save(state);
+}
+
+function clearLocalStateCache() {
+  try {
+    localStorage.removeItem('sicodStateV13');
+    localStorage.removeItem('sicodRemoteConfigV1');
+    localStorage.removeItem('sicod_sidebar_collapsed');
+  } catch {}
+}
+
+function resetStateToDefaults() {
+  const fresh = buildDefaultState();
+  Object.keys(state).forEach((key) => delete state[key]);
+  Object.assign(state, fresh);
+  ensureStateIntegrity();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -536,8 +558,7 @@ function applyBrandAssets() {
 function applySidebarState() {
   const layout = document.getElementById('appLayout');
   if (!layout) return;
-  const collapsed = localStorage.getItem('sicod_sidebar_collapsed') === '1';
-  layout.classList.toggle('sidebar-collapsed', collapsed);
+  layout.classList.toggle('sidebar-collapsed', layout.dataset.sidebarCollapsed === '1');
 }
 
 function toggleSidebar() {
@@ -545,7 +566,7 @@ function toggleSidebar() {
   if (!layout) return;
   const collapsed = !layout.classList.contains('sidebar-collapsed');
   layout.classList.toggle('sidebar-collapsed', collapsed);
-  localStorage.setItem('sicod_sidebar_collapsed', collapsed ? '1' : '0');
+  layout.dataset.sidebarCollapsed = collapsed ? '1' : '0';
 }
 
 /** Applique le thème clair/sombre */
@@ -597,6 +618,7 @@ function psSourcesHtml(ps) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function goPage(page) {
+  if (isAuthLocked()) return;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
   if (page === 'fiches') renderFiches();
@@ -3506,7 +3528,7 @@ const authRuntime = {
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
   if (!label) return;
-  label.textContent = window.SICODApi?.system?.getStorageModeLabel?.() || 'Stockage local navigateur';
+  label.textContent = window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise';
 }
 
 function ensureAuthGateUI() {
@@ -3552,6 +3574,8 @@ function refreshAuthGate() {
   const requiresAuth = !!authState.configured && !authState.authenticated;
   gate.hidden = !requiresAuth;
   document.body.classList.toggle('auth-required', requiresAuth);
+  const appLayout = document.getElementById('appLayout');
+  if (appLayout) appLayout.hidden = requiresAuth;
 }
 
 function updateAuthGateStatus(message, tone = 'info') {
@@ -3635,6 +3659,9 @@ async function logoutSupabaseSession() {
   } catch (error) {
     updateCloudStateStatus(`Deconnexion Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
   }
+  clearLocalStateCache();
+  resetStateToDefaults();
+  renderAll();
   refreshAuthGate();
   refreshStorageStatus();
   hydrateAuthAccessPanel();
@@ -3752,23 +3779,23 @@ function ensureSystemSettingsUI() {
   card.innerHTML = `<div class="card-header"><h2 class="card-title">Stockage et synchronisation</h2></div>
   <div class="card-body">
     <div id="systemBlueprintList" class="info-pairs">
-      <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Stockage local navigateur')}</span></div>
+      <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise')}</span></div>
       <div><strong>Cible</strong><span>GitHub Pages ou hebergement statique + Supabase</span></div>
     </div>
-    <p class="help">L application reste pleinement fonctionnelle en local et peut synchroniser son état vers Supabase sans backend applicatif dédié. En mode distant, l accès aux données est conditionné à une connexion Supabase Auth.</p>
+    <p class="help">L application utilise désormais Supabase comme source de vérité unique. Les données métier ne sont plus conservées dans le navigateur entre deux sessions.</p>
   </div>`;
   generalGrid.appendChild(card);
   const cardBody = card.querySelector('.card-body');
   if (cardBody) {
+    const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
     const providerGrid = document.createElement('div');
     providerGrid.className = 'grid-2';
     providerGrid.style.marginTop = '1rem';
     providerGrid.innerHTML = `
-      <div><label for="settingRemoteProvider">Fournisseur distant</label><select id="settingRemoteProvider"><option value="none">Aucun</option><option value="supabase">Supabase</option></select></div>
-      <div><label for="settingRemoteEnabled">Activation</label><select id="settingRemoteEnabled"><option value="0">Mode local uniquement</option><option value="1">Activer la synchronisation distante</option></select></div>
-      <div><label for="settingSupabaseUrl">URL Supabase</label><input id="settingSupabaseUrl" placeholder="https://xxxxx.supabase.co"></div>
-      <div><label for="settingSupabaseProjectRef">Project ref</label><input id="settingSupabaseProjectRef" placeholder="xxxxx"></div>
-      <div class="full"><label for="settingSupabaseAnonKey">Clé publique Supabase</label><textarea id="settingSupabaseAnonKey" style="min-height:8rem" spellcheck="false" placeholder="sb_publishable_xxx ou clé anon"></textarea></div>
+      <div><label>Fournisseur distant</label><input value="Supabase" readonly></div>
+      <div><label>Mode</label><input value="${remoteConfig.enabled ? 'Base de données active' : 'Configuration manquante'}" readonly></div>
+      <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
+      <div><label>Project ref</label><input value="${esc(remoteConfig.projectRef || '')}" readonly></div>
     `;
     const actions = document.createElement('div');
     actions.className = 'cloud-admin-grid';
@@ -3784,12 +3811,6 @@ function ensureSystemSettingsUI() {
       <label for="cloudStateImportFile">Importer un export JSON dans Supabase</label>
       <input id="cloudStateImportFile" type="file" accept="application/json,.json">
     `;
-    const browserImportWrap = document.createElement('div');
-    browserImportWrap.className = 'field-stack';
-    browserImportWrap.innerHTML = `
-      <label for="browserStateImportFile">Restaurer un export JSON dans le navigateur</label>
-      <input id="browserStateImportFile" type="file" accept="application/json,.json">
-    `;
     const status = document.createElement('div');
     status.id = 'cloudStateStatus';
     status.className = 'cloud-status-panel help';
@@ -3797,7 +3818,6 @@ function ensureSystemSettingsUI() {
     cardBody.appendChild(providerGrid);
     cardBody.appendChild(actions);
     cardBody.appendChild(importWrap);
-    cardBody.appendChild(browserImportWrap);
     cardBody.appendChild(status);
   }
 }
@@ -4047,7 +4067,7 @@ async function hydrateSystemBlueprint() {
   const blueprint = settingsRuntime.blueprint;
   if (!blueprint) return;
   mount.innerHTML = `
-    <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Stockage local navigateur')}</span></div>
+    <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise')}</span></div>
     <div><strong>Frontend cible</strong><span>${esc(blueprint.targetPlatform?.frontend || 'GitHub Pages ou hébergement statique')}</span></div>
     <div><strong>Base cible</strong><span>${esc(blueprint.targetPlatform?.database || 'Supabase PostgreSQL')}</span></div>
     <div><strong>Authentification</strong><span>${esc(blueprint.targetPlatform?.auth || 'Supabase Auth')}</span></div>
@@ -4066,7 +4086,6 @@ function ensureSettingsEnhancements() {
   renderPdfTemplateGuide();
   hydrateSystemBlueprint();
   bindCloudStateImport();
-  bindBrowserStateImport();
 }
 
 function loadSettingsForm() {
@@ -4126,11 +4145,6 @@ function loadSettingsForm() {
   if (get('settingPdfTextColor')) get('settingPdfTextColor').value = state.settings.pdfAppearance?.textColor || DEFAULT_SETTINGS.pdfAppearance.textColor;
   if (get('settingPdfAlertColor')) get('settingPdfAlertColor').value = state.settings.pdfAppearance?.alertColor || DEFAULT_SETTINGS.pdfAppearance.alertColor;
   if (get('settingPdfLogoScale')) get('settingPdfLogoScale').value = String(state.settings.pdfAppearance?.logoScale || DEFAULT_SETTINGS.pdfAppearance.logoScale);
-  if (get('settingRemoteProvider')) get('settingRemoteProvider').value = state.settings.remoteSync?.provider || 'none';
-  if (get('settingRemoteEnabled')) get('settingRemoteEnabled').value = state.settings.remoteSync?.enabled ? '1' : '0';
-  if (get('settingSupabaseUrl')) get('settingSupabaseUrl').value = state.settings.remoteSync?.supabaseUrl || '';
-  if (get('settingSupabaseProjectRef')) get('settingSupabaseProjectRef').value = state.settings.remoteSync?.projectRef || '';
-  if (get('settingSupabaseAnonKey')) get('settingSupabaseAnonKey').value = state.settings.remoteSync?.supabaseAnonKey || '';
   showSettingsTab(activeTab);
   refreshStorageStatus();
 }
@@ -4174,14 +4188,7 @@ function saveSettings() {
     alertColor: get('settingPdfAlertColor')?.value || DEFAULT_SETTINGS.pdfAppearance.alertColor,
     logoScale: Number(get('settingPdfLogoScale')?.value || DEFAULT_SETTINGS.pdfAppearance.logoScale)
   };
-  state.settings.remoteSync = {
-    provider: get('settingRemoteProvider')?.value === 'supabase' ? 'supabase' : 'none',
-    enabled: get('settingRemoteEnabled')?.value === '1' && get('settingRemoteProvider')?.value === 'supabase',
-    supabaseUrl: (get('settingSupabaseUrl')?.value || '').trim(),
-    supabaseAnonKey: (get('settingSupabaseAnonKey')?.value || '').trim(),
-    projectRef: (get('settingSupabaseProjectRef')?.value || '').trim()
-  };
-  window.SICODApi?.system?.setRemoteConfig?.(state.settings.remoteSync);
+  state.settings.remoteSync = Object.assign({}, window.SICODApi?.system?.getRemoteConfig?.() || DEFAULT_SETTINGS.remoteSync);
   refreshAuthGate();
   hydrateAuthAccessPanel();
 
@@ -4230,6 +4237,13 @@ function saveSettings() {
 // ────────────────────────────────────────────────────────────────────────────
 
 function renderAll() {
+  if (isAuthLocked()) {
+    const appLayout = document.getElementById('appLayout');
+    if (appLayout) appLayout.hidden = true;
+    refreshAuthGate();
+    refreshStorageStatus();
+    return;
+  }
   renderEvents();
   renderPSList();
   renderDashboard();
@@ -4250,6 +4264,8 @@ function renderAll() {
   bindPSMediaInputs();
   applyBrandAssets();
   refreshDashboardBanner();
+  const appLayout = document.getElementById('appLayout');
+  if (appLayout) appLayout.hidden = false;
   refreshAuthGate();
 }
 

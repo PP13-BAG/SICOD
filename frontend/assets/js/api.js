@@ -1,11 +1,9 @@
 (function(global){
   'use strict';
 
-  const STORAGE_KEY = 'sicodStateV13';
-  const REMOTE_CONFIG_KEY = 'sicodRemoteConfigV1';
   const AUTH_SESSION_KEY = 'sicodSupabaseSessionV1';
   const BLUEPRINT_FALLBACK = {
-    storageMode: 'local-browser',
+    storageMode: 'supabase-auth-required',
     frontend: {
       entrypoint: '/index.html',
       assets: ['/assets/app.css', '/assets/app.js']
@@ -22,44 +20,21 @@
     }
   };
 
-  let storageMode = 'localStorage';
-  let remoteSyncEnabled = false;
+  const runtimeConfig = sanitizeRemoteConfig(global.SICODConfig || {});
+  let storageMode = runtimeConfig.enabled ? 'auth-required' : 'local-browser';
   let saveTimer = null;
   let lastSerializedState = '';
-  let remoteConfig = loadInitialRemoteConfig();
   let authSession = loadInitialAuthSession();
-
-  const localStorageAdapter = {
-    load() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      } catch (error) {
-        console.warn('[Storage] Erreur lecture state:', error);
-        return null;
-      }
-    },
-    save(data) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        const candidateConfig = sanitizeRemoteConfig(data?.settings?.remoteSync);
-        if (candidateConfig.enabled) {
-          persistRemoteConfig(candidateConfig);
-        }
-      } catch (error) {
-        console.warn('[Storage] Erreur sauvegarde state:', error);
-      }
-    }
-  };
 
   function sanitizeRemoteConfig(input) {
     const value = input && typeof input === 'object' ? input : {};
-    const provider = value.provider === 'supabase' ? 'supabase' : 'none';
-    const enabled = !!value.enabled && provider === 'supabase';
+    const provider = value.remoteProvider === 'supabase' || value.provider === 'supabase' ? 'supabase' : 'none';
+    const enabled = !!value.remoteEnabled || !!value.enabled || provider === 'supabase';
     return {
       provider,
-      enabled,
+      enabled: provider === 'supabase' && enabled,
       supabaseUrl: String(value.supabaseUrl || '').trim().replace(/\/+$/, ''),
-      supabaseAnonKey: String(value.supabaseAnonKey || '').trim(),
+      supabaseAnonKey: String(value.supabasePublishableKey || value.supabaseAnonKey || '').trim(),
       projectRef: String(value.projectRef || '').trim()
     };
   }
@@ -89,37 +64,11 @@
     });
   }
 
-  function loadInitialRemoteConfig() {
-    try {
-      const savedConfig = JSON.parse(localStorage.getItem(REMOTE_CONFIG_KEY) || 'null');
-      const sanitized = sanitizeRemoteConfig(savedConfig);
-      if (sanitized.enabled) return sanitized;
-    } catch {}
-    try {
-      const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      return sanitizeRemoteConfig(savedState?.settings?.remoteSync);
-    } catch {
-      return sanitizeRemoteConfig(null);
-    }
-  }
-
   function loadInitialAuthSession() {
     try {
-      return sanitizeAuthSession(JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null'));
+      return sanitizeAuthSession(JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null'));
     } catch {
       return null;
-    }
-  }
-
-  function persistRemoteConfig(config) {
-    remoteConfig = sanitizeRemoteConfig(config);
-    try {
-      localStorage.setItem(REMOTE_CONFIG_KEY, JSON.stringify(remoteConfig));
-    } catch (error) {
-      console.warn('[Storage] Erreur sauvegarde config distante:', error);
-    }
-    if (!remoteConfig.enabled) {
-      setRemoteMode('localStorage');
     }
   }
 
@@ -127,9 +76,9 @@
     authSession = sanitizeAuthSession(session);
     try {
       if (authSession) {
-        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
+        sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(authSession));
       } else {
-        localStorage.removeItem(AUTH_SESSION_KEY);
+        sessionStorage.removeItem(AUTH_SESSION_KEY);
       }
     } catch (error) {
       console.warn('[Auth] Erreur sauvegarde session:', error);
@@ -140,7 +89,7 @@
     persistAuthSession(null);
   }
 
-  function isSupabaseConfigured(config = remoteConfig) {
+  function isSupabaseConfigured(config = runtimeConfig) {
     return config.provider === 'supabase' && config.enabled && !!config.supabaseUrl && !!config.supabaseAnonKey;
   }
 
@@ -154,17 +103,13 @@
     return Date.now() >= (expiresAtMs - (safetySeconds * 1000));
   }
 
-  function getCurrentUserEmail() {
-    return authSession?.user?.email || '';
-  }
-
   function getSupabaseHeaders(extraHeaders = {}, requireAuth = false) {
     if (requireAuth && !authSession?.accessToken) {
       throw new Error('Connexion Supabase requise.');
     }
     return {
-      apikey: remoteConfig.supabaseAnonKey,
-      Authorization: `Bearer ${requireAuth ? authSession.accessToken : (authSession?.accessToken || remoteConfig.supabaseAnonKey)}`,
+      apikey: runtimeConfig.supabaseAnonKey,
+      Authorization: `Bearer ${requireAuth ? authSession.accessToken : (authSession?.accessToken || runtimeConfig.supabaseAnonKey)}`,
       ...extraHeaders
     };
   }
@@ -203,7 +148,7 @@
       const session = await ensureSupabaseSession();
       if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
     }
-    return fetchJson(`${remoteConfig.supabaseUrl}${path}`, {
+    return fetchJson(`${runtimeConfig.supabaseUrl}${path}`, {
       ...init,
       headers: {
         ...(init?.headers || {}),
@@ -214,10 +159,10 @@
 
   async function authRequest(path, init) {
     if (!isSupabaseConfigured()) throw new Error('Supabase n’est pas configuré.');
-    return fetchJson(`${remoteConfig.supabaseUrl}${path}`, {
+    return fetchJson(`${runtimeConfig.supabaseUrl}${path}`, {
       ...init,
       headers: {
-        apikey: remoteConfig.supabaseAnonKey,
+        apikey: runtimeConfig.supabaseAnonKey,
         ...(init?.headers || {})
       }
     });
@@ -225,19 +170,18 @@
 
   function setRemoteMode(mode) {
     storageMode = mode;
-    remoteSyncEnabled = mode === 'supabase';
   }
 
   function getStorageModeLabel() {
-    if (storageMode === 'supabase') return 'Supabase + cache local';
-    if (isSupabaseConfigured()) return 'Supabase configure · connexion requise';
-    return 'Stockage local navigateur';
+    if (storageMode === 'supabase') return 'Supabase sécurisé';
+    if (isSupabaseConfigured()) return 'Supabase · connexion requise';
+    return 'Mode non configuré';
   }
 
   async function refreshSupabaseSession() {
     if (!isSupabaseConfigured() || !authSession?.refreshToken) {
       clearAuthSession();
-      setRemoteMode('localStorage');
+      setRemoteMode('auth-required');
       return null;
     }
     try {
@@ -257,7 +201,7 @@
       return nextSession;
     } catch (error) {
       clearAuthSession();
-      setRemoteMode('localStorage');
+      setRemoteMode('auth-required');
       throw error;
     }
   }
@@ -265,7 +209,7 @@
   async function ensureSupabaseSession() {
     if (!isSupabaseConfigured()) {
       clearAuthSession();
-      setRemoteMode('localStorage');
+      setRemoteMode('local-browser');
       return null;
     }
     if (!hasAuthSession()) {
@@ -275,7 +219,7 @@
     if (isSessionExpired()) {
       try {
         return await refreshSupabaseSession();
-      } catch (error) {
+      } catch {
         return null;
       }
     }
@@ -308,14 +252,14 @@
   async function signOutSupabase() {
     if (isSupabaseConfigured() && authSession?.accessToken) {
       try {
-        await fetch(`${remoteConfig.supabaseUrl}/auth/v1/logout`, {
+        await fetch(`${runtimeConfig.supabaseUrl}/auth/v1/logout`, {
           method: 'POST',
           headers: getSupabaseHeaders({}, true)
         });
       } catch {}
     }
     clearAuthSession();
-    setRemoteMode(isSupabaseConfigured() ? 'auth-required' : 'localStorage');
+    setRemoteMode(isSupabaseConfigured() ? 'auth-required' : 'local-browser');
     return { authenticated: false };
   }
 
@@ -385,8 +329,8 @@
   }
 
   function scheduleRemoteSave(data) {
-    if (!remoteSyncEnabled || !isSupabaseConfigured() || !authSession?.accessToken) return;
-    const serialized = JSON.stringify(data);
+    if (!isSupabaseConfigured() || !authSession?.accessToken) return;
+    const serialized = JSON.stringify(data || {});
     if (serialized === lastSerializedState) return;
     lastSerializedState = serialized;
     clearTimeout(saveTimer);
@@ -394,29 +338,24 @@
       try {
         await upsertSupabaseAppState(data);
       } catch (error) {
-        console.warn('[Storage] Synchronisation distante impossible :', error.message);
+        console.warn('[Storage] Synchronisation Supabase impossible :', error.message);
       }
-    }, 600);
+    }, 450);
   }
 
   async function hydrateRemoteState() {
     if (!isSupabaseConfigured()) {
-      setRemoteMode('localStorage');
+      setRemoteMode('local-browser');
       return null;
     }
     const session = await ensureSupabaseSession();
     if (!session?.accessToken) return null;
     try {
       const payload = await getSupabaseAppState();
-      if (payload?.state && typeof payload.state === 'object') {
-        localStorageAdapter.save(payload.state);
-        setRemoteMode('supabase');
-        return payload.state;
-      }
       setRemoteMode('supabase');
-      return null;
-    } catch (error) {
-      setRemoteMode('localStorage');
+      return payload?.state && typeof payload.state === 'object' ? payload.state : null;
+    } catch {
+      setRemoteMode('auth-required');
       return null;
     }
   }
@@ -429,13 +368,8 @@
       };
     }
     const session = await ensureSupabaseSession();
-    if (!session?.accessToken) {
-      throw new Error('Connexion Supabase requise.');
-    }
+    if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
     const payload = await getSupabaseAppState();
-    if (payload?.state && typeof payload.state === 'object') {
-      localStorageAdapter.save(payload.state);
-    }
     setRemoteMode('supabase');
     return payload;
   }
@@ -446,7 +380,6 @@
     if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
     const payload = await upsertSupabaseAppState(state);
     setRemoteMode('supabase');
-    localStorageAdapter.save(state);
     lastSerializedState = JSON.stringify(state || {});
     return payload;
   }
@@ -454,10 +387,9 @@
   global.SICODApi = {
     storage: {
       load() {
-        return localStorageAdapter.load();
+        return null;
       },
       save(data) {
-        localStorageAdapter.save(data);
         scheduleRemoteSave(data);
       }
     },
@@ -468,7 +400,7 @@
       async restoreSession() {
         try {
           return await ensureSupabaseSession();
-        } catch (error) {
+        } catch {
           return null;
         }
       },
@@ -487,11 +419,10 @@
         return getStorageModeLabel();
       },
       getRemoteConfig() {
-        return { ...remoteConfig };
+        return { ...runtimeConfig };
       },
-      setRemoteConfig(config) {
-        persistRemoteConfig(config);
-        return { ...remoteConfig };
+      setRemoteConfig() {
+        return { ...runtimeConfig };
       },
       getAuthState() {
         return getAuthState();
@@ -505,8 +436,6 @@
         } catch (error) {
           if (error.message === 'Connexion Supabase requise.') {
             setRemoteMode('auth-required');
-          } else {
-            setRemoteMode('localStorage');
           }
           throw error;
         }
@@ -517,8 +446,6 @@
         } catch (error) {
           if (error.message === 'Connexion Supabase requise.') {
             setRemoteMode('auth-required');
-          } else {
-            setRemoteMode('localStorage');
           }
           throw error;
         }
@@ -531,7 +458,7 @@
             : 'local-browser',
           bindings: {
             provider: isSupabaseConfigured() ? 'supabase' : null,
-            projectRef: remoteConfig.projectRef || null
+            projectRef: runtimeConfig.projectRef || null
           }
         };
       },
