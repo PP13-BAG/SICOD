@@ -27,10 +27,16 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Prepare static site
+        run: |
+          rm -rf site
+          mkdir -p site
+          cp -R frontend/. site/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend
+          path: site
 
       - name: Deploy
         id: deployment
