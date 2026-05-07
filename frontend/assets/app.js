@@ -311,7 +311,7 @@ function downloadCSV(filename, rows) {
 /** Retourne la source logo courante (personnalisée ou défaut) */
 const DEFAULT_BRAND_LOGO = 'assets/logo.png';
 const DEFAULT_FAVICON = 'assets/favicon.ico';
-const DEFAULT_DASHBOARD_BANNER = '/assets/banniere.png';
+const DEFAULT_DASHBOARD_BANNER = 'assets/banniere.png';
 
 function currentLogoSrc() {
   const configured = (state.settings && state.settings.brandLogo) ? String(state.settings.brandLogo).trim() : '';
@@ -329,8 +329,8 @@ function refreshDashboardBanner() {
   if (!wrap || !img) return;
   const configured = (state.settings && state.settings.dashboardBanner) ? String(state.settings.dashboardBanner).trim() : '';
   const fallbacks = configured
-    ? [configured, DEFAULT_DASHBOARD_BANNER, '/banniere.png']
-    : [DEFAULT_DASHBOARD_BANNER, '/banniere.png'];
+    ? [configured, DEFAULT_DASHBOARD_BANNER, 'banniere.png']
+    : [DEFAULT_DASHBOARD_BANNER, 'banniere.png'];
   let index = 0;
   img.dataset.fallback = '0';
   img.onerror = function() {
