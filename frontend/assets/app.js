@@ -3338,7 +3338,7 @@ function ensureSettingsNavigatorUI() {
   tabs.hidden = true;
 }
 
-function ensureBrandingSettingsUI() {
+function _legacyEnsureBrandingSettingsUI() {
   return;
   const generalPanel = document.querySelector('[data-settings-panel="general"] .settings-grid');
   if (!generalPanel || document.getElementById('brandingCard')) return;
@@ -3407,7 +3407,7 @@ function ensureSettingsFooterActions() {
   pageInner.appendChild(wrap);
 }
 
-function loadSettingsForm() {
+function _legacyLoadSettingsForm() {
   const get = id => document.getElementById(id);
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
@@ -3456,7 +3456,7 @@ function loadSettingsForm() {
   showSettingsTab('general');
 }
 
-function saveSettings() {
+function _legacySaveSettings() {
   const get = id => document.getElementById(id);
   state.settings.theme = get('settingTheme')?.value || 'light';
   state.settings.dashboardBanner = normalizeStaticAssetPath((get('settingDashboardBanner')?.value || '').trim());
@@ -3818,7 +3818,7 @@ function ensureExportSettingsUI() {
   pageInner.insertBefore(panel, usersPanel || null);
 }
 
-function ensureSystemSettingsUI() {
+function _legacyEnsureSystemSettingsUI() {
   const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
   if (!generalGrid || document.getElementById('systemCard')) return;
   const card = document.createElement('div');
@@ -4060,7 +4060,7 @@ function renderPdfTemplateGuide() {
     : '<p class="help">Guide indisponible.</p>';
 }
 
-function ensureHostingInfoUI() {
+function _legacyEnsureHostingInfoUI() {
   const panel = document.querySelector('[data-settings-panel="users"] .card');
   if (!panel) return;
   const title = panel.querySelector('.card-title');
@@ -4084,7 +4084,7 @@ function ensureHostingInfoUI() {
   `;
 }
 
-function upgradeHostingInfoUI() {
+function _legacyUpgradeHostingInfoUI() {
   const panel = document.querySelector('[data-settings-panel="users"] .card');
   if (!panel) return;
   const title = panel.querySelector('.card-title');
@@ -4110,11 +4110,11 @@ function upgradeHostingInfoUI() {
   `;
 }
 
-function hydrateAuthAccessPanel() {
+function _legacyHydrateAuthAccessPanel() {
   upgradeHostingInfoUI();
 }
 
-async function hydrateSystemBlueprint() {
+async function _legacyHydrateSystemBlueprint() {
   const mount = document.getElementById('systemBlueprintList');
   if (!mount) return;
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
@@ -4225,6 +4225,8 @@ async function hydrateSystemBlueprint() {
     <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Connexion requise')}</span></div>
   `;
 }
+
+function ensureBrandingSettingsUI() {}
 
 function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
