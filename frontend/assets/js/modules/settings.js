@@ -15,9 +15,6 @@
   ];
 
   global.SICODSettings = {
-    getDocumentTemplates(state) {
-      return state?.settings?.documentTemplates || [];
-    },
     getTemplateFieldGuide() {
       return TEMPLATE_FIELD_GUIDE.slice();
     }

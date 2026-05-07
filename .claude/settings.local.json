@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(ConvertTo-Csv -NoTypeInformation)",
+      "Bash(Out-String)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\dashboard.js\" -Force)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\events.js\" -Force)",
+      "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\settings-admin.js\" -Force)",
+      "Bash(Write-Host \"Fichiers supprimés\")"
+    ]
+  }
+}

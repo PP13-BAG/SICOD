@@ -15,24 +15,6 @@
     dutyAgents: 'reference_duty_agents',
     reflexFamilies: 'reference_reflex_families'
   };
-  const BLUEPRINT_FALLBACK = {
-    storageMode: 'supabase-auth-required',
-    frontend: {
-      entrypoint: '/index.html',
-      assets: ['/assets/app.css', '/assets/app.js']
-    },
-    targetPlatform: {
-      frontend: 'GitHub Pages ou hebergement statique',
-      database: 'Supabase PostgreSQL',
-      auth: 'Supabase Auth + RLS',
-      objectStorage: 'Supabase Storage (optionnel)'
-    },
-    schemaFiles: {
-      supabase: 'supabase/schema.sql',
-      documentTemplates: 'supabase/document-templates.seed.sql'
-    }
-  };
-
   const runtimeConfig = sanitizeRemoteConfig(global.SICODConfig || {});
   let storageMode = runtimeConfig.enabled ? 'auth-required' : 'local-browser';
   let saveTimer = null;
@@ -389,13 +371,6 @@
     return true;
   }
 
-  async function getSupabaseRoles() {
-    const query = new URLSearchParams();
-    query.set('select', 'role_key');
-    const payload = await supabaseRequest(`/rest/v1/app_user_roles?${query.toString()}`, {}, true);
-    return Array.isArray(payload) ? payload.map(item => item.role_key).filter(Boolean) : [];
-  }
-
   function scheduleRemoteSave(data) {
     if (!isSupabaseConfigured() || !authSession?.accessToken) return;
     const serialized = JSON.stringify(data || {});
@@ -489,9 +464,6 @@
       getRemoteConfig() {
         return { ...runtimeConfig };
       },
-      setRemoteConfig() {
-        return { ...runtimeConfig };
-      },
       getAuthState() {
         return getAuthState();
       },
@@ -518,18 +490,6 @@
           throw error;
         }
       },
-      async getBlueprint() {
-        return {
-          ...BLUEPRINT_FALLBACK,
-          storageMode: isSupabaseConfigured()
-            ? (authSession?.accessToken ? 'supabase' : 'supabase-auth-required')
-            : 'local-browser',
-          bindings: {
-            provider: isSupabaseConfigured() ? 'supabase' : null,
-            projectRef: runtimeConfig.projectRef || null
-          }
-        };
-      },
       async getDocumentTemplates(type) {
         if (!isSupabaseConfigured()) return [];
         const session = await ensureSupabaseSession();
@@ -551,12 +511,6 @@
         await pushSupabaseReferenceCatalog(catalog);
         return true;
       },
-      async getRoles() {
-        if (!isSupabaseConfigured()) return [];
-        const session = await ensureSupabaseSession();
-        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
-        return getSupabaseRoles();
-      }
     }
   };
 })(window);

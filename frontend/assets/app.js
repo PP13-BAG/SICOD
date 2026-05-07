@@ -171,7 +171,6 @@ function ensureStateIntegrity() {
 
 ensureStateIntegrity();
 clearLocalStateCache();
-window.SICODApi?.system?.setRemoteConfig?.(state.settings.remoteSync);
 
 // persist() — unique, stable
 function persist() {
