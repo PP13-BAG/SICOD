@@ -1,61 +1,67 @@
 # SICOD - Installation et exploitation
 
-## Démarrage local
+## Cible retenue
 
-```bash
-npm install
-npm start
-```
+- frontend statique sur GitHub Pages
+- donnees et synchronisation sur Supabase
+- aucun backend applicatif obligatoire en production
 
-Application disponible sur `http://localhost:3000`.
+## Fichiers utiles
 
-## Architecture actuelle
+- `frontend/index.html` : structure HTML de l application
+- `frontend/assets/app.css` : styles globaux
+- `frontend/assets/app.js` : logique metier principale
+- `frontend/assets/js/api.js` : stockage local, auth Supabase et synchronisation
+- `frontend/assets/js/modules/pdf-templates.js` : modeles PDF versionnes
+- `supabase/schema.sql` : schema et securite RLS
+- `supabase/document-templates.seed.sql` : modeles PDF par defaut
+- `docs/supabase-setup.md` : procedure Supabase
+- `docs/github-pages-supabase.md` : publication GitHub Pages
 
-- `frontend/index.html` : structure HTML de l'application
-- `frontend/assets/app.css` : design system et styles globaux
-- `frontend/assets/app.js` : logique métier principale
-- `frontend/assets/js/state.js` : normalisation des données de référence
-- `frontend/assets/js/api.js` : adaptateur de stockage / API système
-- `frontend/assets/js/modules/pdf-templates.js` : modèles PDF versionnés
-- `backend/server.js` : serveur Express local
-- `backend/routes/system.routes.js` : endpoints de blueprint et templates
-- `backend/schema/d1-target.sql` : schéma cible pour Cloudflare D1
+## Mise en service
 
-## Stockage actuel
+1. publier le frontend sur GitHub Pages
+2. executer `supabase/schema.sql`
+3. executer `supabase/document-templates.seed.sql`
+4. creer les utilisateurs dans `Supabase Auth`
+5. configurer la section `Parametres -> Stockage et synchronisation`
+6. se connecter
+7. pousser l etat courant
 
-- Frontend : `localStorage` pour l'état applicatif courant
-- Backend local : `data/sicod.db` pour la base sql.js/SQLite
+## Protection des donnees
 
-Les anciennes bases ou sauvegardes locales n'ont pas été supprimées automatiquement si elles pouvaient contenir des données métier.
+Le frontend peut etre public sur GitHub Pages.
 
-## Modifier les modèles PDF
+Les donnees ne sont pas stockees sur GitHub si :
 
-### Depuis l'interface
+- tu ne commits pas d exports JSON dans le depot
+- tu utilises Supabase comme stockage distant
 
-1. Ouvrir `Paramètres`
-2. Aller dans `Exports PDF`
-3. Modifier le JSON des modèles
-4. Enregistrer
+Les donnees sont protegees si :
+
+- `supabase/schema.sql` a bien ete reapplique
+- les policies RLS actuelles sont en place
+- seuls des utilisateurs `Supabase Auth` valides existent
+
+## Modifier les modeles PDF
+
+### Depuis l interface
+
+1. ouvrir `Parametres`
+2. aller dans `Exports PDF`
+3. modifier le JSON des modeles
+4. enregistrer
 
 ### Depuis les fichiers
 
-- Runtime frontend : `frontend/assets/js/modules/pdf-templates.js`
-- Seed backend : `backend/schema/document-templates.seed.json`
-- Guide pratique : `docs/pdf-templates.md`
+- runtime frontend : `frontend/assets/js/modules/pdf-templates.js`
+- seed Supabase : `supabase/document-templates.seed.sql`
+- guide pratique : `docs/pdf-templates.md`
 
-## Préparer la migration Cloudflare
+## Sauvegarde et restauration
 
-La base du projet est déjà organisée pour une migration progressive :
+Dans `Parametres -> Stockage et synchronisation` :
 
-- Frontend statique compatible Cloudflare Pages
-- Endpoints système préparés pour Workers
-- Schéma cible D1 disponible dans `backend/schema/d1-target.sql`
-- Modèles PDF découplés de la logique de rendu
-- Référentiels dynamiques basés sur des identifiants stables
-
-## Recommandations d'exploitation
-
-- Conserver `frontend/assets/` comme source unique des assets servis au navigateur
-- Éviter de référencer des chemins locaux système dans les paramètres
-- Versionner les modèles PDF en créant de nouveaux `id` / `version`
-- Préférer l'archivage logique à la suppression des données métier
+- `Exporter les donnees`
+- `Importer un export JSON dans Supabase`
+- `Restaurer un export JSON dans le navigateur`

@@ -42,10 +42,10 @@ function isLikelyFilePath(src){
 //      Annuaire, Outils, Planning, Astreintes, Paramètres)
 //   6. Bootstrap (init, renderAll, intervalles)
 //
-// MIGRATION CLOUDFLARE — points documentés :
-//   [CF-STORAGE] : remplacer la couche Storage par fetch vers Workers KV / D1
-//   [CF-ASSETS]  : remplacer les chemins relatifs assets/ par URLs R2
-//   [CF-AUTH]    : implémenter Cloudflare Access dans l'onglet Utilisateurs
+// CIBLE ACTUELLE — points documentés :
+//   [SB-STORAGE] : synchronisation vers Supabase
+//   [SB-AUTH]    : authentification utilisateur via Supabase Auth
+//   [GH-PAGES]   : publication du frontend statique via GitHub Pages
 // ============================================================
 
 'use strict';
@@ -61,7 +61,7 @@ let commandTypes = DEFAULT_COMMAND_TYPES.map(x => x.slice());
 const defaultServices = ['SDIS','BMPM','SAMU','ARS','DDTM','DREAL','DZSI','DZPAF','GMAR','PP13','DDSP','GGD','CRS','DMD','MÉTROPOLE','SRCI','GPMM','DIPJ'].map(name => ({name, cod: false, pco: false}));
 
 // ────────────────────────────────────────────────────────────────────────────
-// 2. COUCHE STORAGE (isolée — [CF-STORAGE] : remplacer par API Cloudflare)
+// 2. COUCHE STORAGE (isolée — synchro locale + Supabase)
 // ────────────────────────────────────────────────────────────────────────────
 const Storage = window.SICODApi?.storage || {
   load() { return null; },
@@ -316,8 +316,20 @@ const DEFAULT_DASHBOARD_BANNER = 'assets/banniere.png';
 function normalizeStaticAssetPath(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  if (/^(?:[a-z]+:)?\/\//i.test(raw) || raw.startsWith('data:') || raw.startsWith('blob:')) {
+  if (raw.startsWith('data:') || raw.startsWith('blob:')) {
     return raw;
+  }
+  if (/^(?:[a-z]+:)?\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw, window.location.href);
+      const sameOrigin = url.origin === window.location.origin;
+      if (sameOrigin && (url.pathname === '/banniere.png' || url.pathname === '/assets/banniere.png' || url.pathname === '/assets/logo.png' || url.pathname === '/assets/favicon.ico')) {
+        return url.pathname.replace(/^\/+/, '');
+      }
+      return raw;
+    } catch (e) {
+      return raw;
+    }
   }
   if (raw.startsWith('/')) {
     return raw.replace(/^\/+/, '');
@@ -3487,11 +3499,123 @@ applySidebarState();
 const settingsRuntime = {
   blueprint: null
 };
+const authRuntime = {
+  hydratedOnce: false
+};
 
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
   if (!label) return;
   label.textContent = window.SICODApi?.system?.getStorageModeLabel?.() || 'Stockage local navigateur';
+}
+
+function ensureAuthGateUI() {
+  if (document.getElementById('authGate')) return;
+  const gate = document.createElement('div');
+  gate.id = 'authGate';
+  gate.className = 'auth-gate';
+  gate.hidden = true;
+  gate.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-card-head">
+        <h2>Connexion SICOD</h2>
+        <p>Le site public ne contient pas les donnees. L acces aux donnees Supabase est reserve aux utilisateurs authentifies.</p>
+      </div>
+      <form id="authGateForm" class="auth-form">
+        <div class="field-stack">
+          <label for="authEmail">Adresse e-mail</label>
+          <input id="authEmail" type="email" autocomplete="username" required>
+        </div>
+        <div class="field-stack">
+          <label for="authPassword">Mot de passe</label>
+          <input id="authPassword" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="list-actions">
+          <button class="fr-btn" type="submit">Se connecter</button>
+        </div>
+        <p id="authGateStatus" class="help">Configure un ou plusieurs utilisateurs dans Supabase Auth. Si tu veux un mot de passe unique, cree un seul compte partage.</p>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(gate);
+  const form = gate.querySelector('#authGateForm');
+  if (form) {
+    form.addEventListener('submit', submitSupabaseLogin);
+  }
+}
+
+function refreshAuthGate() {
+  ensureAuthGateUI();
+  const gate = document.getElementById('authGate');
+  if (!gate) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || { configured: false, authenticated: false };
+  const requiresAuth = !!authState.configured && !authState.authenticated;
+  gate.hidden = !requiresAuth;
+  document.body.classList.toggle('auth-required', requiresAuth);
+}
+
+function updateAuthGateStatus(message, tone = 'info') {
+  const mount = document.getElementById('authGateStatus');
+  if (!mount) return;
+  mount.className = tone === 'warning' ? 'help auth-warning' : 'help';
+  mount.textContent = message;
+}
+
+function applyRemoteStateSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return false;
+  const fresh = Object.assign(buildDefaultState(), snapshot);
+  Object.keys(state).forEach((key) => delete state[key]);
+  Object.assign(state, fresh);
+  ensureStateIntegrity();
+  applyTheme(state.settings.theme);
+  renderAll();
+  refreshStorageStatus();
+  hydrateSystemBlueprint();
+  return true;
+}
+
+async function restoreRemoteStateAfterLogin() {
+  const remoteState = await window.SICODApi?.system?.hydrateState?.();
+  if (remoteState && typeof remoteState === 'object') {
+    applyRemoteStateSnapshot(remoteState);
+  } else {
+    refreshStorageStatus();
+  }
+}
+
+async function submitSupabaseLogin(event) {
+  event?.preventDefault?.();
+  const email = document.getElementById('authEmail')?.value?.trim() || '';
+  const password = document.getElementById('authPassword')?.value || '';
+  if (!email || !password) {
+    updateAuthGateStatus('Renseigne une adresse e-mail et un mot de passe.', 'warning');
+    return;
+  }
+  updateAuthGateStatus('Connexion a Supabase en cours...');
+  try {
+    await window.SICODApi?.auth?.signInWithPassword?.(email, password);
+    refreshAuthGate();
+    refreshStorageStatus();
+    await restoreRemoteStateAfterLogin();
+    updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}.`, 'success');
+    hydrateAuthAccessPanel();
+  } catch (error) {
+    updateAuthGateStatus(`Connexion impossible : ${error.message || String(error)}`, 'warning');
+    refreshAuthGate();
+    refreshStorageStatus();
+  }
+}
+
+async function logoutSupabaseSession() {
+  try {
+    await window.SICODApi?.auth?.signOut?.();
+    updateCloudStateStatus('Session Supabase fermee. Le site repasse en mode verrouille tant qu aucune reconnexion n est effectuee.', 'info');
+  } catch (error) {
+    updateCloudStateStatus(`Deconnexion Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
+  }
+  refreshAuthGate();
+  refreshStorageStatus();
+  hydrateAuthAccessPanel();
 }
 
 function ensureBrandingSettingsUI() {
@@ -3609,7 +3733,7 @@ function ensureSystemSettingsUI() {
       <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Stockage local navigateur')}</span></div>
       <div><strong>Cible</strong><span>GitHub Pages ou hebergement statique + Supabase</span></div>
     </div>
-    <p class="help">L application reste pleinement fonctionnelle en local et peut synchroniser son état vers Supabase sans backend applicatif dédié.</p>
+    <p class="help">L application reste pleinement fonctionnelle en local et peut synchroniser son état vers Supabase sans backend applicatif dédié. En mode distant, l accès aux données est conditionné à une connexion Supabase Auth.</p>
   </div>`;
   generalGrid.appendChild(card);
   const cardBody = card.querySelector('.card-body');
@@ -3627,16 +3751,22 @@ function ensureSystemSettingsUI() {
     const actions = document.createElement('div');
     actions.className = 'cloud-admin-grid';
     actions.innerHTML = `
-      <button class="fr-btn secondary" type="button" onclick="checkCloudflareState()">Tester Supabase</button>
-      <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les données</button>
-      <button class="fr-btn secondary" type="button" onclick="pushCurrentStateToCloudflare()">Pousser l'état courant</button>
-      <button class="fr-btn secondary" type="button" onclick="reloadStateFromCloudflare()">Recharger depuis Supabase</button>
+      <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Verifier la connexion</button>
+      <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les donnees</button>
+      <button class="fr-btn secondary" type="button" onclick="pushCurrentStateToSupabase()">Pousser vers Supabase</button>
+      <button class="fr-btn secondary" type="button" onclick="reloadStateFromSupabase()">Recharger depuis Supabase</button>
     `;
     const importWrap = document.createElement('div');
     importWrap.className = 'field-stack';
     importWrap.innerHTML = `
       <label for="cloudStateImportFile">Importer un export JSON dans Supabase</label>
       <input id="cloudStateImportFile" type="file" accept="application/json,.json">
+    `;
+    const browserImportWrap = document.createElement('div');
+    browserImportWrap.className = 'field-stack';
+    browserImportWrap.innerHTML = `
+      <label for="browserStateImportFile">Restaurer un export JSON dans le navigateur</label>
+      <input id="browserStateImportFile" type="file" accept="application/json,.json">
     `;
     const status = document.createElement('div');
     status.id = 'cloudStateStatus';
@@ -3645,6 +3775,7 @@ function ensureSystemSettingsUI() {
     cardBody.appendChild(providerGrid);
     cardBody.appendChild(actions);
     cardBody.appendChild(importWrap);
+    cardBody.appendChild(browserImportWrap);
     cardBody.appendChild(status);
   }
 }
@@ -3686,7 +3817,7 @@ function exportCurrentStateJson() {
   updateCloudStateStatus('Export JSON généré depuis l’état courant du navigateur.', 'success');
 }
 
-async function checkCloudflareState() {
+async function checkSupabaseState() {
   updateCloudStateStatus('Contrôle de Supabase en cours...', 'info');
   try {
     const remoteConfig = window.SICODApi.system.getRemoteConfig();
@@ -3700,9 +3831,11 @@ async function checkCloudflareState() {
       window.SICODApi.system.getDocumentTemplates()
     ]);
     const counts = countStateRecords(remoteStatePayload?.state);
+    const authState = window.SICODApi.system.getAuthState?.() || {};
     updateCloudStateStatus(`
       <strong>Supabase joignable.</strong><br>
       Mode : ${esc(window.SICODApi.system.getStorageModeLabel())}<br>
+      Utilisateur : ${esc(authState.email || 'non identifie')}<br>
       Modèles PDF : ${remoteTemplates.length}<br>
       Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
@@ -3716,7 +3849,7 @@ async function checkCloudflareState() {
   }
 }
 
-async function pushCurrentStateToCloudflare() {
+async function pushCurrentStateToSupabase() {
   updateCloudStateStatus('Envoi de l’état courant vers Supabase...', 'info');
   try {
     ensureStateIntegrity();
@@ -3734,7 +3867,7 @@ async function pushCurrentStateToCloudflare() {
   }
 }
 
-async function reloadStateFromCloudflare() {
+async function reloadStateFromSupabase() {
   updateCloudStateStatus('Chargement de l’état Supabase en cours...', 'info');
   try {
     const payload = await window.SICODApi.system.getRemoteState();
@@ -3743,13 +3876,7 @@ async function reloadStateFromCloudflare() {
       refreshStorageStatus();
       return;
     }
-    const fresh = Object.assign(buildDefaultState(), payload.state);
-    Object.keys(state).forEach((key) => delete state[key]);
-    Object.assign(state, fresh);
-    ensureStateIntegrity();
-    applyTheme(state.settings.theme);
-    renderAll();
-    refreshStorageStatus();
+    applyRemoteStateSnapshot(payload.state);
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
       <strong>État Supabase rechargé.</strong><br>
@@ -3793,6 +3920,36 @@ function bindCloudStateImport() {
   });
 }
 
+function bindBrowserStateImport() {
+  const input = document.getElementById('browserStateImportFile');
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+  input.addEventListener('change', async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    updateCloudStateStatus(`Restauration locale de ${esc(file.name)} en cours...`, 'info');
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') throw new Error('Le fichier JSON ne contient pas un Ã©tat valide.');
+      applyRemoteStateSnapshot(parsed);
+      persist();
+      const counts = countStateRecords(state);
+      updateCloudStateStatus(`
+        <strong>Restauration locale terminÃ©e.</strong><br>
+        Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
+      `, 'success');
+      input.value = '';
+    } catch (error) {
+      updateCloudStateStatus(`Restauration locale impossible : ${esc(error.message || String(error))}`, 'warning');
+    }
+  });
+}
+
+async function checkCloudflareState() { return checkSupabaseState(); }
+async function pushCurrentStateToCloudflare() { return pushCurrentStateToSupabase(); }
+async function reloadStateFromCloudflare() { return reloadStateFromSupabase(); }
+
 function renderPdfTemplateGuide() {
   const mount = document.getElementById('pdfTemplateGuideList');
   if (!mount) return;
@@ -3817,6 +3974,37 @@ function ensureHostingInfoUI() {
         <tr><td>Publication statique</td><td><code>docs/github-pages-supabase.md</code></td><td>Déploiement GitHub Pages</td></tr>
         <tr><td>Base partagée</td><td><code>docs/supabase-setup.md</code></td><td>Configuration Supabase</td></tr>
         <tr><td>Schéma SQL</td><td><code>supabase/schema.sql</code></td><td>Initialisation de la base</td></tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function upgradeHostingInfoUI() {
+  const panel = document.querySelector('[data-settings-panel="users"] .card');
+  if (!panel) return;
+  const title = panel.querySelector('.card-title');
+  if (title) title.textContent = 'Acces et securite';
+  const body = panel.querySelector('.card-body');
+  if (!body) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  body.innerHTML = `
+    <p class="help">Le frontend reste public sur GitHub Pages, mais les donnees SICOD ne doivent etre accessibles qu apres authentification Supabase et application des policies RLS.</p>
+    <div class="info-pairs">
+      <div><strong>Mode de protection</strong><span>Supabase Auth par e-mail / mot de passe</span></div>
+      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecte' : (authState.configured ? 'Connexion requise' : 'Non configure'))}</span></div>
+      <div><strong>Utilisateur courant</strong><span>${esc(authState.email || 'Aucun')}</span></div>
+      <div><strong>Gestion des utilisateurs</strong><span>Se fait dans le dashboard Supabase Auth</span></div>
+    </div>
+    <div class="list-actions" style="margin-top:1rem">
+      <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Verifier la connexion</button>
+      ${authState.authenticated ? '<button class="fr-btn secondary" type="button" onclick="logoutSupabaseSession()">Se deconnecter</button>' : ''}
+    </div>
+    <table class="table" style="margin-top:1rem">
+      <thead><tr><th>Sujet</th><th>Reference</th><th>Usage</th></tr></thead>
+      <tbody>
+        <tr><td>Publication statique</td><td><code>docs/github-pages-supabase.md</code></td><td>Deploiement GitHub Pages</td></tr>
+        <tr><td>Base partagee</td><td><code>docs/supabase-setup.md</code></td><td>Configuration Supabase</td></tr>
+        <tr><td>Securite SQL</td><td><code>supabase/schema.sql</code></td><td>RLS et acces authentifie</td></tr>
       </tbody>
     </table>
   `;
@@ -3848,9 +4036,11 @@ function ensureSettingsEnhancements() {
   ensureBrandingSettingsUI();
   ensureSystemSettingsUI();
   ensureHostingInfoUI();
+  upgradeHostingInfoUI();
   renderPdfTemplateGuide();
   hydrateSystemBlueprint();
   bindCloudStateImport();
+  bindBrowserStateImport();
 }
 
 function loadSettingsForm() {
@@ -3966,6 +4156,8 @@ function saveSettings() {
     projectRef: (get('settingSupabaseProjectRef')?.value || '').trim()
   };
   window.SICODApi?.system?.setRemoteConfig?.(state.settings.remoteSync);
+  refreshAuthGate();
+  hydrateAuthAccessPanel();
 
   const parseList = id => (get(id)?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   if (get('settingEventTypes')) window.SICODDataModel?.setReferenceLabels(state, 'eventTypes', parseList('settingEventTypes'));
@@ -4032,6 +4224,7 @@ function renderAll() {
   bindPSMediaInputs();
   applyBrandAssets();
   refreshDashboardBanner();
+  refreshAuthGate();
 }
 
 // Initialisation
@@ -4042,24 +4235,30 @@ if (dutyMonthEl && !dutyMonthEl.value) dutyMonthEl.value = todayISO().slice(0, 7
 
 initCommandForm();
 renderAll();
-window.SICODApi?.system?.hydrateState?.()
+ensureAuthGateUI();
+refreshAuthGate();
+window.SICODApi?.auth?.restoreSession?.()
+  .then(() => {
+    refreshAuthGate();
+    hydrateAuthAccessPanel();
+    return window.SICODApi?.system?.hydrateState?.();
+  })
   .then((remoteState) => {
-    if (!remoteState || typeof remoteState !== 'object') {
+    if (remoteState && typeof remoteState === 'object') {
+      applyRemoteStateSnapshot(remoteState);
+      authRuntime.hydratedOnce = true;
+    } else {
       refreshStorageStatus();
       persist();
-      return;
     }
-    const fresh = Object.assign(buildDefaultState(), remoteState);
-    Object.keys(state).forEach((key) => delete state[key]);
-    Object.assign(state, fresh);
-    ensureStateIntegrity();
-    applyTheme(state.settings.theme);
-    renderAll();
-    refreshStorageStatus();
   })
   .catch((error) => {
     console.warn('[Remote] Hydratation distante indisponible :', error.message);
     refreshStorageStatus();
+  })
+  .finally(() => {
+    refreshAuthGate();
+    hydrateAuthAccessPanel();
   });
 
 // Mise à jour dashboard chaque seconde (heure locale)

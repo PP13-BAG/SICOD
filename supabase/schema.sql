@@ -31,27 +31,34 @@ alter table public.app_settings enable row level security;
 alter table public.document_templates enable row level security;
 alter table public.app_runtime_lock enable row level security;
 
-drop policy if exists "app_settings_full_access" on public.app_settings;
-create policy "app_settings_full_access"
+revoke all on table public.app_settings from anon, authenticated;
+revoke all on table public.document_templates from anon, authenticated;
+revoke all on table public.app_runtime_lock from anon, authenticated;
+
+grant select, insert, update on table public.app_settings to authenticated;
+grant select on table public.document_templates to authenticated;
+grant select, insert, update, delete on table public.app_runtime_lock to authenticated;
+
+drop policy if exists "app_settings_authenticated_rw" on public.app_settings;
+create policy "app_settings_authenticated_rw"
 on public.app_settings
 for all
-to anon, authenticated
+to authenticated
 using (true)
 with check (true);
 
-drop policy if exists "document_templates_full_access" on public.document_templates;
-create policy "document_templates_full_access"
+drop policy if exists "document_templates_authenticated_read" on public.document_templates;
+create policy "document_templates_authenticated_read"
 on public.document_templates
-for all
-to anon, authenticated
-using (true)
-with check (true);
+for select
+to authenticated
+using (is_active = true);
 
-drop policy if exists "app_runtime_lock_full_access" on public.app_runtime_lock;
-create policy "app_runtime_lock_full_access"
+drop policy if exists "app_runtime_lock_authenticated_rw" on public.app_runtime_lock;
+create policy "app_runtime_lock_authenticated_rw"
 on public.app_runtime_lock
 for all
-to anon, authenticated
+to authenticated
 using (true)
 with check (true);
 

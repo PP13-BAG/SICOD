@@ -6,7 +6,7 @@ Les exports PDF de l'application sont pilotes par des modeles JSON versionnes, s
 
 - Dans l'application : `Parametres` -> `Exports PDF`
 - En frontend : `frontend/assets/js/modules/pdf-templates.js`
-- En backend : `backend/schema/document-templates.seed.json`
+- Dans Supabase : `supabase/document-templates.seed.sql`
 
 ## Deux niveaux de personnalisation
 

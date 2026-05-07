@@ -5,12 +5,7 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-    "dev": "nodemon backend/server.js",
-    "cf:dev": "npx wrangler pages dev frontend",
-    "cf:deploy": "npx wrangler pages deploy frontend --project-name sicod-pages --branch production --commit-dirty=true",
-    "cf:d1:migrate": "npx wrangler d1 migrations apply sicod-prod --remote --config wrangler.jsonc",
-    "cf:d1:migrate:local": "npx wrangler d1 migrations apply sicod-preview --local --config wrangler.jsonc",
-    "cf:d1:migrate:preview": "npx wrangler d1 migrations apply sicod-preview --remote --preview --config wrangler.jsonc"
+    "dev": "nodemon backend/server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -18,7 +13,6 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0",
-    "wrangler": "^4.41.0"
+    "nodemon": "^3.1.0"
   }
 }

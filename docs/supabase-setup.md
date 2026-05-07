@@ -1,26 +1,48 @@
 # SICOD sur Supabase
 
-Cette version du projet vise :
+Cette cible repose sur :
 
-- frontend statique sur GitHub Pages ou autre hebergement statique
+- frontend statique publie sur GitHub Pages ou un hebergement statique equivalent
 - donnees centralisees dans Supabase
-- aucun backend applicatif obligatoire
+- authentification par `Supabase Auth`
+- protection des tables par `Row Level Security`
 
 ## 1. Creer le projet Supabase
 
 1. creer un projet Supabase
 2. noter :
    - `Project URL`
-   - `Publishable key` ou `anon key`
+   - `Publishable key`
 
-## 2. Initialiser la base
+Ne jamais utiliser la `secret key` dans le frontend.
+
+## 2. Initialiser ou mettre a jour la base
 
 Dans l editeur SQL Supabase :
 
 1. executer `supabase/schema.sql`
 2. executer `supabase/document-templates.seed.sql`
 
-## 3. Configurer SICOD
+Important :
+
+- reexecuter `supabase/schema.sql` apres chaque mise a jour de la securite
+- le schema actuel reserve l acces aux tables SICOD aux seuls utilisateurs `authenticated`
+
+## 3. Creer les utilisateurs
+
+Dans `Supabase Dashboard` :
+
+1. ouvrir `Authentication`
+2. creer un ou plusieurs utilisateurs e-mail / mot de passe
+
+Deux modes possibles :
+
+- gestion des utilisateurs : un compte par personne
+- mot de passe unique : un seul compte partage
+
+Le second mode fonctionne, mais il est moins propre en traçabilite.
+
+## 4. Configurer SICOD
 
 Dans l application :
 
@@ -36,14 +58,15 @@ Dans l application :
 
 Ensuite :
 
-1. cliquer `Tester Supabase`
-2. cliquer `Pousser l etat courant`
+1. se connecter avec un utilisateur Supabase
+2. cliquer `Verifier la connexion`
+3. cliquer `Pousser vers Supabase`
 
 Le bandeau doit ensuite afficher :
 
 - `Supabase + cache local`
 
-## 4. Import initial des donnees existantes
+## 5. Import initial des donnees existantes
 
 Si tu as deja un export JSON :
 
@@ -51,31 +74,28 @@ Si tu as deja un export JSON :
 2. section `Stockage et synchronisation`
 3. utiliser `Importer un export JSON dans Supabase`
 
-Sinon :
+Pour une restauration locale de secours :
 
-1. cliquer `Exporter les donnees`
-2. conserver le fichier JSON comme sauvegarde
-3. cliquer `Pousser l etat courant`
+1. utiliser `Restaurer un export JSON dans le navigateur`
 
-## 5. Securite minimale
+## 6. Ce qui est public et ce qui ne l est pas
 
-Le schema fourni autorise l acces direct depuis le frontend avec la cle publique.
+Public :
 
-Avantage :
+- le code source du frontend si le depot GitHub est public
+- les fichiers statiques publies par GitHub Pages
 
-- mise en route immediate
+Non public apres durcissement :
 
-Limite :
+- les donnees stockees dans Supabase
+- les modeles stockes dans `public.document_templates`
 
-- securite applicative minimale
+Condition importante :
 
-Pour un durcissement ulterieur, il faudra :
+- il faut bien avoir reapplique le `supabase/schema.sql` mis a jour
+- et n utiliser que des utilisateurs Supabase Auth valides
 
-- ajouter Supabase Auth
-- restreindre les policies RLS
-- journaliser les acces
-
-## 6. Verification rapide
+## 7. Verification rapide
 
 Dans Supabase :
 
@@ -84,6 +104,6 @@ Dans Supabase :
 
 Dans l application :
 
-- le test Supabase est vert
+- la connexion Supabase est verte
 - le bandeau passe sur `Supabase + cache local`
 - les listes et exports restent fonctionnels
