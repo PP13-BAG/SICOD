@@ -4010,6 +4010,10 @@ function upgradeHostingInfoUI() {
   `;
 }
 
+function hydrateAuthAccessPanel() {
+  upgradeHostingInfoUI();
+}
+
 async function hydrateSystemBlueprint() {
   const mount = document.getElementById('systemBlueprintList');
   if (!mount) return;

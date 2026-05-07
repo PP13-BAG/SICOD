@@ -107,3 +107,25 @@ Dans l application :
 - la connexion Supabase est verte
 - le bandeau passe sur `Supabase + cache local`
 - les listes et exports restent fonctionnels
+
+## 8. Depannage connexion
+
+Si la connexion e-mail / mot de passe echoue :
+
+1. verifier dans `Authentication` -> `Providers` que le provider `Email` est bien actif
+2. verifier dans `Authentication` -> `Users` que l utilisateur existe bien
+3. verifier que l utilisateur n est pas desactive
+4. verifier que l e-mail est confirme :
+   - soit `email_confirmed_at` est renseigne
+   - soit l utilisateur a clique sur le mail de confirmation
+
+Rappel Supabase :
+
+- sur les projets heberges, la confirmation d e-mail est active par defaut
+- un utilisateur non confirme ne peut pas se connecter par mot de passe
+
+Si besoin, pour un usage interne simple :
+
+- creer manuellement un utilisateur dans `Authentication` -> `Users`
+- confirmer son e-mail
+- puis se connecter depuis SICOD
