@@ -61,7 +61,7 @@ Ensuite :
 
 Le bandeau doit ensuite afficher :
 
-- `Supabase sécurisé`
+- `Base de donnée`
 
 ## 5. Import initial des donnees existantes
 
@@ -100,7 +100,7 @@ Dans Supabase :
 Dans l application :
 
 - la connexion Supabase est verte
-- le bandeau passe sur `Supabase sécurisé`
+- le bandeau passe sur `Base de donnée`
 - les listes et exports restent fonctionnels
 
 ## 8. Depannage connexion

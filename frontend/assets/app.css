@@ -194,7 +194,7 @@ code{
   padding:var(--space-4) var(--space-4) var(--space-3);
   border-bottom:1px solid var(--border);
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   justify-content:space-between;
   gap:var(--space-3);
 }
@@ -287,7 +287,7 @@ input:focus,select:focus,textarea:focus{
 .table th,.table td{border:1px solid var(--border);padding:.8rem .85rem;vertical-align:top;text-align:left}
 .table th{background:var(--blue-soft);color:var(--blue-france);font-size:.875rem}
 .table tr.is-selected td{background:#f5f5fe}
-.table .table-title-btn{width:100%;display:block;text-align:left;background:none;border:0;padding:0;color:var(--blue-france);font-weight:700;cursor:pointer}
+.table .table-title-btn{width:100%;display:block;text-align:left;background:none;border:0;padding:0;color:var(--blue-france);font-weight:700;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
 .table .table-meta{display:block;margin-top:.25rem;color:var(--text-light);font-size:.8125rem;font-weight:400}
 
 .badge{
@@ -330,10 +330,55 @@ input:focus,select:focus,textarea:focus{
   flex-wrap:wrap;
   align-items:center;
 }
+.page-header .list-actions,
+.page-header .tool-actions,
+.page-header .event-actions,
+.page-header .directory-actions{
+  justify-content:flex-end;
+  align-items:stretch;
+}
+.card-header .list-actions,
+.card-header .tool-actions,
+.card-header .event-actions{
+  justify-content:flex-end;
+  align-items:stretch;
+  flex:1 1 auto;
+}
 .list-actions > .fr-btn,
 .tool-actions > .fr-btn,
 .event-actions > .fr-btn,
-.directory-actions > .fr-btn{min-width:10rem}
+.directory-actions > .fr-btn,
+.stats-toolbar > .fr-btn{
+  flex:0 1 auto;
+}
+.settings-footer-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:var(--space-4);
+}
+.settings-footer-actions .fr-btn{min-width:14rem}
+.cloud-admin-grid .fr-btn{width:100%}
+.table td .list-actions,
+.table td .tool-actions,
+.table td .event-actions,
+.table td .directory-actions{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:var(--space-2);
+  width:100%;
+}
+.table .fr-btn,
+.table button,
+.card-header .fr-btn.small{
+  min-width:0;
+  max-width:100%;
+  white-space:normal;
+}
+.table td .fr-btn,
+.table td button{
+  width:100%;
+  justify-content:center;
+}
 
 .fiche-layout{display:grid;grid-template-columns:20rem minmax(0,1fr);gap:1rem;min-height:0}
 .fiche-nav{overflow:auto;max-height:calc(100vh - 16rem)}

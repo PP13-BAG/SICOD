@@ -360,24 +360,18 @@ function normalizeStaticAssetPath(value) {
 }
 
 function currentLogoSrc() {
-  const configured = (state.settings && state.settings.brandLogo) ? String(state.settings.brandLogo).trim() : '';
-  return normalizeStaticAssetPath(configured) || DEFAULT_BRAND_LOGO;
+  return DEFAULT_BRAND_LOGO;
 }
 
 function currentDashboardBannerSrc() {
-  const configured = (state.settings && state.settings.dashboardBanner) ? String(state.settings.dashboardBanner).trim() : '';
-  return normalizeStaticAssetPath(configured) || DEFAULT_DASHBOARD_BANNER;
+  return DEFAULT_DASHBOARD_BANNER;
 }
 
 function refreshDashboardBanner() {
   const wrap = document.getElementById('dashboardBannerWrap');
   const img = document.getElementById('dashboardBannerImage');
   if (!wrap || !img) return;
-  const configured = (state.settings && state.settings.dashboardBanner) ? String(state.settings.dashboardBanner).trim() : '';
-  const normalizedConfigured = normalizeStaticAssetPath(configured);
-  const fallbacks = normalizedConfigured
-    ? [normalizedConfigured, DEFAULT_DASHBOARD_BANNER, 'banniere.png']
-    : [DEFAULT_DASHBOARD_BANNER, 'banniere.png'];
+  const fallbacks = [DEFAULT_DASHBOARD_BANNER, 'banniere.png'];
   let index = 0;
   img.dataset.fallback = '0';
   img.onerror = function() {
@@ -408,8 +402,7 @@ function updateDashboardBannerThumb(src) {
 
 /** Retourne la source favicon courante */
 function currentFaviconSrc() {
-  const configured = (state.settings && state.settings.favicon) ? String(state.settings.favicon).trim() : '';
-  return normalizeStaticAssetPath(configured) || DEFAULT_FAVICON;
+  return DEFAULT_FAVICON;
 }
 
 function addLogoPreserved(doc, x, y, maxW, maxH) {
@@ -3326,6 +3319,8 @@ function showSettingsTab(tab) {
 function ensureSettingsNavigatorUI() {
   const tabs = document.querySelector('.settings-tabs');
   if (!tabs) return;
+  const usersTab = tabs.querySelector('[data-settings-tab="users"]');
+  if (usersTab) usersTab.textContent = 'Acces';
   let wrapper = document.querySelector('.settings-selector-row');
   if (!wrapper) {
     wrapper = document.createElement('div');
@@ -3344,6 +3339,7 @@ function ensureSettingsNavigatorUI() {
 }
 
 function ensureBrandingSettingsUI() {
+  return;
   const generalPanel = document.querySelector('[data-settings-panel="general"] .settings-grid');
   if (!generalPanel || document.getElementById('brandingCard')) return;
   const card = document.createElement('div');
@@ -3377,11 +3373,43 @@ function ensureBrandingSettingsUI() {
   document.getElementById('settingFaviconFile').onchange = e => readFile(e.target.files[0], 'settingFavicon', 'settingFaviconPreview');
 }
 
+function ensureSettingsCleanupUI() {
+  const generalPanel = document.querySelector('[data-settings-panel="general"]');
+  if (generalPanel) {
+    Array.from(generalPanel.querySelectorAll('label')).forEach((label) => {
+      const text = (label.textContent || '').trim().toLowerCase();
+      if (text.includes('bannière du tableau de bord') || text.includes('joindre une bannière')) {
+        const block = label.parentElement;
+        if (block) block.hidden = true;
+      }
+    });
+    const thumb = document.getElementById('settingDashboardBannerThumb');
+    if (thumb) thumb.style.display = 'none';
+    ['settingDashboardBanner', 'settingDashboardBannerFile'].forEach((id) => {
+      const input = document.getElementById(id);
+      if (input && input.parentElement) input.parentElement.hidden = true;
+    });
+  }
+
+  document.querySelectorAll('#page-settings .card .list-actions').forEach((group) => {
+    if (group.closest('.settings-footer-actions')) return;
+    group.hidden = true;
+  });
+}
+
+function ensureSettingsFooterActions() {
+  const pageInner = document.querySelector('#page-settings .page-inner');
+  if (!pageInner || document.getElementById('settingsFooterActions')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'settingsFooterActions';
+  wrap.className = 'settings-footer-actions';
+  wrap.innerHTML = `<button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramètres</button>`;
+  pageInner.appendChild(wrap);
+}
+
 function loadSettingsForm() {
   const get = id => document.getElementById(id);
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
-  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = normalizeStaticAssetPath(state.settings.dashboardBanner || '');
-  updateDashboardBannerThumb(normalizeStaticAssetPath(state.settings.dashboardBanner || ''));
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
@@ -3528,7 +3556,26 @@ const authRuntime = {
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
   if (!label) return;
-  label.textContent = window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise';
+  label.textContent = 'Base de donnée';
+}
+
+function ensureTopbarAuthAction() {
+  const actions = document.querySelector('.top-actions');
+  if (!actions) return;
+  let button = document.getElementById('topbarLogoutBtn');
+  if (!button) {
+    const themeButton = actions.querySelector('.fr-btn');
+    button = document.createElement('button');
+    button.id = 'topbarLogoutBtn';
+    button.className = 'fr-btn secondary small';
+    button.type = 'button';
+    button.textContent = 'Déconnexion';
+    button.onclick = () => logoutSupabaseSession();
+    if (themeButton) actions.insertBefore(button, themeButton);
+    else actions.appendChild(button);
+  }
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  button.hidden = !authState.authenticated;
 }
 
 function ensureAuthGateUI() {
@@ -3576,6 +3623,7 @@ function refreshAuthGate() {
   document.body.classList.toggle('auth-required', requiresAuth);
   const appLayout = document.getElementById('appLayout');
   if (appLayout) appLayout.hidden = requiresAuth;
+  ensureTopbarAuthAction();
 }
 
 function updateAuthGateStatus(message, tone = 'info') {
@@ -3776,7 +3824,7 @@ function ensureSystemSettingsUI() {
   const card = document.createElement('div');
   card.className = 'card';
   card.id = 'systemCard';
-  card.innerHTML = `<div class="card-header"><h2 class="card-title">Stockage et synchronisation</h2></div>
+  card.innerHTML = `<div class="card-header"><h2 class="card-title">Base de donnÃ©e</h2></div>
   <div class="card-body">
     <div id="systemBlueprintList" class="info-pairs">
       <div><strong>Mode actuel</strong><span>${esc(window.SICODApi?.system?.getStorageModeLabel?.() || 'Supabase · connexion requise')}</span></div>
@@ -3787,16 +3835,27 @@ function ensureSystemSettingsUI() {
   generalGrid.appendChild(card);
   const cardBody = card.querySelector('.card-body');
   if (cardBody) {
+    const title = card.querySelector('.card-title');
+    if (title) title.textContent = 'Base de donnée';
+    const blueprintMount = card.querySelector('#systemBlueprintList');
+    if (blueprintMount) blueprintMount.innerHTML = '';
+    const introHelp = cardBody.querySelector('.help');
+    if (introHelp) introHelp.remove();
     const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
     const providerGrid = document.createElement('div');
     providerGrid.className = 'grid-2';
     providerGrid.style.marginTop = '1rem';
     providerGrid.innerHTML = `
-      <div><label>Fournisseur distant</label><input value="Supabase" readonly></div>
+      <div><label>Fournisseur</label><input value="Supabase" readonly></div>
       <div><label>Mode</label><input value="${remoteConfig.enabled ? 'Base de données active' : 'Configuration manquante'}" readonly></div>
       <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
       <div><label>Project ref</label><input value="${esc(remoteConfig.projectRef || '')}" readonly></div>
     `;
+    const providerLabels = providerGrid.querySelectorAll('label');
+    if (providerLabels[0]) providerLabels[0].textContent = 'Fournisseur';
+    if (providerLabels[1]) providerLabels[1].textContent = 'Accès';
+    const providerInputs = providerGrid.querySelectorAll('input');
+    if (providerInputs[1]) providerInputs[1].value = remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante';
     const actions = document.createElement('div');
     actions.className = 'cloud-admin-grid';
     actions.innerHTML = `
@@ -3856,7 +3915,7 @@ function exportCurrentStateJson() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  updateCloudStateStatus('Export JSON généré depuis l’état courant du navigateur.', 'success');
+  updateCloudStateStatus('Export JSON généré depuis l’état courant de la session.', 'success');
 }
 
 async function checkSupabaseState() {
@@ -3876,7 +3935,7 @@ async function checkSupabaseState() {
     const authState = window.SICODApi.system.getAuthState?.() || {};
     updateCloudStateStatus(`
       <strong>Supabase joignable.</strong><br>
-      Mode : ${esc(window.SICODApi.system.getStorageModeLabel())}<br>
+      Support : Base de donnée<br>
       Utilisateur : ${esc(authState.email || 'non identifie')}<br>
       Modèles PDF : ${remoteTemplates.length}<br>
       Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
@@ -4019,6 +4078,10 @@ function ensureHostingInfoUI() {
       </tbody>
     </table>
   `;
+  body.innerHTML = `
+    <p class="help">Les comptes se gerent dans Supabase Auth. Le site peut rester public, mais les donnees restent protegees par l authentification et les regles RLS.</p>
+    <div class="info-pairs" id="accessInfoPairs"></div>
+  `;
 }
 
 function upgradeHostingInfoUI() {
@@ -4030,16 +4093,11 @@ function upgradeHostingInfoUI() {
   if (!body) return;
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
   body.innerHTML = `
-    <p class="help">Le frontend reste public sur GitHub Pages, mais les donnees SICOD ne doivent etre accessibles qu apres authentification Supabase et application des policies RLS.</p>
     <div class="info-pairs">
-      <div><strong>Mode de protection</strong><span>Supabase Auth par e-mail / mot de passe</span></div>
-      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecte' : (authState.configured ? 'Connexion requise' : 'Non configure'))}</span></div>
-      <div><strong>Utilisateur courant</strong><span>${esc(authState.email || 'Aucun')}</span></div>
-      <div><strong>Gestion des utilisateurs</strong><span>Se fait dans le dashboard Supabase Auth</span></div>
-    </div>
-    <div class="list-actions" style="margin-top:1rem">
-      <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Verifier la connexion</button>
-      ${authState.authenticated ? '<button class="fr-btn secondary" type="button" onclick="logoutSupabaseSession()">Se deconnecter</button>' : ''}
+      <div><strong>Protection</strong><span>Supabase Auth</span></div>
+      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecté' : (authState.configured ? 'Connexion requise' : 'Non configuré'))}</span></div>
+      <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Aucun')}</span></div>
+      <div><strong>Administration</strong><span>Utilisateurs gérés dans Supabase Auth</span></div>
     </div>
     <table class="table" style="margin-top:1rem">
       <thead><tr><th>Sujet</th><th>Reference</th><th>Usage</th></tr></thead>
@@ -4059,6 +4117,12 @@ function hydrateAuthAccessPanel() {
 async function hydrateSystemBlueprint() {
   const mount = document.getElementById('systemBlueprintList');
   if (!mount) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  mount.innerHTML = `
+    <div><strong>Mode</strong><span>Base de donnée</span></div>
+    <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Connexion requise')}</span></div>
+  `;
+  return;
   try {
     settingsRuntime.blueprint = settingsRuntime.blueprint || await window.SICODApi.system.getBlueprint();
   } catch (error) {
@@ -4076,11 +4140,99 @@ async function hydrateSystemBlueprint() {
   `;
 }
 
+function ensureSystemSettingsUI() {
+  const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
+  if (!generalGrid) return;
+  let card = document.getElementById('systemCard');
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'systemCard';
+    generalGrid.appendChild(card);
+  }
+  const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
+  card.innerHTML = `
+    <div class="card-header"><h2 class="card-title">Base de donnee</h2></div>
+    <div class="card-body">
+      <div id="systemBlueprintList" class="info-pairs"></div>
+      <div class="grid-2" style="margin-top:1rem">
+        <div><label>Fournisseur</label><input value="Supabase" readonly></div>
+        <div><label>Acces</label><input value="${remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante'}" readonly></div>
+        <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
+        <div><label>Project ref</label><input value="${esc(remoteConfig.projectRef || '')}" readonly></div>
+      </div>
+      <div class="cloud-admin-grid">
+        <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Verifier la connexion</button>
+        <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les donnees</button>
+        <button class="fr-btn secondary" type="button" onclick="pushCurrentStateToSupabase()">Pousser vers Supabase</button>
+        <button class="fr-btn secondary" type="button" onclick="reloadStateFromSupabase()">Recharger depuis Supabase</button>
+      </div>
+      <div class="field-stack">
+        <label for="cloudStateImportFile">Importer un export JSON dans Supabase</label>
+        <input id="cloudStateImportFile" type="file" accept="application/json,.json">
+      </div>
+      <div id="cloudStateStatus" class="cloud-status-panel help">Aucun controle execute pour le moment.</div>
+    </div>
+  `;
+}
+
+function ensureHostingInfoUI() {
+  const panel = document.querySelector('[data-settings-panel="users"] .card');
+  if (!panel) return;
+  const title = panel.querySelector('.card-title');
+  if (title) title.textContent = 'Acces et securite';
+  const body = panel.querySelector('.card-body');
+  if (!body) return;
+  body.innerHTML = `
+    <p class="help">Les comptes se gerent dans Supabase Auth. Le site public ne contient pas les donnees metier et l acces aux donnees depend de l authentification et des regles RLS.</p>
+    <div class="info-pairs">
+      <div><strong>Creation des comptes</strong><span>Supabase Auth</span></div>
+      <div><strong>Protection des donnees</strong><span>RLS sur les tables publiques</span></div>
+      <div><strong>Session locale</strong><span>Session d authentification uniquement</span></div>
+    </div>
+  `;
+}
+
+function upgradeHostingInfoUI() {
+  const panel = document.querySelector('[data-settings-panel="users"] .card');
+  if (!panel) return;
+  const title = panel.querySelector('.card-title');
+  if (title) title.textContent = 'Acces et securite';
+  const body = panel.querySelector('.card-body');
+  if (!body) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  body.innerHTML = `
+    <div class="info-pairs">
+      <div><strong>Protection</strong><span>Supabase Auth</span></div>
+      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecte' : (authState.configured ? 'Connexion requise' : 'Non configure'))}</span></div>
+      <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Aucun')}</span></div>
+      <div><strong>Gestion</strong><span>Utilisateurs et mots de passe dans Supabase Auth</span></div>
+    </div>
+    <p class="help" style="margin-top:1rem">Pour autoriser un acces, cree un utilisateur dans Supabase Auth puis confirme son adresse e-mail si necessaire.</p>
+  `;
+}
+
+function hydrateAuthAccessPanel() {
+  upgradeHostingInfoUI();
+}
+
+async function hydrateSystemBlueprint() {
+  const mount = document.getElementById('systemBlueprintList');
+  if (!mount) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  mount.innerHTML = `
+    <div><strong>Mode</strong><span>Base de donnee</span></div>
+    <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Connexion requise')}</span></div>
+  `;
+}
+
 function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
   ensureBrandingSettingsUI();
   ensureSystemSettingsUI();
+  ensureSettingsCleanupUI();
+  ensureSettingsFooterActions();
   ensureHostingInfoUI();
   upgradeHostingInfoUI();
   renderPdfTemplateGuide();
@@ -4093,30 +4245,12 @@ function loadSettingsForm() {
   const activeTab = document.querySelector('.settings-tab.active')?.dataset.settingsTab || 'general';
   ensureSettingsEnhancements();
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
-  if (get('settingDashboardBanner')) get('settingDashboardBanner').value = normalizeStaticAssetPath(state.settings.dashboardBanner || '');
-  updateDashboardBannerThumb(normalizeStaticAssetPath(state.settings.dashboardBanner || ''));
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
   if (get('settingPsSignatureMode')) get('settingPsSignatureMode').value = state.settings.psSignatureMode || 'prefet';
   if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
   if (get('settingPsSignatureRole')) get('settingPsSignatureRole').value = state.settings.psSignatureRole || '';
-  if (get('settingBrandLogo')) {
-    get('settingBrandLogo').value = normalizeStaticAssetPath(state.settings.brandLogo || '');
-    const logoPreview = get('settingBrandLogoPreview');
-    if (logoPreview) {
-      logoPreview.src = currentLogoSrc();
-      logoPreview.style.display = 'block';
-    }
-  }
-  if (get('settingFavicon')) {
-    get('settingFavicon').value = normalizeStaticAssetPath(state.settings.favicon || '');
-    const favPreview = get('settingFaviconPreview');
-    if (favPreview) {
-      favPreview.src = currentFaviconSrc();
-      favPreview.style.display = 'block';
-    }
-  }
   if (get('settingEventTypes')) get('settingEventTypes').value = getDynamicList('eventTypes').join('\n');
   if (get('settingCommandTypes')) get('settingCommandTypes').value = getDynamicList('commandTypes').join('\n');
   if (get('settingCommandSignatureMode')) get('settingCommandSignatureMode').value = state.settings.commandSignatureMode || 'delegation';
@@ -4162,7 +4296,7 @@ function saveSettings() {
     }
   }
   state.settings.theme = get('settingTheme')?.value || 'light';
-  state.settings.dashboardBanner = normalizeStaticAssetPath((get('settingDashboardBanner')?.value || '').trim());
+  state.settings.dashboardBanner = '';
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
   state.settings.classification = get('settingClassification')?.value || 'Non protégé';
   state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
@@ -4179,8 +4313,8 @@ function saveSettings() {
   state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
   state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
   state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.brandLogo = normalizeStaticAssetPath((get('settingBrandLogo')?.value || '').trim());
-  state.settings.favicon = normalizeStaticAssetPath((get('settingFavicon')?.value || '').trim());
+  state.settings.brandLogo = '';
+  state.settings.favicon = '';
   state.settings.pdfAppearance = {
     primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
     accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
