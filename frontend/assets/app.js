@@ -1111,7 +1111,7 @@ function openPSForm(id) {
   const ps = id ? byId(state.ps, id) : null;
   const draft = !ps ? window.SICODPS?.loadDraft?.() : null;
   const targetEventId = ps?.eventId || state.currentEventId || document.getElementById('psEvent')?.value || '';
-  if (targetEventId && isEventArchived(targetEventId)) { showToast(‘Les points de situation d\’un événement archivé ne sont pas modifiables.’, ‘error’); return; }
+  if (targetEventId && isEventArchived(targetEventId)) { showToast("Les points de situation d'un événement archivé ne sont pas modifiables.", 'error'); return; }
   document.getElementById('psId').value = ps?.id || '';
 
   const psEvent = document.getElementById('psEvent');
