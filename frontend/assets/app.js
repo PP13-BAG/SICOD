@@ -3583,6 +3583,15 @@ async function restoreRemoteStateAfterLogin() {
   }
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message || 'Operation expirée.')), timeoutMs);
+    })
+  ]);
+}
+
 async function submitSupabaseLogin(event) {
   event?.preventDefault?.();
   const email = document.getElementById('authEmail')?.value?.trim() || '';
@@ -3593,12 +3602,25 @@ async function submitSupabaseLogin(event) {
   }
   updateAuthGateStatus('Connexion a Supabase en cours...');
   try {
-    await window.SICODApi?.auth?.signInWithPassword?.(email, password);
+    await withTimeout(
+      window.SICODApi?.auth?.signInWithPassword?.(email, password),
+      15000,
+      'La connexion Supabase a expiré. Vérifie le réseau, le compte utilisateur ou la confirmation de l e-mail.'
+    );
     refreshAuthGate();
     refreshStorageStatus();
-    await restoreRemoteStateAfterLogin();
-    updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}.`, 'success');
+    updateAuthGateStatus(`Connexion Supabase ouverte pour ${email}.`);
+    updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
     hydrateAuthAccessPanel();
+    try {
+      await withTimeout(
+        restoreRemoteStateAfterLogin(),
+        15000,
+        'Le chargement de l état distant a expiré.'
+      );
+    } catch (error) {
+      updateCloudStateStatus(`Connexion ouverte, mais chargement distant incomplet : ${esc(error.message || String(error))}`, 'warning');
+    }
   } catch (error) {
     updateAuthGateStatus(`Connexion impossible : ${error.message || String(error)}`, 'warning');
     refreshAuthGate();
