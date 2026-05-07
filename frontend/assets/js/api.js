@@ -332,8 +332,12 @@
 
   async function getSupabaseReferenceCatalog() {
     const entries = await Promise.all(Object.entries(REFERENCE_TABLES).map(async ([key, table]) => {
-      const rows = await getSupabaseReferenceCollection(table);
-      return [key, rows];
+      try {
+        const rows = await getSupabaseReferenceCollection(table);
+        return [key, rows];
+      } catch {
+        return [key, []];
+      }
     }));
     return Object.fromEntries(entries);
   }

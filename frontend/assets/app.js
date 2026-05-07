@@ -239,6 +239,9 @@ function todayISO() {
   return toLocalISO(new Date());
 }
 
+/** Formate une date ISO ou Date en format français jj/mm/aaaa */
+function formatDateFR(value){if(!value)return '';const m=String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return `${m[3]}/${m[2]}/${m[1]}`;const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}
+
 /** Retourne l'heure actuelle HH:MM */
 function timeHHMM() {
   return new Date().toTimeString().slice(0, 5);
@@ -346,6 +349,45 @@ function setSelectOptions(selectEl, items, selected) {
   if (!selectEl) return;
   selectEl.innerHTML = items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
   if (selected !== undefined && items.includes(selected)) selectEl.value = selected;
+}
+
+/** Affiche un toast non-bloquant (type: 'success'|'error'|'info') */
+function showToast(msg, type = 'success', duration = 3500) {
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+/** Affiche une boîte de confirmation asynchrone — retourne Promise<boolean> */
+function confirmAsync(msg) {
+  return new Promise(resolve => {
+    let dialog = document.getElementById('confirmDialog');
+    if (!dialog) {
+      dialog = document.createElement('dialog');
+      dialog.id = 'confirmDialog';
+      dialog.innerHTML = `<p id="confirmDialogMsg"></p><div class="confirm-actions"><button class="fr-btn secondary" id="confirmNo">Annuler</button><button class="fr-btn" id="confirmYes">Confirmer</button></div>`;
+      document.body.appendChild(dialog);
+    }
+    document.getElementById('confirmDialogMsg').textContent = msg;
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    const cleanup = result => { dialog.close(); yes.onclick = null; no.onclick = null; resolve(result); };
+    yes.onclick = () => cleanup(true);
+    no.onclick = () => cleanup(false);
+    dialog.showModal();
+  });
 }
 
 /** Marque binaire pour les exports PDF */
@@ -511,6 +553,16 @@ function applyPlanExpiryRules() {
     limit.setFullYear(limit.getFullYear() + years);
     if (new Date() > limit) item.status = 'A programmer';
   });
+}
+
+function isPlanExpired(item) {
+  const years = getPlanExpiryYearsForType(item.type);
+  if (!years || !item.approvalDate) return false;
+  const approval = parseDateLocal(item.approvalDate);
+  if (!approval) return false;
+  const limit = new Date(approval);
+  limit.setFullYear(limit.getFullYear() + years);
+  return new Date() > limit;
 }
 
 function getPSSignatureConfig() {
@@ -683,7 +735,6 @@ function renderDashboard() {
   const kpiEvents = document.getElementById('kpiEvents');
   const kpiPS = document.getElementById('kpiPS');
   const kpiArchived = document.getElementById('kpiArchived');
-  const kpiTime = document.getElementById('kpiTime');
   const kpiPlansTotal = document.getElementById('kpiPlansTotal');
   const kpiPlansUpToDate = document.getElementById('kpiPlansUpToDate');
   const kpiPlansTodo = document.getElementById('kpiPlansTodo');
@@ -701,7 +752,6 @@ function renderDashboard() {
   if (kpiEvents) kpiEvents.textContent = activeEvents.length;
   if (kpiPS) kpiPS.textContent = activePS.length;
   if (kpiArchived) kpiArchived.textContent = archivedEvents.length;
-  if (kpiTime) kpiTime.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   if (kpiPlansTotal) kpiPlansTotal.textContent = planItems.length;
   if (kpiPlansUpToDate) kpiPlansUpToDate.textContent = planItems.filter(isPlanUpToDate).length;
   if (kpiPlansTodo) kpiPlansTodo.textContent = planItems.filter(isPlanTodo).length;
@@ -779,10 +829,10 @@ function openEventForm(id) {
 function saveEvent() {
   const idEl = document.getElementById('eventId');
   const titleEl = document.getElementById('eventTitle');
-  if (!titleEl || !titleEl.value.trim()) { alert('Le libellé est requis.'); return; }
+  if (!titleEl || !titleEl.value.trim()) { showToast('Le libellé est requis.', 'error'); return; }
   const id = idEl?.value || uid('evt');
   const existing = byId(state.events, id);
-  if (existing && existing.status === 'Archivé') { alert('Un événement archivé ne peut pas être modifié.'); return; }
+  if (existing && existing.status === 'Archivé') { showToast('Un événement archivé ne peut pas être modifié.', 'error'); return; }
   const typeSnapshot = getReferenceSnapshot('eventTypes', document.getElementById('eventType').value.trim());
   const data = {
     id,
@@ -823,8 +873,8 @@ function reactivateEvent(id) {
   renderAll();
 }
 
-function deleteEvent(id) {
-  if (!confirm('Supprimer cet événement et les points de situation rattachés ?')) return;
+async function deleteEvent(id) {
+  if (!await confirmAsync('Supprimer cet événement et les points de situation rattachés ?')) return;
   window.SICODDataModel?.archiveRecord(state.events, id);
   getActiveItems(state.ps).filter(ps => ps.eventId === id).forEach(ps => {
     window.SICODDataModel?.archiveRecord(state.ps, ps.id);
@@ -849,8 +899,8 @@ function openEvent(id) {
 function openEventEntryForm() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
-  if (!e) { alert('Sélectionnez un événement.'); return; }
-  if (e.status === 'Archivé') { alert('Un événement archivé ne peut pas être enrichi.'); return; }
+  if (!e) { showToast('Sélectionnez un événement.', 'error'); return; }
+  if (e.status === 'Archivé') { showToast('Un événement archivé ne peut pas être enrichi.', 'error'); return; }
   document.getElementById('eventLogEventId').value = eventId;
   document.getElementById('eventLogDateTime').value = nowFR();
   document.getElementById('eventLogAuthor').value = 'SIRACEDPC';
@@ -863,11 +913,11 @@ function saveEventLogEntry() {
   const eventId = document.getElementById('eventLogEventId').value;
   const e = byId(state.events, eventId);
   if (!e) return;
-  if (e.status === 'Archivé') { alert('Un événement archivé ne peut pas être enrichi.'); return; }
+  if (e.status === 'Archivé') { showToast('Un événement archivé ne peut pas être enrichi.', 'error'); return; }
   const title = (document.getElementById('eventLogTitle').value || '').trim();
   const detail = (document.getElementById('eventLogDetail').value || '').trim();
   const author = (document.getElementById('eventLogAuthor').value || '').trim() || 'SIRACEDPC';
-  if (!title) { alert('Le titre est requis.'); return; }
+  if (!title) { showToast('Le titre est requis.', 'error'); return; }
   e.logEntries = Array.isArray(e.logEntries) ? e.logEntries : [];
   e.logEntries.unshift({ id: uid('log'), createdAt: new Date().toISOString(), title, detail, author });
   e.updatedAt = new Date().toISOString();
@@ -1061,7 +1111,7 @@ function openPSForm(id) {
   const ps = id ? byId(state.ps, id) : null;
   const draft = !ps ? window.SICODPS?.loadDraft?.() : null;
   const targetEventId = ps?.eventId || state.currentEventId || document.getElementById('psEvent')?.value || '';
-  if (targetEventId && isEventArchived(targetEventId)) { alert('Les points de situation d’un événement archivé ne sont pas modifiables.'); return; }
+  if (targetEventId && isEventArchived(targetEventId)) { showToast(‘Les points de situation d\’un événement archivé ne sont pas modifiables.’, ‘error’); return; }
   document.getElementById('psId').value = ps?.id || '';
 
   const psEvent = document.getElementById('psEvent');
@@ -1145,7 +1195,7 @@ function savePS() {
   const id = idEl?.value || uid('ps');
   const existing = byId(state.ps, id);
   const eventId = psEvent?.value || '';
-  if (eventId && isEventArchived(eventId)) { alert('Impossible de modifier un point de situation rattaché à un événement archivé.'); return; }
+  if (eventId && isEventArchived(eventId)) { showToast('Impossible de modifier un point de situation rattaché à un événement archivé.', 'error'); return; }
   const siblings = state.ps.filter(p => p.eventId === eventId && p.id !== id);
 
   const audioEl = document.getElementById('psAudioPreview');
@@ -1185,7 +1235,7 @@ function savePS() {
 
   const validation = window.SICODPS?.validate?.(data);
   if (validation && validation.ok === false) {
-    alert(validation.message);
+    showToast(validation.message, 'error');
     return;
   }
 
@@ -1199,8 +1249,8 @@ function savePS() {
   renderAll();
 }
 
-function deletePS(id) {
-  if (!confirm('Supprimer ce point de situation ?')) return;
+async function deletePS(id) {
+  if (!await confirmAsync('Supprimer ce point de situation ?')) return;
   window.SICODDataModel?.archiveRecord(state.ps, id);
   if (state.selectedPSId === id) state.selectedPSId = getActiveItems(state.ps)[0]?.id || null;
   persist();
@@ -1214,14 +1264,50 @@ function selectPS(id) {
   renderPSList();
 }
 
+function duplicatePS(id) {
+  const src = byId(state.ps, id);
+  if (!src) return;
+  const siblings = state.ps.filter(p => p.eventId === src.eventId);
+  const copy = Object.assign({}, src, {
+    id: uid('ps'),
+    number: String(siblings.length + 1),
+    status: 'Brouillon',
+    updatedAt: new Date().toISOString()
+  });
+  state.ps.unshift(copy);
+  state.selectedPSId = copy.id;
+  persist();
+  renderAll();
+  showToast('Point de situation dupliqué.');
+}
+
+function filterPSByEvent(eventId) {
+  state.currentEventId = eventId || null;
+  persist();
+  renderPSList();
+}
+
 function renderPSList() {
   const psList = document.getElementById('psList');
   if (!psList) return;
+
+  // Populate event filter dropdown
+  const psEventFilter = document.getElementById('psEventFilter');
+  if (psEventFilter) {
+    const events = getActiveItems(state.events);
+    psEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
+      events.map(e => `<option value="${esc(e.id)}" ${state.currentEventId === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
+  }
+
+  const q = (document.getElementById('psListSearch')?.value || '').toLowerCase().trim();
   const source = getActiveItems(state.ps);
   const list = state.currentEventId
     ? source.filter(ps => ps.eventId === state.currentEventId)
     : source;
-  const sorted = [...list].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  const filtered = q
+    ? list.filter(ps => [ps.number, ps.author, ps.status, ps.title, getEventTitle(ps.eventId)].join(' ').toLowerCase().includes(q))
+    : list;
+  const sorted = [...filtered].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   psList.innerHTML = sorted.length
     ? `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
         sorted.map(ps => `<tr>
@@ -1231,6 +1317,7 @@ function renderPSList() {
           <td>${badge(ps.status)}</td>
           <td><div class="list-actions">
             <button class="fr-btn secondary small ps-toggle-btn" type="button" onclick="selectPS('${ps.id}')">${state.selectedPSId === ps.id ? 'Fermer' : 'Ouvrir'}</button>
+            <button class="fr-btn secondary small" type="button" onclick="duplicatePS('${ps.id}')">Dupliquer</button>
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -1341,7 +1428,7 @@ async function togglePSRecording() {
     return;
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    alert('Enregistrement audio indisponible sur ce navigateur.');
+    showToast('Enregistrement audio indisponible sur ce navigateur.', 'error');
     return;
   }
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1588,7 +1675,8 @@ function exportPSFocusPDF(ps) {
 
 function exportPSPDF() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
-  if (!ps) { alert('Sélectionnez un point de situation.'); return; }
+  if (!ps) { showToast('Sélectionnez un point de situation.', 'error'); return; }
+  if (ps.format === 'focus') { exportPSFocusPDF(ps); return; }
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
   const attention = ps.attention ?? ps.points ?? '';
@@ -1941,7 +2029,7 @@ function saveCommandMessage() {
   });
   const validation = window.SICODCommand?.validate?.(payload);
   if (validation && validation.ok === false) {
-    alert(validation.message);
+    showToast(validation.message, 'error');
     return;
   }
   if (existing) Object.assign(existing, payload);
@@ -1955,11 +2043,11 @@ function saveCommandMessage() {
   renderCommandPreview(byId(state.commandMessages, id));
 }
 
-function deleteSelectedCommand() {
-  if (!state.selectedCommandId) { alert('Sélectionnez un message de commandement'); return; }
+async function deleteSelectedCommand() {
+  if (!state.selectedCommandId) { showToast('Sélectionnez un message de commandement', 'error'); return; }
   const record = byId(state.commandMessages, state.selectedCommandId);
   if (!record) return;
-  if (!confirm('Supprimer ce message de commandement ?')) return;
+  if (!await confirmAsync('Supprimer ce message de commandement ?')) return;
   window.SICODDataModel?.archiveRecord(state.commandMessages, state.selectedCommandId);
   state.selectedCommandId = getActiveItems(state.commandMessages)[0]?.id || null;
   persist();
@@ -1988,11 +2076,31 @@ function selectCommand(id) {
   renderCommandPreview(byId(state.commandMessages, id));
 }
 
+function filterCommandByEvent(eventId) {
+  state.selectedCommandEventFilter = eventId || null;
+  renderCommandList();
+}
+
 function renderCommandList() {
   const el = document.getElementById('commandList');
   if (!el) return;
-  const items = [...getActiveItems(state.commandMessages)]
+
+  // Populate event filter dropdown
+  const cmdEventFilter = document.getElementById('cmdEventFilter');
+  if (cmdEventFilter) {
+    const events = getActiveItems(state.events);
+    const cur = state.selectedCommandEventFilter || '';
+    cmdEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
+      events.map(e => `<option value="${esc(e.id)}" ${cur === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
+  }
+
+  const q = (document.getElementById('commandListSearch')?.value || '').toLowerCase().trim();
+  const eventFilter = state.selectedCommandEventFilter || null;
+  let items = [...getActiveItems(state.commandMessages)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  if (eventFilter) items = items.filter(i => i.eventId === eventFilter);
+  if (q) items = items.filter(i => [i.number, i.typeLabel, i.status, i.event, getEventTitle(i.eventId)].join(' ').toLowerCase().includes(q));
+
   if (!items.length) {
     el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. Créer un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistré.</p>';
     return;
@@ -2003,9 +2111,30 @@ function renderCommandList() {
       <td><button class="table-title-btn" type="button" onclick="selectCommand('${item.id}')">Message ${esc(item.number || '')}<span class="table-meta">${esc(item.typeLabel || '')}</span></button></td>
       <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
       <td>${badge(item.status)}</td>
-      <td><div class="list-actions"><button class="fr-btn secondary small" type="button" onclick="toggleCommandPreview('${item.id}')">${item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir'}</button></div></td>
+      <td><div class="list-actions">
+        <button class="fr-btn secondary small" type="button" onclick="toggleCommandPreview('${item.id}')">${item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir'}</button>
+        <button class="fr-btn secondary small" type="button" onclick="duplicateCommand('${item.id}')">Dupliquer</button>
+      </div></td>
     </tr>`).join('')
   }</tbody></table>`;
+}
+
+function duplicateCommand(id) {
+  const src = byId(state.commandMessages, id);
+  if (!src) return;
+  const siblings = getActiveItems(state.commandMessages).filter(m => m.eventId === src.eventId);
+  const copy = Object.assign({}, src, {
+    id: uid('cmd'),
+    number: String(siblings.length + 1),
+    status: 'Ouvert',
+    updatedAt: new Date().toISOString()
+  });
+  state.commandMessages.unshift(copy);
+  state.selectedCommandId = copy.id;
+  persist();
+  renderCommandList();
+  renderCommandPreview(copy);
+  showToast('Message de commandement dupliqué.');
 }
 
 function addServiceRow(data) {
@@ -2122,7 +2251,7 @@ function renderCommandPreview(data) {
 
 function exportCommandPDF() {
   const d = state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null;
-  if (!d) { alert('Sélectionnez un message de commandement'); return; }
+  if (!d) { showToast('Sélectionnez un message de commandement', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -2338,10 +2467,10 @@ function saveFiche() {
   const title = document.getElementById('ficheTitle').value.trim();
   const familySnapshot = getReferenceSnapshot('reflexFamilies', document.getElementById('ficheFamily').value.trim() || getDynamicList('reflexFamilies')[0] || 'Autres');
   const sections = parseFicheSections(document.getElementById('ficheSections').value);
-  if (!code || !title) { alert('Renseignez au minimum le code et le titre.'); return; }
-  if (!sections.length) { alert('Ajoutez au moins une section avec du contenu.'); return; }
+  if (!code || !title) { showToast('Renseignez au minimum le code et le titre.', 'error'); return; }
+  if (!sections.length) { showToast('Ajoutez au moins une section avec du contenu.', 'error'); return; }
   const duplicate = fiches.find(f => f.code === code && f.code !== originalCode);
-  if (duplicate) { alert('Une fiche avec ce code existe déjà.'); return; }
+  if (duplicate) { showToast('Une fiche avec ce code existe déjà.', 'error'); return; }
   const payload = { code, title, family: familySnapshot.label, familyId: familySnapshot.id, familyLabelSnapshot: familySnapshot.label, sections };
   const index = fiches.findIndex(f => f.code === originalCode);
   if (index >= 0) fiches[index] = payload;
@@ -2355,12 +2484,12 @@ function saveFiche() {
   renderFiches();
 }
 
-function deleteSelectedFiche() {
+async function deleteSelectedFiche() {
   if (!state.selectedFiche || state.selectedFiche === 'glossary') return;
   const fiches = getReflexFiches();
   const fiche = fiches.find(f => f.code === state.selectedFiche);
   if (!fiche) return;
-  if (!confirm(`Supprimer la fiche ${fiche.code} · ${fiche.title} ?`)) return;
+  if (!await confirmAsync(`Supprimer la fiche ${fiche.code} · ${fiche.title} ?`)) return;
   fiche.deletedAt = new Date().toISOString();
   fiche.updatedAt = new Date().toISOString();
   state.selectedFiche = (getReflexFiches()[0] || {}).code || 'glossary';
@@ -2373,7 +2502,11 @@ function renderFiches() {
   const ficheContent = document.getElementById('ficheContent');
   if (!ficheNav || !ficheContent) return;
 
-  const fiches = getReflexFiches();
+  const allFiches = getReflexFiches();
+  const q = (document.getElementById('ficheSearch')?.value || '').toLowerCase().trim();
+  const fiches = q
+    ? allFiches.filter(f => [f.code, f.title, f.family, ...(f.sections || []).flatMap(s => [s.heading, ...(s.items || [])])].join(' ').toLowerCase().includes(q))
+    : allFiches;
   const glossary = getReflexGlossary();
   const groups = {};
   fiches.forEach(f => { (groups[f.family] ||= []).push(f); });
@@ -2382,7 +2515,7 @@ function renderFiches() {
     `<div class="group"><h3>${esc(family)}</h3>${
       items.sort((a, b) => `${a.code} ${a.title}`.localeCompare(`${b.code} ${b.title}`, 'fr')).map(f => `<button class="fiche-link ${state.selectedFiche === f.code ? 'active' : ''}" onclick="selectFiche('${esc(f.code)}')">${esc(f.code)} · ${esc(f.title)}</button>`).join('')
     }</div>`
-  ).join('') + `<div class="group"><h3>Compléments</h3><button class="fiche-link ${state.selectedFiche === 'glossary' ? 'active' : ''}" onclick="selectFiche('glossary')">Glossaire</button></div>`;
+  ).join('') + (!q ? `<div class="group"><h3>Compléments</h3><button class="fiche-link ${state.selectedFiche === 'glossary' ? 'active' : ''}" onclick="selectFiche('glossary')">Glossaire</button></div>` : '');
 
   if (state.selectedFiche === 'glossary') {
     ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter une fiche</button></div><h2>Glossaire</h2><div class="fiche-section"><ul>${glossary.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`;
@@ -2408,7 +2541,7 @@ function selectFiche(code) {
 
 function exportAllFichesPDF() {
   const fiches = getReflexFiches();
-  if (!fiches.length || !window.jspdf) { alert('Aucune fiche à exporter.'); return; }
+  if (!fiches.length || !window.jspdf) { showToast('Aucune fiche à exporter.', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -2522,7 +2655,7 @@ function saveContact() {
     email1: document.getElementById('contactEmail1').value.trim(),
     email2: document.getElementById('contactEmail2').value.trim()
   };
-  if (!data.name) { alert('Le nom du contact est requis.'); return; }
+  if (!data.name) { showToast('Le nom du contact est requis.', 'error'); return; }
   if (existing) Object.assign(existing, data);
   else state.contacts.push(data);
   persist();
@@ -2530,8 +2663,8 @@ function saveContact() {
   renderDirectory();
 }
 
-function deleteContact(id) {
-  if (!confirm('Supprimer ce contact ?')) return;
+async function deleteContact(id) {
+  if (!await confirmAsync('Supprimer ce contact ?')) return;
   window.SICODDataModel?.archiveRecord(state.contacts, id);
   persist();
   renderDirectory();
@@ -2575,7 +2708,7 @@ function importContactsCSV(file) {
   if (!file) return;
   file.text().then(text => {
     const lines = text.replaceAll('\r', '').split('\n').filter(Boolean);
-    if (lines.length < 2) { alert("Le fichier CSV d'annuaire est vide ou invalide."); return; }
+    if (lines.length < 2) { showToast("Le fichier CSV d'annuaire est vide ou invalide.", 'error'); return; }
     const data = lines.slice(1).map(line => line.split(/[;,]/).map(v => v.replace(/^"|"$/g, '')));
     let imported = 0;
     data.forEach(cols => {
@@ -2595,10 +2728,10 @@ function importContactsCSV(file) {
       });
       imported += 1;
     });
-    if (!imported) { alert("Aucun contact exploitable n'a été trouvé dans ce fichier CSV."); return; }
+    if (!imported) { showToast("Aucun contact exploitable n'a été trouvé dans ce fichier CSV.", 'error'); return; }
     persist();
     renderDirectory();
-    alert(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
+    showToast(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
   });
 }
 
@@ -2779,7 +2912,7 @@ function saveTool() {
     password: document.getElementById('toolPassword').value.trim(),
     logo
   };
-  if (!data.name || !data.url) { alert("Le nom et l'URL de l'outil sont requis."); return; }
+  if (!data.name || !data.url) { showToast("Le nom et l'URL de l'outil sont requis.", 'error'); return; }
   if (existing) Object.assign(existing, data);
   else state.tools.unshift(data);
   persist();
@@ -2787,8 +2920,8 @@ function saveTool() {
   renderTools();
 }
 
-function deleteTool(id) {
-  if (!confirm('Supprimer cet outil ?')) return;
+async function deleteTool(id) {
+  if (!await confirmAsync('Supprimer cet outil ?')) return;
   window.SICODDataModel?.archiveRecord(state.tools, id);
   persist();
   renderTools();
@@ -2853,6 +2986,7 @@ function openPlanForm(id) {
   document.getElementById('planItem').value = p?.item || '';
   document.getElementById('planApproval').value = p?.approvalDate || '';
   document.getElementById('planObservation').value = p?.observation || '';
+  document.getElementById('planUrl').value = p?.url || '';
   document.getElementById('planningDialog').showModal();
 }
 
@@ -2879,9 +3013,10 @@ function savePlanItem() {
     statusId: statusSnapshot.id,
     statusLabelSnapshot: statusSnapshot.label,
     approvalDate: document.getElementById('planApproval').value,
-    observation: document.getElementById('planObservation').value.trim()
+    observation: document.getElementById('planObservation').value.trim(),
+    url: document.getElementById('planUrl').value.trim()
   };
-  if (!data.item) { alert("L'item de planification est requis."); return; }
+  if (!data.item) { showToast("L'item de planification est requis.", 'error'); return; }
   if (existing) Object.assign(existing, data);
   else state.planItems.unshift(data);
   persist();
@@ -2901,7 +3036,11 @@ function renderPlanning() {
   const planningSummary = document.getElementById('planningSummary');
   if (!planningList) return;
 
-  const items = getActiveItems(state.planItems);
+  const q = (document.getElementById('planningSearch')?.value || '').toLowerCase().trim();
+  const allItems = getActiveItems(state.planItems);
+  const items = q
+    ? allItems.filter(p => [p.type, p.risk, p.item, p.priority, p.status, p.observation].join(' ').toLowerCase().includes(q))
+    : allItems;
   planningList.innerHTML = items.length
     ? `<table class="table"><thead><tr><th>Type</th><th>Risque</th><th>Item</th><th>Priorité</th><th>Statut</th><th>Date d'approbation</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
         items.map(p => `<tr>
@@ -2909,11 +3048,12 @@ function renderPlanning() {
           <td>${esc(p.risk || '')}</td>
           <td>${esc(p.item || '')}</td>
           <td>${esc(p.priority || '')}</td>
-          <td>${badge(p.status || '')}</td>
+          <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
           <td>${esc(p.approvalDate || '')}</td>
           <td>${esc(p.observation || '')}</td>
           <td><div class="list-actions plan-actions-single">
             <button class="fr-btn secondary small" type="button" onclick="openPlanForm('${p.id}')">Modifier</button>
+            ${p.url ? `<a class="fr-btn small" href="${esc(p.url)}" target="_blank" rel="noopener">Accéder</a>` : ''}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -3145,8 +3285,8 @@ function saveDutyAvailability() {
     end: document.getElementById('dutyEnd').value,
     note: document.getElementById('dutyNote').value.trim()
   };
-  if (!data.agent || !data.role) { alert("Sélectionnez un agent et un rôle d'astreinte."); return; }
-  if (!data.start || !data.end || data.end < data.start) { alert("Définissez une période de disponibilité valide."); return; }
+  if (!data.agent || !data.role) { showToast("Sélectionnez un agent et un rôle d'astreinte.", 'error'); return; }
+  if (!data.start || !data.end || data.end < data.start) { showToast("Définissez une période de disponibilité valide.", 'error'); return; }
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
@@ -3220,7 +3360,7 @@ function generateDutySchedule() {
   const startVal = document.getElementById('dutyPeriodStart')?.value || todayISO();
   const endVal = document.getElementById('dutyPeriodEnd')?.value || startVal;
   const startInput = parseDateLocal(startVal), endInput = parseDateLocal(endVal);
-  if (!startInput || !endInput || endInput < startInput) { alert('Définissez une période de planning valide.'); return; }
+  if (!startInput || !endInput || endInput < startInput) { showToast('Définissez une période de planning valide.', 'error'); return; }
 
   const roles = getDynamicList('dutyRoles');
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
@@ -3299,7 +3439,7 @@ function updateDutyAssignment(index, key, value) {
 }
 
 function exportDutyPDF() {
-  if (!(state.dutySchedule || []).length) { alert("Générez d'abord le planning d'astreinte."); return; }
+  if (!(state.dutySchedule || []).length) { showToast("Générez d'abord le planning d'astreinte.", 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -3614,7 +3754,7 @@ function applyRemoteStateSnapshot(snapshot) {
   applyTheme(state.settings.theme);
   renderAll();
   refreshStorageStatus();
-  hydrateSystemBlueprint();
+
   return true;
 }
 
@@ -3655,7 +3795,7 @@ async function submitSupabaseLogin(event) {
     refreshStorageStatus();
     updateAuthGateStatus(`Connexion Supabase ouverte pour ${email}.`);
     updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
-    hydrateAuthAccessPanel();
+  
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
@@ -3684,7 +3824,7 @@ async function logoutSupabaseSession() {
   renderAll();
   refreshAuthGate();
   refreshStorageStatus();
-  hydrateAuthAccessPanel();
+
 }
 
 function ensureExportSettingsUI() {
@@ -3716,12 +3856,7 @@ function ensureExportSettingsUI() {
 
       </div>
     </div>
-    <div class="settings-grid">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Guide des champs PDF</h2></div>
-        <div class="card-body" id="pdfTemplateGuideList"></div>
-      </div>
-      <div class="card">
+    <div class="card">
         <div class="card-header"><h2 class="card-title">Apparence des PDF</h2></div>
         <div class="card-body">
           <div class="grid-2">
@@ -3734,18 +3869,6 @@ function ensureExportSettingsUI() {
           <p class="help">Ces réglages modifient simplement l habillage des exports sans toucher à la matrice du document.</p>
         </div>
       </div>
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Chemins de référence</h2></div>
-        <div class="card-body">
-        <div class="info-pairs">
-            <div><strong>Frontend runtime</strong><code>frontend/assets/js/modules/pdf-templates.js</code></div>
-            <div><strong>Seed Supabase</strong><code>supabase/document-templates.seed.sql</code></div>
-            <div><strong>Schema Supabase</strong><code>supabase/schema.sql</code></div>
-            <div><strong>Guide projet</strong><code>docs/supabase-setup.md</code></div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>`;
   const usersPanel = pageInner.querySelector('[data-settings-panel="users"]');
   pageInner.insertBefore(panel, usersPanel || null);
@@ -3811,7 +3934,7 @@ async function checkSupabaseState() {
       Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
     refreshStorageStatus();
-    hydrateSystemBlueprint();
+  
     return remoteStatePayload;
   } catch (error) {
     updateCloudStateStatus(`Contrôle Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
@@ -3832,7 +3955,7 @@ async function pushCurrentStateToSupabase() {
       Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
     refreshStorageStatus();
-    hydrateSystemBlueprint();
+  
   } catch (error) {
     updateCloudStateStatus(`Synchronisation Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
     refreshStorageStatus();
@@ -3895,15 +4018,6 @@ function bindCloudStateImport() {
   });
 }
 
-function renderPdfTemplateGuide() {
-  const mount = document.getElementById('pdfTemplateGuideList');
-  if (!mount) return;
-  const guide = window.SICODSettings?.getTemplateFieldGuide?.() || [];
-  mount.innerHTML = guide.length
-    ? `<div class="info-pairs">${guide.map(item => `<div><strong>${esc(item.field)}</strong><span>${esc(item.label)} · ${esc(item.use)}</span></div>`).join('')}</div>`
-    : '<p class="help">Guide indisponible.</p>';
-}
-
 function ensureSystemSettingsUI() {
   const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
   if (!generalGrid) return;
@@ -3918,8 +4032,7 @@ function ensureSystemSettingsUI() {
   card.innerHTML = `
     <div class="card-header"><h2 class="card-title">Base de donnee</h2></div>
     <div class="card-body">
-      <div id="systemBlueprintList" class="info-pairs"></div>
-      <div class="grid-2" style="margin-top:1rem">
+      <div class="grid-2">
         <div><label>Fournisseur</label><input value="Supabase" readonly></div>
         <div><label>Acces</label><input value="${remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante'}" readonly></div>
         <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
@@ -3940,66 +4053,12 @@ function ensureSystemSettingsUI() {
   `;
 }
 
-function ensureHostingInfoUI() {
-  const panel = document.querySelector('[data-settings-panel="users"] .card');
-  if (!panel) return;
-  const title = panel.querySelector('.card-title');
-  if (title) title.textContent = 'Acces et securite';
-  const body = panel.querySelector('.card-body');
-  if (!body) return;
-  body.innerHTML = `
-    <p class="help">Les comptes se gerent dans Supabase Auth. Le site public ne contient pas les donnees metier et l acces aux donnees depend de l authentification et des regles RLS.</p>
-    <div class="info-pairs">
-      <div><strong>Creation des comptes</strong><span>Supabase Auth</span></div>
-      <div><strong>Protection des donnees</strong><span>RLS sur les tables publiques</span></div>
-      <div><strong>Session locale</strong><span>Session d authentification uniquement</span></div>
-    </div>
-  `;
-}
-
-function upgradeHostingInfoUI() {
-  const panel = document.querySelector('[data-settings-panel="users"] .card');
-  if (!panel) return;
-  const title = panel.querySelector('.card-title');
-  if (title) title.textContent = 'Acces et securite';
-  const body = panel.querySelector('.card-body');
-  if (!body) return;
-  const authState = window.SICODApi?.system?.getAuthState?.() || {};
-  body.innerHTML = `
-    <div class="info-pairs">
-      <div><strong>Protection</strong><span>Supabase Auth</span></div>
-      <div><strong>Etat</strong><span>${esc(authState.authenticated ? 'Connecte' : (authState.configured ? 'Connexion requise' : 'Non configure'))}</span></div>
-      <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Aucun')}</span></div>
-      <div><strong>Gestion</strong><span>Utilisateurs et mots de passe dans Supabase Auth</span></div>
-    </div>
-    <p class="help" style="margin-top:1rem">Pour autoriser un acces, cree un utilisateur dans Supabase Auth puis confirme son adresse e-mail si necessaire.</p>
-  `;
-}
-
-function hydrateAuthAccessPanel() {
-  upgradeHostingInfoUI();
-}
-
-async function hydrateSystemBlueprint() {
-  const mount = document.getElementById('systemBlueprintList');
-  if (!mount) return;
-  const authState = window.SICODApi?.system?.getAuthState?.() || {};
-  mount.innerHTML = `
-    <div><strong>Mode</strong><span>Base de donnee</span></div>
-    <div><strong>Utilisateur</strong><span>${esc(authState.email || 'Connexion requise')}</span></div>
-  `;
-}
-
 function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
   ensureSystemSettingsUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
-  ensureHostingInfoUI();
-  upgradeHostingInfoUI();
-  renderPdfTemplateGuide();
-  hydrateSystemBlueprint();
   bindCloudStateImport();
 }
 
@@ -4058,7 +4117,7 @@ async function saveSettings() {
       window.SICODPdfTemplates?.setTemplates(state, parsedTemplates);
     } catch (error) {
       showSettingsTab('exports');
-      alert(`Le JSON des modèles PDF est invalide : ${error.message}`);
+      showToast(`Le JSON des modèles PDF est invalide : ${error.message}`, 'error');
       return;
     }
   }
@@ -4080,8 +4139,6 @@ async function saveSettings() {
   state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
   state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
   state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.brandLogo = '';
-  state.settings.favicon = '';
   state.settings.pdfAppearance = {
     primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
     accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
@@ -4091,7 +4148,7 @@ async function saveSettings() {
   };
   state.settings.remoteSync = Object.assign({}, window.SICODApi?.system?.getRemoteConfig?.() || DEFAULT_SETTINGS.remoteSync);
   refreshAuthGate();
-  hydrateAuthAccessPanel();
+
 
   const parseList = id => (get(id)?.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   if (get('settingEventTypes')) window.SICODDataModel?.setReferenceLabels(state, 'eventTypes', parseList('settingEventTypes'));
@@ -4131,7 +4188,7 @@ async function saveSettings() {
   renderPlanningStats();
   renderDutyStats();
   loadSettingsForm();
-  alert('Paramètres enregistrés.');
+  showToast('Paramètres enregistrés.');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -4184,7 +4241,7 @@ refreshAuthGate();
 window.SICODApi?.auth?.restoreSession?.()
   .then(() => {
     refreshAuthGate();
-    hydrateAuthAccessPanel();
+  
     return Promise.all([
       window.SICODApi?.system?.hydrateState?.(),
       hydrateReferenceCatalogFromSupabase()
@@ -4207,21 +4264,22 @@ window.SICODApi?.auth?.restoreSession?.()
   })
   .finally(() => {
     refreshAuthGate();
-    hydrateAuthAccessPanel();
+  
   });
 
-// Mise à jour dashboard chaque seconde (heure locale)
-setInterval(renderDashboard, 1000);
+// Mise à jour horloge chaque seconde (heure locale)
+setInterval(() => {
+  const el = document.getElementById('kpiTime');
+  if (el) el.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}, 1000);
 
-
-function formatDateFR(value){if(!value)return '';const m=String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return `${m[3]}/${m[2]}/${m[1]}`;const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}
 
 function editSelectedPS(){
- if(!state.selectedPSId){alert('Sélectionnez un point de situation');return;}
+ if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
  openPSForm(state.selectedPSId);
 }
 function deleteSelectedPS(){
- if(!state.selectedPSId){alert('Sélectionnez un point de situation');return;}
+ if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
  deletePS(state.selectedPSId);
 }
 

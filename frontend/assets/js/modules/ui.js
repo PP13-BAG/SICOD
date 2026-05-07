@@ -1,20 +1,6 @@
 (function(global){
   'use strict';
 
-  function toText(value, fallback = '') {
-    const text = String(value ?? '').trim();
-    return text || fallback;
-  }
-
-  function readValue(id, fallback = '') {
-    const el = document.getElementById(id);
-    return el ? toText(el.value, fallback) : fallback;
-  }
-
-  function readChecked(id) {
-    return !!document.getElementById(id)?.checked;
-  }
-
   function setEmptyState(message, actionLabel, actionHandler) {
     const button = actionLabel && actionHandler
       ? `<button class="fr-btn small" type="button" onclick="${actionHandler}">${actionLabel}</button>`
@@ -22,20 +8,19 @@
     return `<div class="empty-state"><p class="help">${message}</p>${button}</div>`;
   }
 
-  function notify(message) {
-    alert(message);
+  function notify(message, type) {
+    if (typeof global.showToast === 'function') global.showToast(message, type || 'info');
+    else alert(message);
   }
 
   function confirmAction(message) {
-    return confirm(message);
+    if (typeof global.confirmAsync === 'function') return global.confirmAsync(message);
+    return Promise.resolve(confirm(message));
   }
 
   global.SICODUI = {
     confirmAction,
     notify,
-    readChecked,
-    readValue,
-    setEmptyState,
-    toText
+    setEmptyState
   };
 })(window);

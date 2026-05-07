@@ -286,6 +286,7 @@ input:focus,select:focus,textarea:focus{
 .table{width:100%;border-collapse:collapse;table-layout:fixed}
 .table th,.table td{border:1px solid var(--border);padding:.8rem .85rem;vertical-align:top;text-align:left}
 .table th{background:var(--blue-soft);color:var(--blue-france);font-size:.875rem}
+.table td{background:var(--bg)}
 .table tr.is-selected td{background:#f5f5fe}
 .table .table-title-btn{width:100%;display:block;text-align:left;background:none;border:0;padding:0;color:var(--blue-france);font-weight:700;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
 .table .table-meta{display:block;margin-top:.25rem;color:var(--text-light);font-size:.8125rem;font-weight:400}
@@ -697,3 +698,24 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
   .nav-btn span,.side-head p,.side-head h2{display:none}
   .page{padding:1rem}
 }
+
+/* ── Toasts ─────────────────────────────────────────────── */
+#toastContainer{position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;pointer-events:none}
+.toast{padding:.75rem 1.25rem;border-radius:.375rem;font-size:.875rem;font-weight:500;color:#fff;opacity:0;transform:translateY(.5rem);transition:opacity .25s,transform .25s;pointer-events:auto;max-width:24rem;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.success{background:#218657}
+.toast.error{background:var(--red-marianne,#e1000f)}
+.toast.info{background:var(--blue-france,#000091)}
+
+/* ── Confirm dialog ──────────────────────────────────────── */
+#confirmDialog{border:none;border-radius:.5rem;padding:1.5rem 2rem;max-width:22rem;box-shadow:0 8px 32px rgba(0,0,0,.18);background:var(--bg)}
+#confirmDialog::backdrop{background:rgba(0,0,0,.35)}
+#confirmDialog p{margin:0 0 1.25rem;color:var(--text);line-height:1.5}
+#confirmDialog .confirm-actions{display:flex;gap:.75rem;justify-content:flex-end}
+
+/* ── Search bar ──────────────────────────────────────────── */
+.list-search{width:100%;padding:.45rem .75rem;border:1px solid var(--border);border-radius:.375rem;background:var(--bg);color:var(--text);font-size:.875rem;margin-bottom:.75rem}
+.list-search:focus{outline:2px solid var(--blue-france,#000091);outline-offset:1px}
+
+/* ── Expired plan badge ──────────────────────────────────── */
+.badge.expired{background:#7a3b00;color:#fff}
