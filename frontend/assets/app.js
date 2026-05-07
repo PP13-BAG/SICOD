@@ -2892,7 +2892,7 @@ function openToolForm(id) {
   document.getElementById('toolDescription').value = t?.description || '';
   document.getElementById('toolUsername').value = t?.username || '';
   document.getElementById('toolPassword').value = t?.password || '';
-  const logoVal = t?.logo || guessFavicon(t?.url || '');
+  const logoVal = t?.logo || '';
   document.getElementById('toolLogo').value = logoVal;
   updateToolThumb(logoVal);
   document.getElementById('toolDialog').showModal();
@@ -2902,7 +2902,7 @@ function saveTool() {
   const id = document.getElementById('toolId').value || uid('tool');
   const existing = byId(state.tools, id);
   const urlVal = document.getElementById('toolUrl').value.trim();
-  const logo = document.getElementById('toolLogo').value.trim() || guessFavicon(urlVal);
+  const logo = document.getElementById('toolLogo').value.trim();
   const data = {
     id,
     name: document.getElementById('toolName').value.trim(),
@@ -2960,7 +2960,7 @@ function renderTools() {
   toolsGrid.innerHTML = tools.length
     ? tools.map(t => `<div class="tool-card">
         <div class="tool-card-head">
-          <img class="tool-logo" src="${esc(t.logo || guessFavicon(t.url) || 'assets/icons/Icones/System/apps-2-line.svg')}" alt="">
+          <img class="tool-logo" src="${esc(t.logo || 'assets/icons/Icones/System/apps-2-line.svg')}" alt="" onerror="this.onerror=null;this.src='assets/icons/Icones/System/apps-2-line.svg'">
           <h3 class="tool-title">${esc(t.name)}</h3>
         </div>
         <div class="tool-desc">${esc(t.description || '')}</div>
