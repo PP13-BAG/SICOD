@@ -8,7 +8,20 @@
       "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\dashboard.js\" -Force)",
       "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\events.js\" -Force)",
       "Bash(Remove-Item \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\js\\\\modules\\\\settings-admin.js\" -Force)",
-      "Bash(Write-Host \"Fichiers supprimés\")"
+      "Bash(Write-Host \"Fichiers supprimés\")",
+      "Bash(python3 -c ' *)",
+      "Bash(git -C \"c:/Users/SIRACEDPC/Desktop/Projet\" status)",
+      "Bash(git -C \"c:/Users/SIRACEDPC/Desktop/Projet\" remote -v)",
+      "Bash(node --input-type=module)",
+      "Bash(git -C \"c:/Users/SIRACEDPC/Desktop/Projet\" stash -- frontend/assets/app.js)",
+      "Bash(git -C \"c:/Users/SIRACEDPC/Desktop/Projet\" log --oneline -3)",
+      "Bash(node --check frontend/assets/app.js)",
+      "PowerShell($content = [System.IO.File]::ReadAllText\\('c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js', [System.Text.Encoding]::UTF8\\); $content = $content.TrimStart\\([char]0xFEFF\\); [System.IO.File]::WriteAllText\\('c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js', $content, [System.Text.Encoding]::UTF8NoBOM\\); Write-Host \"Done\")",
+      "PowerShell($content = [System.IO.File]::ReadAllText\\('c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js', [System.Text.Encoding]::UTF8\\); $content = $content.TrimStart\\([char]0xFEFF\\); $enc = New-Object System.Text.UTF8Encoding $false; [System.IO.File]::WriteAllText\\('c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js', $content, $enc\\); Write-Host \"Done, length=$\\($content.Length\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(node --check \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js\")"
     ]
   }
 }

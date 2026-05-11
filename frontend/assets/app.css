@@ -275,12 +275,23 @@ input:focus,select:focus,textarea:focus{
   color:var(--blue-france);
   font-size:1.5rem;
 }
-.auth-card-head p{
-  margin:.5rem 0 0;
-  color:var(--text-light);
-}
 .auth-form{
   padding:1.25rem;
+}
+.auth-form .list-actions{
+  justify-content:center;
+  margin-top:1.25rem;
+}
+.auth-form .fr-btn{
+  min-width:11rem;
+}
+.auth-form .help{
+  display:block;
+  margin-top:.75rem;
+  text-align:center;
+}
+.auth-success{
+  color:var(--success);
 }
 
 .table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -288,6 +299,7 @@ input:focus,select:focus,textarea:focus{
 .table th{background:var(--blue-soft);color:var(--blue-france);font-size:.875rem}
 .table td{background:var(--bg)}
 .table tr.is-selected td{background:#f5f5fe}
+#commandList .table tr.is-selected td{background:#fff}
 .table .table-title-btn{width:100%;display:block;text-align:left;background:none;border:0;padding:0;color:var(--blue-france);font-weight:700;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
 .table .table-meta{display:block;margin-top:.25rem;color:var(--text-light);font-size:.8125rem;font-weight:400}
 

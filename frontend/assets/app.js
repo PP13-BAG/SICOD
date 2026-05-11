@@ -164,6 +164,12 @@ function ensureStateIntegrity() {
   if (!Array.isArray(state.reflexFiches)) state.reflexFiches = JSON.parse(JSON.stringify(reflexLibrary.fiches || []));
   if (!Array.isArray(state.reflexGlossary)) state.reflexGlossary = JSON.parse(JSON.stringify(reflexLibrary.glossary || []));
   if (!Array.isArray(state.services) || !state.services.length) state.services = JSON.parse(JSON.stringify(defaultServices));
+  state.ps.forEach((item) => {
+    item.status = normalizePublishStatus(item.status, 'Brouillon');
+  });
+  state.commandMessages.forEach((item) => {
+    item.status = normalizePublishStatus(item.status, 'Brouillon');
+  });
   window.SICODDataModel?.ensureReferenceData(state, DEFAULT_DYNAMIC_LISTS);
   window.SICODDataModel?.migrateSnapshots(state);
   window.SICODPdfTemplates?.ensureState(state);
@@ -255,6 +261,72 @@ function badge(status) {
 }
 
 /** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
+const PS_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
+const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
+
+function normalizePublishStatus(status, fallback = 'Brouillon') {
+  const value = String(status || '').trim();
+  if (!value) return fallback;
+  if (value === 'DiffusÃ©' || value === 'ValidÃ©') return 'DiffusÃ©';
+  if (value === 'Brouillon' || value === 'Ouvert') return 'Brouillon';
+  return fallback;
+}
+
+function isPublishedStatus(status) {
+  return normalizePublishStatus(status) === 'DiffusÃ©';
+}
+
+function buildFixedSignatureLines(signature) {
+  const sig = signature || {};
+  const lines = [];
+  if (sig.mode === 'delegation') {
+    lines.push('Pour le prÃ©fet, par dÃ©lÃ©gation');
+    if (sig.role) lines.push(sig.role);
+    if (sig.name) {
+      lines.push('');
+      lines.push(sig.name);
+    }
+    return lines;
+  }
+  lines.push('Le prÃ©fet');
+  if (sig.name) {
+    lines.push('');
+    lines.push(sig.name);
+  }
+  return lines;
+}
+
+function drawFixedBottomRightSignature(doc, signature, opts = {}) {
+  const lines = buildFixedSignatureLines(signature);
+  const printableLines = lines.filter((line) => String(line || '').trim()).length;
+  if (!printableLines) return false;
+  const margin = Number(opts.margin || 10);
+  const blockWidth = Number(opts.blockWidth || 52);
+  const lineGap = Number(opts.lineGap || 4.8);
+  const spacerGap = Number(opts.spacerGap || 4.5);
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  let height = 0;
+  lines.forEach((line, index) => {
+    height += line ? lineGap : spacerGap;
+    if (index === lines.length - 1) height -= line ? (lineGap - 4) : spacerGap;
+  });
+  const centerX = pageW - margin - (blockWidth / 2);
+  let y = pageH - margin - height;
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...(opts.textColor || [22, 22, 22]));
+  doc.setFontSize(Number(opts.fontSize || 10));
+  lines.forEach((line) => {
+    if (line) {
+      doc.text(String(line), centerX, y, { align: 'center', maxWidth: blockWidth });
+      y += lineGap;
+    } else {
+      y += spacerGap;
+    }
+  });
+  return true;
+}
+
 function parseDateLocal(s) {
   if (!s) return null;
   const [y, m, d] = String(s).split('-').map(Number);
@@ -1023,6 +1095,16 @@ function exportEventLogPDF() {
     doc.setFont('helvetica','normal');
   };
 
+  const applyFixedSignature = () => {
+    drawFixedBottomRightSignature(doc, signature, {
+      margin: m,
+      blockWidth: 54,
+      lineGap: 4.8,
+      spacerGap: 4.5,
+      fontSize: 10,
+      textColor
+    });
+  };
   drawHeader();
 
   if (!items.length) {
@@ -1119,7 +1201,7 @@ function openPSForm(id) {
   if (psEvent) psEvent.value = ps?.eventId || draft?.eventId || state.currentEventId || firstActiveEvent?.id || '';
 
   document.getElementById('psAuthor').value = ps?.author || draft?.author || state.settings?.author || 'SIRACEDPC';
-  document.getElementById('psStatus').value = ps?.status || draft?.status || 'Brouillon';
+  document.getElementById('psStatus').value = normalizePublishStatus(ps?.status || draft?.status, 'Brouillon');
   document.getElementById('psClassification').value = ps?.classification || draft?.classification || state.settings?.classification || 'Non protégé';
   document.getElementById('psFormat').value = ps?.format || draft?.format || state.settings?.psFormat || 'detail';
   document.getElementById('psTitle').value = ps?.title || draft?.title || '';
@@ -1163,7 +1245,7 @@ function openPSForm(id) {
         window.SICODPS?.saveDraft?.({
           eventId: document.getElementById('psEvent')?.value || '',
           author: document.getElementById('psAuthor')?.value || '',
-          status: document.getElementById('psStatus')?.value || '',
+          status: normalizePublishStatus(document.getElementById('psStatus')?.value, 'Brouillon'),
           classification: document.getElementById('psClassification')?.value || '',
           format: document.getElementById('psFormat')?.value || '',
           title: document.getElementById('psTitle')?.value || '',
@@ -1207,7 +1289,7 @@ function savePS() {
   const data = {
     id, eventId,
     author: (document.getElementById('psAuthor').value || '').trim() || state.settings?.author || 'SIRACEDPC',
-    status: document.getElementById('psStatus').value,
+    status: normalizePublishStatus(document.getElementById('psStatus').value, 'Brouillon'),
     classification: document.getElementById('psClassification').value,
     format,
     templateId: template?.id || existing?.templateId || '',
@@ -1494,10 +1576,10 @@ function exportPSFocusPDF(ps) {
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
   const attention = ps.attention ?? ps.points ?? '';
-  const signature = getPSSignatureConfig();
+  const signature = shouldApplyPdfSignature('ps') ? getPSSignatureConfig() : { mode: 'prefet', name: '', role: '' };
   const title = `POINT DE SITUATION N° ${ps.number}`;
-  const contentTop = 42;
-  const contentBottomReserve = (signature.name || signature.role) ? 18 : 8;
+  const contentTop = 46;
+  const contentBottomReserve = signature.name ? 22 : 8;
   const gridTop = contentTop;
   const gridBottom = pageH - m - contentBottomReserve;
   const gridH = Math.max(110, gridBottom - gridTop);
@@ -1546,7 +1628,7 @@ function exportPSFocusPDF(ps) {
   const drawHeader = () => {
     drawLogo();
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...blue);
+    doc.setTextColor(...textColor);
     doc.setFontSize(15);
     doc.text(title, pageW / 2, m + 7, { align: 'center' });
     doc.setFont('helvetica', 'normal');
@@ -1661,6 +1743,17 @@ function exportPSFocusPDF(ps) {
     lines.forEach((line, idx) => doc.text(line, x, y + idx * 4.8));
   };
 
+  const applyFixedSignature = () => {
+    drawFixedBottomRightSignature(doc, signature, {
+      margin: m,
+      blockWidth: 54,
+      lineGap: 4.8,
+      spacerGap: 4.5,
+      fontSize: 10,
+      textColor
+    });
+  };
+
   drawHeader();
   drawBilanBox(m, gridTop, col1W, box1TopH);
   drawTextBox(m, gridTop + box1TopH, col1W, box1BottomH, 'Moyens', means);
@@ -1669,7 +1762,7 @@ function exportPSFocusPDF(ps) {
   drawTextBox(m + col1W, gridTop + centerTopH + centerMidH, col2W, centerBottomH, 'Mesures prises', measures);
   drawTextBox(m + col1W + col2W, gridTop, col3W, box3TopH, "Points d'attention", attention);
   drawTextBox(m + col1W + col2W, gridTop + box3TopH, col3W, box3BottomH, 'Communication', [ps.communication || '', ps.transcript ? `Transcription : ${ps.transcript}` : '', ps.audioData ? 'Source audio jointe.' : ''].filter(Boolean).join('\n\n'));
-  drawSignature();
+  applyFixedSignature();
   doc.save(`PS_${ps.number || 'SICOD'}.pdf`);
 }
 
@@ -1689,7 +1782,7 @@ function exportPSPDF() {
   const palette = getPdfAppearance();
   const blue = palette.primary, light = palette.accent, textColor = palette.text, border=[221,221,221];
   let y = m + 3;
-  const signature = getPSSignatureConfig();
+  const signature = shouldApplyPdfSignature('ps') ? getPSSignatureConfig() : { mode: 'prefet', name: '', role: '' };
 
   const wrap = (txt, w) => doc.splitTextToSize(String(txt || '—'), w);
 
@@ -1745,7 +1838,7 @@ function exportPSPDF() {
       doc.text(String(v || '—'), x + widths[i] / 2, y + 5.2, { align: 'center', maxWidth: widths[i] - 2 });
       x += widths[i];
     });
-    y += 11;
+    y += 14;
   };
 
   const needPage = (needed) => {
@@ -1847,7 +1940,14 @@ function exportPSPDF() {
     }
     section(block.title, value, block.forcedHeight, false);
   });
-  signatureBlock();
+  drawFixedBottomRightSignature(doc, signature, {
+    margin: m,
+    blockWidth: 56,
+    lineGap: 4.9,
+    spacerGap: 4.6,
+    fontSize: 10,
+    textColor
+  });
   doc.save(`PS_${ps.number || 'SICOD'}.pdf`);
 }
 
@@ -1940,7 +2040,7 @@ function getDefaultCommandMessage() {
   return {
     id: uid('cmdmsg'),
     number: (state.commandMessages?.length || 0) + 1,
-    status: 'Ouvert',
+    status: 'Brouillon',
     eventId: '',
     typeIndex: 0,
     typeLabel: commandTypes[0]?.[0] || '',
@@ -1978,7 +2078,7 @@ function openCommandForm(id) {
   document.getElementById('cmdTime').value = d.time || timeHHMM();
   document.getElementById('cmdType').value = String(d.typeIndex || 0);
   document.getElementById('cmdEvent').value = d.eventId || '';
-  document.getElementById('cmdStatus').value = d.status || 'Ouvert';
+  document.getElementById('cmdStatus').value = normalizePublishStatus(d.status, 'Brouillon');
   document.getElementById('cmdNumber').value = d.number || '';
   document.getElementById('cmdSite').value = d.site || '';
   document.getElementById('cmdRef').value = d.reference || '';
@@ -2126,7 +2226,7 @@ function duplicateCommand(id) {
   const copy = Object.assign({}, src, {
     id: uid('cmd'),
     number: String(siblings.length + 1),
-    status: 'Ouvert',
+    status: 'Brouillon',
     updatedAt: new Date().toISOString()
   });
   state.commandMessages.unshift(copy);
@@ -2173,7 +2273,7 @@ function getCommandData() {
     time: document.getElementById('cmdTime')?.value || '',
     eventId,
     event: eventObj?.title || '',
-    status: document.getElementById('cmdStatus')?.value || 'Ouvert',
+    status: normalizePublishStatus(document.getElementById('cmdStatus')?.value, 'Brouillon'),
     site: document.getElementById('cmdSite')?.value || '',
     reference: document.getElementById('cmdRef')?.value || '',
     activation: document.getElementById('cmdActivation')?.value || '',
@@ -2554,7 +2654,7 @@ function exportAllFichesPDF() {
   const addHeader = (fiche) => {
     let y = margin;
     addLogoPreserved(doc, margin, y, 18, 18);
-    doc.setTextColor(...blue);
+    doc.setTextColor(...textColor);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.text('Fiche réflexe', margin + 24, y + 7);
@@ -2775,6 +2875,7 @@ function exportContactsPDF() {
     doc.setFillColor(...headerFill);
     doc.setDrawColor(221, 221, 221);
     doc.setTextColor(...blue);
+    doc.setTextColor(...textColor);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     headers.forEach((h, i) => {
@@ -3080,14 +3181,18 @@ function exportPlanningPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const palette = getPdfAppearance();
-  const blue = palette.primary, soft = palette.accent, text = palette.text; let y = 10;
-  addLogoPreserved(doc, 10, y, 30, 16);
+  const blue = palette.primary, soft = palette.accent, text = palette.text;
+  const marginX = 10;
+  const pageW = doc.internal.pageSize.getWidth();
+  const title = 'Tableau de suivi de la planification ORSEC';
+  let y = 10;
+  addLogoPreserved(doc, marginX, y, 30, 16);
   doc.setFont('helvetica', 'bold'); doc.setTextColor(...text); doc.setFontSize(16);
-  doc.text('PLANIFICATION DES PLANS', 148.5, y + 9, { align: 'center' }); y += 20;
+  doc.text(title, pageW / 2, y + 9, { align: 'center' }); y += 20;
   const headers = ['Type','Risque','Item','Priorité','Statut','Approbation','Observation'];
-  const widths = [28,40,60,24,28,26,81];
+  const widths = [28,40,60,24,28,26,pageW - (marginX * 2) - 28 - 40 - 60 - 24 - 28 - 26];
   const drawHeader = () => {
-    let x = 10;
+    let x = marginX;
     headers.forEach((h, i) => {
       doc.setFillColor(...soft); doc.rect(x, y, widths[i], 8, 'F');
       doc.setDrawColor(180); doc.rect(x, y, widths[i], 8);
@@ -3101,8 +3206,8 @@ function exportPlanningPDF() {
     const vals = [p.type||'',p.risk||'',p.item||'',p.priority||'',p.status||'',p.approvalDate||'',p.observation||''];
     const lines = vals.map((v, i) => doc.splitTextToSize(String(v), widths[i] - 3));
     const h = Math.max(...lines.map(l => l.length), 1) * 4 + 4;
-    if (y + h > 200) { doc.addPage(); y = 10; addLogoPreserved(doc, 10, y, 30, 16); doc.setFont('helvetica','bold'); doc.setTextColor(...text); doc.setFontSize(16); doc.text('PLANIFICATION DES PLANS', 148.5, y + 9, { align: 'center' }); y += 20; drawHeader(); }
-    let x = 10;
+    if (y + h > 200) { doc.addPage(); y = 10; addLogoPreserved(doc, marginX, y, 30, 16); doc.setFont('helvetica','bold'); doc.setTextColor(...text); doc.setFontSize(16); doc.text(title, pageW / 2, y + 9, { align: 'center' }); y += 20; drawHeader(); }
+    let x = marginX;
     lines.forEach((l, i) => { doc.setDrawColor(180); doc.rect(x, y, widths[i], h); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text(l, x + widths[i] / 2, y + 4.5, { align: 'center', maxWidth: widths[i]-3 }); x += widths[i]; });
     y += h;
   });
@@ -3700,7 +3805,6 @@ function ensureAuthGateUI() {
     <div class="auth-card">
       <div class="auth-card-head">
         <h2>Connexion SICOD</h2>
-        <p>Le site public ne contient pas les donnees. L acces aux donnees Supabase est reserve aux utilisateurs authentifies.</p>
       </div>
       <form id="authGateForm" class="auth-form">
         <div class="field-stack">
@@ -3714,7 +3818,7 @@ function ensureAuthGateUI() {
         <div class="list-actions">
           <button class="fr-btn" type="submit">Se connecter</button>
         </div>
-        <p id="authGateStatus" class="help">Configure un ou plusieurs utilisateurs dans Supabase Auth. Si tu veux un mot de passe unique, cree un seul compte partage.</p>
+        <p id="authGateStatus" class="help"></p>
       </form>
     </div>
   `;
@@ -3741,7 +3845,7 @@ function refreshAuthGate() {
 function updateAuthGateStatus(message, tone = 'info') {
   const mount = document.getElementById('authGateStatus');
   if (!mount) return;
-  mount.className = tone === 'warning' ? 'help auth-warning' : 'help';
+  mount.className = tone === 'warning' ? 'help auth-warning' : (tone === 'success' ? 'help auth-success' : 'help');
   mount.textContent = message;
 }
 
@@ -3781,10 +3885,9 @@ async function submitSupabaseLogin(event) {
   const email = document.getElementById('authEmail')?.value?.trim() || '';
   const password = document.getElementById('authPassword')?.value || '';
   if (!email || !password) {
-    updateAuthGateStatus('Renseigne une adresse e-mail et un mot de passe.', 'warning');
+    updateAuthGateStatus('E-mail ou mot de passe incorrect', 'warning');
     return;
   }
-  updateAuthGateStatus('Connexion a Supabase en cours...');
   try {
     await withTimeout(
       window.SICODApi?.auth?.signInWithPassword?.(email, password),
@@ -3793,9 +3896,10 @@ async function submitSupabaseLogin(event) {
     );
     refreshAuthGate();
     refreshStorageStatus();
-    updateAuthGateStatus(`Connexion Supabase ouverte pour ${email}.`);
+    updateAuthGateStatus('Connexion rÃ©ussie', 'success');
     updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
   
+    updateAuthGateStatus('Connexion r\u00E9ussie', 'success');
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
@@ -3806,7 +3910,7 @@ async function submitSupabaseLogin(event) {
       updateCloudStateStatus(`Connexion ouverte, mais chargement distant incomplet : ${esc(error.message || String(error))}`, 'warning');
     }
   } catch (error) {
-    updateAuthGateStatus(`Connexion impossible : ${error.message || String(error)}`, 'warning');
+    updateAuthGateStatus('E-mail ou mot de passe incorrect', 'warning');
     refreshAuthGate();
     refreshStorageStatus();
   }
@@ -3827,6 +3931,116 @@ async function logoutSupabaseSession() {
 
 }
 
+function syncHtmlTemplateEditorValue() {
+  const textarea = document.getElementById('settingHtmlTemplateSource');
+  const key = textarea?.dataset?.templateKey;
+  if (!textarea || !key) return;
+  window.SICODPdfTemplates?.setHtmlTemplate(state, key, textarea.value || '');
+}
+
+function loadSelectedHtmlTemplate() {
+  const select = document.getElementById('settingHtmlTemplateKey');
+  const textarea = document.getElementById('settingHtmlTemplateSource');
+  if (!select || !textarea) return;
+  const template = window.SICODPdfTemplates?.getHtmlTemplate(state, select.value);
+  textarea.value = template?.html || '';
+  textarea.dataset.templateKey = template?.id || '';
+}
+
+function populateHtmlTemplateEditor(preferredKey) {
+  const select = document.getElementById('settingHtmlTemplateKey');
+  if (!select) return;
+  const templates = window.SICODPdfTemplates?.listHtmlTemplates(state) || [];
+  const activeKey = preferredKey || select.value || templates[0]?.id || '';
+  select.innerHTML = templates.map((template) => `<option value="${esc(template.id)}">${esc(template.label)}</option>`).join('');
+  if (templates.some((template) => template.id === activeKey)) select.value = activeKey;
+  else if (templates[0]) select.value = templates[0].id;
+  loadSelectedHtmlTemplate();
+}
+
+function onHtmlTemplateSelectionChange() {
+  syncHtmlTemplateEditorValue();
+  loadSelectedHtmlTemplate();
+}
+
+function exportSelectedHtmlTemplate() {
+  syncHtmlTemplateEditorValue();
+  const select = document.getElementById('settingHtmlTemplateKey');
+  const template = window.SICODPdfTemplates?.getHtmlTemplate(state, select?.value || '');
+  if (!template) {
+    showToast('Aucun modÃ¨le HTML sÃ©lectionnÃ©.', 'error');
+    return;
+  }
+  downloadBlob(new Blob([template.html], { type: 'text/html;charset=utf-8' }), template.fileName || `${slugify(template.id || 'modele')}.html`);
+  showToast('ModÃ¨le HTML exportÃ©.');
+}
+
+function triggerHtmlTemplateImport() {
+  document.getElementById('settingHtmlTemplateImport')?.click();
+}
+
+async function importSelectedHtmlTemplate(file) {
+  if (!file) return;
+  const select = document.getElementById('settingHtmlTemplateKey');
+  const key = select?.value || '';
+  if (!key) {
+    showToast('Aucun modÃ¨le HTML cible n est sÃ©lectionnÃ©.', 'error');
+    return;
+  }
+  try {
+    const content = await file.text();
+    if (!String(content || '').trim()) throw new Error('Le fichier HTML est vide.');
+    window.SICODPdfTemplates?.setHtmlTemplate(state, key, content);
+    loadSelectedHtmlTemplate();
+    showToast('ModÃ¨le HTML importÃ©.');
+  } catch (error) {
+    showToast(`Import HTML impossible : ${error.message || String(error)}`, 'error');
+  } finally {
+    const input = document.getElementById('settingHtmlTemplateImport');
+    if (input) input.value = '';
+  }
+}
+
+function resetSelectedHtmlTemplate() {
+  const select = document.getElementById('settingHtmlTemplateKey');
+  const key = select?.value || '';
+  if (!key) return;
+  window.SICODPdfTemplates?.resetHtmlTemplate(state, key);
+  loadSelectedHtmlTemplate();
+  showToast('ModÃ¨le HTML rÃ©initialisÃ©.');
+}
+
+function ensureHtmlTemplateSettingsCard() {
+  const stack = document.querySelector('[data-settings-panel="exports"] .settings-stack');
+  if (!stack || stack.querySelector('#htmlTemplateSettingsCard')) return;
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'htmlTemplateSettingsCard';
+  card.innerHTML = `
+    <div class="card-header"><h2 class="card-title">Maquettes HTML d aperÃ§u et d export</h2></div>
+    <div class="card-body">
+      <div class="grid-2">
+        <div>
+          <label for="settingHtmlTemplateKey">Document</label>
+          <select id="settingHtmlTemplateKey" onchange="onHtmlTemplateSelectionChange()"></select>
+        </div>
+        <div class="list-actions" style="align-self:end">
+          <button class="fr-btn secondary small" type="button" onclick="exportSelectedHtmlTemplate()">Exporter HTML</button>
+          <button class="fr-btn secondary small" type="button" onclick="triggerHtmlTemplateImport()">Importer HTML</button>
+          <button class="fr-btn secondary small" type="button" onclick="resetSelectedHtmlTemplate()">RÃ©initialiser</button>
+        </div>
+      </div>
+      <input id="settingHtmlTemplateImport" type="file" accept=".html,text/html" style="display:none" onchange="importSelectedHtmlTemplate(this.files[0])">
+      <div style="margin-top:1rem">
+        <label for="settingHtmlTemplateSource">Code HTML</label>
+        <textarea id="settingHtmlTemplateSource" class="code-area" spellcheck="false"></textarea>
+      </div>
+      <p class="help">Ces maquettes HTML permettent d importer, d exporter et d harmoniser les aperÃ§us et futurs rendus documentaires sans toucher Ã  la matrice PDF active.</p>
+    </div>
+  `;
+  stack.insertBefore(card, stack.children[1] || null);
+}
+
 function ensureExportSettingsUI() {
   const tabs = document.querySelector('.settings-tabs');
   if (tabs && !tabs.querySelector('[data-settings-tab="exports"]')) {
@@ -3841,7 +4055,11 @@ function ensureExportSettingsUI() {
   }
 
   const pageInner = document.querySelector('#page-settings .page-inner');
-  if (!pageInner || pageInner.querySelector('[data-settings-panel="exports"]')) return;
+  if (!pageInner) return;
+  if (pageInner.querySelector('[data-settings-panel="exports"]')) {
+    ensureHtmlTemplateSettingsCard();
+    return;
+  }
   const panel = document.createElement('div');
   panel.className = 'settings-panel';
   panel.dataset.settingsPanel = 'exports';
@@ -3872,6 +4090,7 @@ function ensureExportSettingsUI() {
   </div>`;
   const usersPanel = pageInner.querySelector('[data-settings-panel="users"]');
   pageInner.insertBefore(panel, usersPanel || null);
+  ensureHtmlTemplateSettingsCard();
 }
 
 function countStateRecords(stateSnapshot) {
@@ -4096,6 +4315,7 @@ function loadSettingsForm() {
   if (get('settingReflexFamilies')) get('settingReflexFamilies').value = getDynamicList('reflexFamilies').join('\n');
   if (get('settingPlanExpiryRules')) get('settingPlanExpiryRules').value = Object.entries(state.settings.planExpiryYears || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
   if (get('settingDocumentTemplates')) get('settingDocumentTemplates').value = JSON.stringify(window.SICODPdfTemplates?.listTemplates(state) || [], null, 2);
+  populateHtmlTemplateEditor();
   if (get('settingPdfPrimaryColor')) get('settingPdfPrimaryColor').value = state.settings.pdfAppearance?.primaryColor || DEFAULT_SETTINGS.pdfAppearance.primaryColor;
   if (get('settingPdfAccentColor')) get('settingPdfAccentColor').value = state.settings.pdfAppearance?.accentColor || DEFAULT_SETTINGS.pdfAppearance.accentColor;
   if (get('settingPdfTextColor')) get('settingPdfTextColor').value = state.settings.pdfAppearance?.textColor || DEFAULT_SETTINGS.pdfAppearance.textColor;
@@ -4107,11 +4327,12 @@ function loadSettingsForm() {
 
 async function saveSettings() {
   const get = id => document.getElementById(id);
+  syncHtmlTemplateEditorValue();
   if (get('settingDocumentTemplates')) {
     try {
       const parsedTemplates = JSON.parse(get('settingDocumentTemplates').value || '[]');
       const validation = window.SICODPdf?.validateTemplateList?.(parsedTemplates);
-      if (validation && validation.valid === false) {
+      if (validation && (validation.valid === false || validation.ok === false)) {
         throw new Error(validation.message || 'Modele PDF invalide.');
       }
       window.SICODPdfTemplates?.setTemplates(state, parsedTemplates);
