@@ -1,7 +1,7 @@
 ﻿function formatPSDateTime(ps){
   const date = ps && ps.date ? String(ps.date) : '';
   const time = ps && ps.time ? String(ps.time) : '';
-  return [date, time].filter(Boolean).join(' ') || 'â€”';
+  return [date, time].filter(Boolean).join(' ') || '—';
 }
 
 function escapeHtml(value){
@@ -29,20 +29,20 @@ function isLikelyFilePath(src){
 }
 
 // ============================================================
-// SICOD â€” Script principal consolidÃ©
-// Version : refactorÃ©e â€” aucune fonctionnalitÃ© supprimÃ©e
-// Charte graphique : conservÃ©e intÃ©gralement
+// SICOD — Script principal consolidé
+// Version : refactorée — aucune fonctionnalité supprimée
+// Charte graphique : conservée intégralement
 //
 // ARCHITECTURE :
-//   1. Constantes de donnÃ©es (logoBase64, reflexLibrary, commandTypes)
-//   2. Couche Storage (isolÃ©e â€” synchronisation Supabase)
-//   3. Ã‰tat applicatif (state) â€” unique, initialisÃ© une seule fois
+//   1. Constantes de données (logoBase64, reflexLibrary, commandTypes)
+//   2. Couche Storage (isolée — synchronisation Supabase)
+//   3. État applicatif (state) — unique, initialisé une seule fois
 //   4. Utilitaires globaux
-//   5. Modules par page (Dashboard, Ã‰vÃ©nements, PS, Command, Fiches,
-//      Annuaire, Outils, Planning, Astreintes, ParamÃ¨tres)
+//   5. Modules par page (Dashboard, Événements, PS, Command, Fiches,
+//      Annuaire, Outils, Planning, Astreintes, Paramètres)
 //   6. Bootstrap (init, renderAll, intervalles)
 //
-// CIBLE ACTUELLE â€” points documentÃ©s :
+// CIBLE ACTUELLE — points documentés :
 //   [SB-STORAGE] : synchronisation vers Supabase
 //   [SB-AUTH]    : authentification utilisateur via Supabase Auth
 //   [GH-PAGES]   : publication du frontend statique via GitHub Pages
@@ -50,33 +50,33 @@ function isLikelyFilePath(src){
 
 'use strict';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 1. CONSTANTES DE DONNÃ‰ES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 1. CONSTANTES DE DONNÉES
+// ────────────────────────────────────────────────────────────────────────────
 const logoBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAggAAABaCAIAAABSRznhAAAQKUlEQVR4nO3df0wT5x8H8GsLtPJTQUEnAhZ0cYhV6Bg4cNNhgKkoRnRTmW4zhqngj5kNcUQTWQrEFYmEzUWjzl9zMJGoCFMIgajohqyCX0SLFkUNKoMJFEqBfv+4fO97V6C9QhFK36+/+tw9z3PP84neh95zveNoNBoCAADgf7jDPQAAABhZkBgAAIABiQEAABiQGAAAgAGJAQAAGJAYAACAAYkBAAAYkBgAAIABiQEAABiQGAAAgAGJAQAAGJAYAACAAYkBAAAYkBgAAIABiWHILV++nMPhcLnclJSU4R4LAIB+FsM9gFFu//79OTk5FhYWR44c+eyzz4Z7OAAA+nHwop6hU1paumDBAj6fn52dHRYWNtzDAQBgRU9i4HhlGtSdvCDUoPrjlkQbVJ8gCMf/XDe0CQAAsGf8NQZPQxj96H0Si8WcvtjZ2U2bNu3TTz/Nzc3tnSD7bGVlZeXo6CgWi+Pi4v7++2/2x6I7duzYgOsPrAmlsLAwNjbW19fXxcXFysrK1tbWy8srMjIyMzPz1atXZB0PDw+9/dMVFxdrjar316OysjJ6k/z8/DcfagBgyawXn1tbW+Vy+a+//rps2bIFCxY0NTXpbaJWq5uamsrLyw8ePOjr65uUlPQGxmkUMplMLBaHhIRkZGRUVFS8ePFCrVa3tbXV1taeP39+8+bNrq6uzc3Nwz3M/zPdUAOYOrNODHTFxcXLly83qIlGo0lMTCwpKRmiIRlRbm5uYGBgeXm5jjoqlaqrq+uNDckgJhRqgFHA7BJDaGioRqPRaDStra1XrlwRCoXUruLi4qKiIh2turu7nzx5EhcXR9918uRJvcfSsn79eqPUZ9mkoqJi9erV7e3tZJHD4axfv/7GjRuvX79ubW2trKyUSCSTJk2i6isUCnpXWl+k0tLStI714Ycf9je8AXgzoQYAHcwuMVBsbGxCQkIOHTpE30heLu8Pl8t1dXVNS0tzdXWlNsrl8iEaobFs3bpVqVRSxcOHDx89ejQgIMDOzs7GxmbmzJnx8fG1tbVfffUVh8MZxnHSmWioAUYH800MJB8fH3qRWoDVgcvluru7U0Vra2vjD8t4bt26VVpaShVXrVr1xRdf9K42ZsyYzMxMJyenNzg0/Uwr1ACjhrknhsrKSnpx/Pjxepv09PQoFAqqOHPmTKOPyoguX75ML2pdnBnhTCvUAKOG+SYGpVJZWFgYExND36j7cnlPT099ff327dufPn1KbuHz+Zs2beqvfkFBQe8bKHXkHkPrs2ly584d6jOfz3/33Xd19DZyDHWoAUAHs3skBnkG6XPXvHnzFixYwL7V2LFjs7Ky3NzcjDxEo3r58iX1efz48ZaWlsM4GDZMN9QAo4bZJYb+BAUFnTt3jn39t99+Oz8/38PDY8hGZHwjZ23ZIKYYagCTZr6XkgiCsLa2FgqFK1eu/P3330tKSgxaeq2pqQkODn7w4IGOOn3eQ6ljfdvQ+myaTJgwgfr88uXLofulgkFZx6DKQxFqANDB7BID/QxC/u737Nmz5JOx9bZqamr68ccfqasx9fX1UVFR3d3db2TgAzRr1izqs0qlunXr1hAdiH7LUGdnp9ZelUpFL9ra2vbXj+mGGmDUMLvEMBhjx46NiYmRSCTUFplMdvjw4WEckl7h4eH0YkZGxhAdyMXFhfr85MkTrb2PHz+mF52dnXX3ZoqhBhg1kBgMFhsbS7+5XiKRjNgnSRAE4e/vHxwcTBXPnDnzyy+/9K7W3t6+efPmxsbGAR/ovffeoz7L5fL79+/T9168eJH67Ojo6OXlxaZP0wo1wKiBxGAwKyurHTt2UMW6urozZ84M43j0Sk9Pp1/nWb9+/YYNG27evNnW1qZUKquqqlJSUjw9PTMzMzWDeDlHVFQU/ZaniIiI4uLilpaWR48eJSQkZGVlUbtWr17Nco3B5EINMDogMQzEhg0b6CvVqampfZ5S+7y5nsPhrF271lgjYXOIOXPmnD59WiAQkEWNRnPkyJGAgABbW1sbGxsfH5/4+Pjnz58PciRubm47d+6kijU1NfPnz7e3txcKhRKJhIqPi4tLQkIC+25HTqgBzAcSw0BYW1vHxsZSxaqqqkuXLg3jePRaunRpWVmZr6+vjjp8Pt/CYlC3LyclJW3fvl1HBS8vr4KCAvoD+/QyuVADjAJIDAO0ZcsWGxsbqpicnDyMg2FDJBKVl5dfuXJl8+bNIpFo/PjxFhYW5A27y5Yty8jIqK+vHzt27GAOweVypVJpZWXltm3bxGKxo6OjhYWFjY2Nu7t7ZGTk0aNHKysrRSKRod2aXKgBTJ3xX+1p0HvZ/nlnrkH9E3i1JwDAEMM3BgAAYEBiAAAABiQGAABgQGIAAAAGJAYYhWprazds2BATE/P69evhHguA6UFigNGmtbU1IyMjISEhOjpaKpX29PQM94gATAzexwCjja2tbVpaGkEQQqHw/fffH+7hAJie0Z8YTpw4Qb6Bh8PhjBkzxtnZ2dvb++OPP37rrbd616HbtGnTwoUL1Wp1bm5uSUnJy5cvbWxspk+fvnjx4nfeeUfHgQiCsLKymjhxYnh4eFhYGFWhu7s7Ly+vqKjo2bNnPB7Pw8Nj0aJF9DNXUlJSc3Pz/v376d1u37590qRJ33zzDVnUaDRXr14tKiqqq6vTaDQTJ0708/NbvHgx+du0EydO5OXlaT1QKDU19fnz5+S50igzZRlVNtPpL4D29vZubm5RUVH0x4brnR2bIJNHEYlEe/fupTZKJJK2trakpCTdIeozFP3p6ur6888/CwsLKyoqZsyYQXauNVMejzdhwoSgoKAVK1bw+XyD+gcYOqM/MRAEIRAIyLOJUqmsq6vLzc3dtm3btm3b5s6d27uOloMHD8pksri4OG9vb5VKVVNTc/r06T179vT5jkyqk46OjtLS0szMTEtLy48++oggiO7u7u+///7Ro0cbN26cM2dOV1dXaWlpenq6XC5ft24dy4n09PSkpqbeu3dv3bp1fn5+fD6/pqbm+PHjDQ0NX3/9taHRGMxMCXZRNRTVZ2Nj47Fjx5KSkqRSqaurK8vmLIPM4XBkMlllZaWPj4/uYQzGrVu3SktLw8LCurq6tB4KGx0dHR0dTRCEWq2urq7+4YcfXrx4oftpIgBvknmtMVhbW8+YMSM+Pj4gIODgwYNsViZv3LgREhLi5+cnEAgcHBz8/f2TkpL0vjlZIBAsXLjQ09OzrKyM3HLhwoWKiopdu3YFBgYKBAJbW9vw8PAvv/zy/PnzMpmM5fgvXrz4119/7dmzh3w+HZ/PnzVrVnJysre3N8sedBjYTIkBRVUvJyendevWqdXqiooK9q1YBtnBwWH27NknT54c/Dh1mDt37rfffisWi7ncfv+XWVpazpo1a9GiRdevX8cTxWHkMK/EQFmxYkVHR8e1a9f01nRycqqurm5raxvYgagnjuTn54tEounTp9P3hoSEjBs3Lj8/n2VveXl5vr6+U6dOpW+0tLSkX7AasEHOlDAkquyp1Wr2ldkHee3atffv3x+699kZhMfjDeaB5wBGZ6aJYcqUKXw+X6FQ6K0ZExPz7Nmzzz///Lvvvjt27Njdu3fZ9N/R0VFYWPjw4cP58+cTBNHS0tLQ0ND7KVI8Hs/d3V3324wpZCdaZz0jGthM6dhHVa9//vnn+PHjfD4/MDCQZRODguzp6RkYGHjq1KnhPSN3dXVVV1fn5eUtXbp0kI+2BTAiM/23SC6ZKpVKaktHR0dkZCS9TkZGxuTJk2fPnn3o0KGqqqp79+5VVVXl5uaKxeL4+Hgej9e7W61OwsPDyfMa+Wd4n88uHTdu3L1799iMmeyE/pzRPvWeCEEQHh4eOioMYKZ96h1VQ9HHZm1tvW/fPq1ndOuYnaFBXrNmTVxcXElJyQcffKBjGCQyRFrVrly5kpmZ2ecuNlauXEl+H/L394+KihpADwBDxEwTg0ajUSqV9JOsjvVGPp/v5+fn5+dHEERJSUlaWlp+fv6iRYt616Q6UavVjx49OnDggFQq3blzJ3mg5ubm3k2ampqoYXA4fT/slnzfGVlN76We3hMh79sZzExlMhl1D4+/v/+uXbv6bK4VVd3T6bNPcmw9PT0KhSIlJeXs2bO7d++mv+5Nx+xYBpkyefLk+fPnnzlzJigoSGuXURaf9frtt9/UarVCofjpp592796dmprKPgcDDCkzvZT0+PHjzs5OrYv1bMybN8/BwUHvxR9LS8vp06dHRERcu3atoaHBzs7O2dm5trZWq1p3d3ddXd20adPIokAgaGlp0arz77//ki9fs7Ozc3Fx0XqX8tChz1QkEuX8T39ZgegVVd3T0dEnl8sVCoVbtmwpLy+/fp3tU9ZZBplu1apVjY2Nf/zxB8tDaFm4cGFOTs7Avi6QLC0tp02btnHjxocPH1ZVVQ24HwDjMtPEkJ2dLRAI2NxYqfWXY2dnp1KpHDNmDJujkH8vd3d3EwQRFhYmk8nkcjm9QlFRUVNTU2hoKFkUCoWNjY2NjY1UhYaGhubmZqFQSBbDw8Nv376tdRFfrVazX77WYTAzJWlFVe90dPPx8fH29s7OzmY/ADZBppswYUJoaGhWVpZKpWJ/FKPD/Ugw0phXYmhvb6+urk5JSbl58+bWrVvt7Oz0NsnJydm3b59cLler1U+fPk1LS+vp6SF/mqBDV1fXgwcPLly4MHXqVPIqeUREhEgkkkgkZWVlKpWqtbW1oKDg8OHDERERs2fPJluFhIQ4ODikp6c/fvxYpVIpFIr09HQnJydyBZsgiCVLlvj6+u7du7e4uLilpaWzs/POnTvx8fEDWCg21kyJ/qOqdzp6RUZGKhSK27dvs6zPJshaoqKi2tvb79y5w/IQRiGVSsvLy1+/ft3R0XH37t2ff/55ypQpRrnnGMAozGKNgVxL5HA4AoHA2dl55syZBw4coP9Gl+hrvXHFihVr1qxJTk7Oz8+XSqWvXr2yt7f39PSUSCReXl46DkQQBI/Hc3R09PX1/eSTT8hL5DweLzEx8dKlS2fPnpVKpeSPcrds2RIcHEw1t7Ozk0gkp06dSkxMbG1ttbe3F4lEO3bssLa2Jitwudz4+PirV69evnz50KFDBEG4uLiIxeI+Fzx0R2OQM2UTVb3T0cvPz8/d3f3cuXO631ZNYRNkLQ4ODkuWLMnKyuo9NfoWMkQsh016/vz5pk2bqCLZIblSvXz58uzs7IyMjI6ODicnp4CAANyVBCMKXu0JAAAM5nUpCQAA9EJiAAAABiQGAABgQGIAAAAGJAYAAGBAYgAAAAYkBgAAYEBiAAAABiQGAABgQGIAAAAGJAYAAGBAYgAAAAYkBgAAYEBiAAAABiQGAABgMP67QXq/dFeHcUY/PAAADI6eF/UAAIC5waUkAABgQGIAAAAGJAYAAGBAYgAAAAYkBgAAYEBiAAAABiQGAABgQGIAAAAGJAYAAGBAYgAAAAYkBgAAYEBiAAAABiQGAABgQGIAAAAGJAYAAGBAYgAAAIb/AoVykzuG5rK2AAAAAElFTkSuQmCC";
-const reflexLibrary = {"fiches": [{"code": "2.A", "title": "Feux de forÃªt", "family": "Risques naturels", "sections": [{"heading": "SynthÃ¨se", "items": ["EvÃ©nement concernÃ©", "Feu de forÃªt impliquant la mise en Å“uvre de moyens de secours importants avec enjeux humains et/ou Ã©conomiques (infrastructures)."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM", "Evaluation : oÃ¹ - quand - quoi - moyens- enjeux ? cf. verso"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision du PREFET"]}, {"heading": "Direction des opÃ©rations", "items": ["Activation dâ€™une cellule de suivi ou du COD sur dÃ©cision de l'autoritÃ© prÃ©fectorale."]}, {"heading": "PremiÃ¨res questions Ã  poser Ã  lâ€™appel du CODIS ou du COSSIM", "items": ["OÃ¹ et quand, prÃ©cisÃ©ment, le FEU DE FORET sâ€™est-il produit ?", "Quelles sont Ã  ce stade, vos difficultÃ©s ?", "Qui est le COS ? (commandant des opÃ©rations de secours)", "Quelle est lâ€™autoritÃ© de police ou de gendarmerie avec laquelle vous Ãªtes en contact ?", "Y-a-t-il des victimes ?", "Si oui, combien et identitÃ© des victimes ?", "Ces victimes sont-elles sur le terrain ?", "Un PMA (Poste mÃ©dical avancÃ©) a-t-il Ã©tÃ© mis en place ?", "Le procureur a â€“t-il Ã©tÃ© averti ?", "Y-a-t-il des habitations menacÃ©es ?", "Si oui, - quel est le village menacÃ© et dans quel dÃ©lai ?", "quelles sont les mesures prises ? qui avez-vous alertÃ© ? (le maire, le dÃ©putÃ©, le CD13, la GGD,...)", "lâ€™Ã©vacuation des habitations doit-elle Ãªtre envisagÃ©e ?", "quelles sont les solutions dâ€™hÃ©bergement provisoire dÃ©jÃ  Ã  lâ€™Ã©tude ?", "Quels sont les moyens engagÃ©s (terrestres, aÃ©riens) ?", "Avez-vous demandÃ© des renforcements au BMPM ou au SDIS ?", "Si oui lesquels ? Les avez-vous obtenus ? dans quels dÃ©lais ?", "Avez-vous demandÃ© des renforcements extra-dÃ©partementaux Ã  lâ€™EMIZDS?", "Si oui lesquels ? (colonnes de renfort, moyens aÃ©riens BASC)", "Les avez-vous obtenus ? dans quels dÃ©lais ?", "A ce stade, avez-vous prÃ©venu la presse ?", "Quelle est lâ€™Ã©volution probable de la situation (mÃ©tÃ©orologie, â€¦) ?"]}, {"heading": "Sur le terrain", "items": ["Lâ€™autoritÃ© prÃ©fectorale sâ€™adresse au COS :", "Quelle est la stratÃ©gie de lutte contre le feu de forÃªt mise en Å“uvre ?", "Comment avez-vous sectorisÃ© votre dispositif ?", "Comment avez-vous organisÃ© votre PC, vos relÃ¨ves (commandement, groupes dâ€™intervention, â€¦..) ?", "Envisagez-vous un dÃ©placement de votre PC ? si oui, quand ?", "OÃ¹ sont fixÃ©s (sur le terrain et sur la carte) les points de transit pour lâ€™accueil des colonnes de renfort ?", "Quels sont les Ã©lus prÃ©sents sur le terrain ?", "OÃ¹ les regroupez-vous dans votre PC pour les tenir informÃ©s ?", "Un 1er briefing, Ã  leur intention, a-t-il dÃ©jÃ  Ã©tÃ© fait ?", "Quels sont les organes de presse prÃ©sents ?", "OÃ¹ est la zone presse ?", "Un point presse a-t-il dÃ©jÃ  Ã©tÃ© fait ? si oui, par qui ?", "- Quelles sont les informations communiquÃ©es Ã  ce stade ?"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["ALERTE DES SERVICES :", "Astreinte SIRACEDPC (mise en place structure suivi dâ€™Ã©vÃ©nement ou gestion de crise)", "CODIS/COSSIM (pour convocation officier de liaison Ã  la PrÃ©fecture)", "DDTM (dispositif forestier de surveillance des massifs et coordination routiÃ¨re)", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ©", "COG (groupement de gendarmerie 13) / DIPN (CIC : centre dâ€™information et de commandement)", "EMIZDS (information ouverture de la cellule de suivi ou du COD)", "Sous-prÃ©fet dâ€™arrondissement (liaison maire(s) concernÃ©(s))", "Communication prÃ©fecture", "SINSIC.", "Selon les enjeux :", "Autoroutes :", "Sur tronÃ§on non concÃ©dÃ© : CIGT / Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ© (C.R.S /Gendarmerie) / CRICR", "Sur tronÃ§on concÃ©dÃ© : SociÃ©tÃ© dâ€™Autoroute (ESCOTA, ASF) / Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ© (C.R.S /Gendarmerie) / CRICR", "Voies ferrÃ©es : EIC PACA (GPMM et RDT 13 sont Ã©galement gestionnaires de rÃ©seaux)", "Ligne HT 400 kV et 225 kV :", "ConsidÃ©rer la ligne comme stratÃ©gique avec un enjeu supÃ©rieur Ã  celui Â« feu de forÃªtÂ»", "En liaison avec lâ€™EMIZDS, prendre contact avec RTE pour connaÃ®tre :", "lâ€™impact de la coupure (nombre dâ€™abonnÃ©s, sites particuliers, â€¦)", "le dÃ©lai nÃ©cessaire Ã  la coupure et celui correspondant au rÃ©tablissement", "Les dÃ©partements concernÃ©s devront Ãªtre informÃ©s de lâ€™Ã©ventualitÃ© de la coupure de la ligne HT"]}]}, {"code": "2.B", "title": "Vigilance MÃ©tÃ©o APIC", "family": "Risques naturels", "sections": [{"heading": "SynthÃ¨se", "items": ["EvÃ©nement concernÃ©", "PrÃ©cipitations intenses et trÃ¨s intenses."]}, {"heading": "Alerte initiale", "items": ["Outil dâ€™avertissement complÃ©mentaire aux vigilances mÃ©tÃ©orologiques et crues.", "Information des maires abonnÃ©es au service et de la prÃ©fecture sur les prÃ©cipitations intenses ou trÃ¨s intenses dÃ©tectÃ©es dans les communes ou Ã  proximitÃ© immÃ©diate (bassin Amont)."]}, {"heading": "DÃ©clenchement", "items": ["Lâ€™outil APIC :", "MÃ©tÃ©o-France a dÃ©veloppÃ© un service dâ€™Â« Avertissement Pluies Intenses pour les Communes Â», informant les maires des prÃ©cipitations intenses ou trÃ¨s intenses dÃ©tectÃ©es sur leur commune ou Ã  proximitÃ© immÃ©diate.", "Service complÃ©mentaire de la vigilance mÃ©tÃ©orologique et de la vigilance crue, APIC est un service gratuit dâ€™avertissement aux communes, il suffit de sâ€™abonner sur le site internet https://apic.meteo.fr", "ConditionnÃ© Ã  la disponibilitÃ© dâ€™informations reÃ§ues de radars mÃ©tÃ©orologiques, qualifiant lâ€™intensitÃ© des prÃ©cipitations (2 niveaux), il permet dâ€™anticiper lâ€™inondation par ruissellement ou crue rapide.", "Toutes les communes des Bouches du RhÃ´ne y sont Ã©ligibles et lâ€™abonnement APIC permet dâ€™accÃ©der aux avertissements de communes voisines (de 1Ã 10) notamment celles situÃ©es en amont."]}, {"heading": "APIC et gestion de crise", "items": ["Accessible aux SDIS et aux prÃ©fectures, le SIRACEDPC 13 a crÃ©Ã© un compte APIC pour recevoir les avertissements concernant le dÃ©partement des Bouches du RhÃ´ne et consulter le site."]}, {"heading": "RÃ©ception des avertissements", "items": ["Lâ€™appel vocal nâ€™a pas Ã©tÃ© sÃ©lectionnÃ©, en consÃ©quence, les avertissements sont envoyÃ©s par", "SMS / sur les portables dâ€™astreinte SIRACEDPC aux nÂ° : 06.14.88.88.87 et 06.09.73.86.57", "MEL / sur les adresses gÃ©nÃ©riques : pref-siracedpc@bouches-du-rhone.gouv.fr et pccrise-13@bouches-du-rhone.pref.gouv.fr"]}, {"heading": "Consultation du site", "items": ["On accÃ¨de au site, exclusivement rÃ©servÃ© aux mairies, aux prÃ©fectures , aux services de prÃ©vision des crues et Ã  MÃ©tÃ©o-France par lâ€™adresse : https://apic.meteo.fr", "A lâ€™ouverture, cliquer sur Â« se connecter en tant que prÃ©fecture Â»", "Choisir le dÃ©partement BdR dans le menu dÃ©roulant le mot de passe est 3jthoi3e / valider", "AccÃ¨s Ã  la page dâ€™accueil comportant :", "Lâ€™affichage des paramÃ¨tres de lâ€™abonnement et des moyens de rÃ©ception", "les onglets Â« cartographie Â» et Â« communes abonnÃ©es Â»", "La cartographie, actualisÃ©e de Â¼ dâ€™heure en Â¼ dâ€™heure, indique :", "en violet les communes subissant des prÃ©cipitations intenses = niveau1", "en fuschia les communes subissant des prÃ©cipitations trÃ¨s intenses = niveau 2", "Dans le menu communes abonnÃ©es, on trouve la liste des abonnements principaux et celle des communes surveillÃ©es, au titre de lâ€™abonnement principal.", "Si un avertissement APIC est en cours, la commune est signalÃ©e par un tÃ©lÃ©phone"]}]}, {"code": "2.C", "title": "Vigilance crue", "family": "Risques naturels", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Crues suite Ã  phÃ©nomÃ¨ne mÃ©tÃ©orologique."]}, {"heading": "Alerte initiale", "items": ["Le dÃ©partement des Bouches-du-RhÃ´ne comporte 4 cours dâ€™eau majeurs surveillÃ©s par 2 SPC (service de prÃ©vision des crues).", "Le niveau de vigilance/alerte est diffusÃ© et consultable sur : www.vigicrues.ecologie.gouv.fr"]}, {"heading": "DÃ©clenchement", "items": ["PrÃ©visions de SPC Grand Delta et SPC MÃ©diterranÃ©e Est"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["ETAT DE VIGILANCE VERT", "Pas dâ€™action particuliÃ¨re requise", "ETAT DE VIGILANCE JAUNE", "Risque de crue ou de montÃ©e rapide des eaux n'entraÃ®nant pas de dommages significatifs, mais pouvant nÃ©cessiter une vigilance particuliÃ¨re dans le cas d'activitÃ©s saisonniÃ¨res et/ou exposÃ©es. Le CODIS et le COSSIM informe les maires et les services.", "Affiner si nÃ©cessaire les prÃ©visions avec le SPC concernÃ© ;", "Rester en contact avec le CODIS et le COSSIM.", "ETAT DE VIGILANCE ORANGE", "Risque de crue gÃ©nÃ©ratrice de dÃ©bordements importants susceptibles dâ€™avoir un impact significatif sur la vie collective et la sÃ©curitÃ©. Si lâ€™analyse des bulletins dâ€™informations locaux confirme la nÃ©cessitÃ© dâ€™une action des pouvoirs publics, la prÃ©fecture procÃ¨dera Ã  lâ€™alerte de lâ€™ensemble des services opÃ©rationnels, et des maires si nÃ©cessaires : ouverture dâ€™une cellule de suivi en prÃ©fecture.", "Affiner les prÃ©visions avec le SPC concernÃ© et MÃ©tÃ©o-France (CMIR) ;", "Activation si nÃ©cessaire par lâ€™astreinte SIRACEDPC dâ€™une cellule de suivi dâ€™Ã©vÃ©nement en prÃ©fecture : SIRACEDPC â€“ services de secours â€“ Communication PrÃ©fecture ;", "Avertir le service communication de la prÃ©fecture qui prend contact avec les mÃ©dias locaux et prÃ©pare Ã©ventuellement un communiquÃ© de presse ;", "Informer, le cas Ã©chÃ©ant, les maires par fax et/ou SMS (Easylink) ;", "Rester en contact avec le CODIS et le COSSIM.", "ETAT DE VIGILANCE ROUGE", "Risque de crue majeure. Menace directe et gÃ©nÃ©ralisÃ©e de la sÃ©curitÃ© des personnes et des biens. Elle justifie la mobilisation immÃ©diate de l'ensemble des acteurs et des moyens au niveau du dÃ©partement.", "Activation du COD par lâ€™astreinte SIRACEDPC et consolidation des prÃ©visions mÃ©tÃ©orologiques et de crues ;", "Avertir le service communication de la prÃ©fecture qui prend contact avec les mÃ©dias locaux et prÃ©pare un communiquÃ© de presse ;", "Informer les maires par fax et/ou SMS (Easylink) ;", "Anticiper les demandes de renforts selon besoins auprÃ¨s de lâ€™EMIZDS."]}]}, {"code": "2.D", "title": "Inondations", "family": "Risques naturels", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Inondations suite Ã  phÃ©nomÃ¨ne mÃ©tÃ©orologique."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision du prÃ©fet."]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["En complÃ©ment du dispositif de vigilance crues (cf.Vigilance crue), approuvÃ© dans le cadre du rÃ¨glement de surveillance, de prÃ©vision et de transmission de lâ€™information sur les crues (RIC), les objectifs des dispositions spÃ©cifiques ORSEC Inondations sont de :", "DÃ©finir les missions des diffÃ©rents services appelÃ©s Ã  participer Ã  la gestion des inondations et de leurs consÃ©quences ;", "ArrÃªter un schÃ©ma de coordination des services intervenants, notamment au travers de la mise en place dâ€™une cellule de crise.", "Dans le cas oÃ¹ une cellule de suivi dâ€™Ã©vÃ©nement ne soit pas dÃ©jÃ  activÃ©e en prÃ©fecture , auquel cas les services essentiels Ã  la gestion de crise seront dÃ©jÃ  alertÃ©s :", "Mise en alerte des services (hors services de secours) :", "Astreinte SIRACEDPC pour grÃ©ement du COD ;", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ© ;", "CORG (groupement de gendarmerie 13) ;", "CIC (Direction dÃ©partementale de la sÃ©curitÃ© publique) ;", "DDTM (police de lâ€™eau et coordination des gestionnaires routiers) ;", "Conseil GÃ©nÃ©ral (PC sÃ»retÃ©) ;", "ARS /APHM /SAMU ;", "DREAL ;", "Sous-prÃ©fet(s) dâ€™arrondissement(s) concernÃ©(s) ;", "Communication prÃ©fecture ;", "SINSIC ;", "COZ (information)."]}]}, {"code": "2.E", "title": "Ã‰vacuation des campings en zone de submersion rapide", "family": "Risques naturels", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Vigilance crues sur cours d'eau, de niveau ORANGE ou ROUGE.", "Ã‰pisodes mÃ©tÃ©orologiques : vigilance mÃ©tÃ©o Orage et/ou Pluies-Inondations, de niveau ORANGE ou ROUGE ."]}, {"heading": "Alerte initiale", "items": ["Pour les cours dâ€™eau : messages vigilance crues Ã©manant des SPC Grand Delta et MÃ©diterranÃ©e Est ;", "Pour la mÃ©tÃ©o : bulletins de suivi vigilance pour le dÃ©partement 13 ou bulletins spÃ©ciaux zone de dÃ©fense (SPZEF)."]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision du prÃ©fet", "en lien avec le(s) maire(s) concernÃ©(s)"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Alerte prÃ©fecture â€“ mobilisation des astreintes :", "Astreinte SIRACEDPC pour grÃ©ement du COD ou de la cellule de suivi ;", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ© ;", "Astreinte Communication."]}, {"heading": "2 niveaux :", "items": ["Niveau ORANGE, relayÃ© par le SIRACEDPC avec rÃ©union Ã©ventuelle dâ€™une cellule de suivi en prÃ©fecture ;", "Niveau ROUGE, relayÃ© par le SIRACEDPC avec rÃ©union systÃ©matique dâ€™un COD en prÃ©fecture."]}, {"heading": "Structures :", "items": ["Cellule de suivi : PPOL, SDIS, BMPM, DDTM / par liaison tÃ©lÃ©phonique : MÃ©tÃ©o-France, SPC Grand Delta et/ou SPC Med-Est ;", "COD : PPOL, DIPN, GGD, CRS, ARS, DREAL, DDTM, CD 13, SDIS, BMPM, DMD, SAMU / par liaison tÃ©lÃ©phonique : VNF, MÃ©tÃ©o-France, SPC Grand Delta et/ou SPC Med-Est."]}, {"heading": "ProcÃ©dure spÃ©cifique Â« Campings Â»", "items": ["(instruction du gouvernement du 06 octobre 2014 NOR : DEVP149070J)", "En cas de vigilance ORANGE : point tÃ©lÃ©phonique sur la situation locale avec le(s) maire(s) concernÃ©(s) pour Ã©valuation de la nÃ©cessitÃ© dâ€™Ã©vacuer les campings en zone de submersion rapide.", "Les remontÃ©es dâ€™information seront centralisÃ©es par la DDTM (RDI) pour proposition Ã©ventuelle dâ€™Ã©vacuation, en prenant en compte les mesures de prÃ©caution qui auraient dÃ©jÃ  Ã©tÃ© prises par un ou plusieurs maire.", "En cas de vigilance ROUGE : le prÃ©fet donne les consignes dâ€™Ã©vacuation systÃ©matique pour tous les campings concernÃ©s.", "Diffusion du message ad hoc (cf. modÃ¨le en piÃ¨ce jointe).", "Observation : Lorsquâ€™il est procÃ©dÃ© Ã  lâ€™Ã©vacuation dâ€™un ou plusieurs campings, le(s) maire(s) concernÃ©(s) devra (ont) activer leur PCS."]}]}, {"code": "2.F", "title": "Canicule", "family": "Risques naturels", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["DÃ©clenchement dâ€™un niveau dâ€™alerte du plan canicule (4 niveaux )"]}, {"heading": "Alerte initiale", "items": ["Des Ã©pisodes aigus de pollution de lâ€™air Ã  lâ€™ozone peuvent survenir Ã  lâ€™occasion de forte canicule."]}, {"heading": "DÃ©clenchement", "items": ["Niveau 1 â€“ Veille saisonniÃ¨re", "Niveau 2 â€“ Avertissement chaleur", "Niveau 3 â€“ Alerte canicule", "Niveau 4 â€“ Mobilisation maximale"]}, {"heading": "Conditions dâ€™activation", "items": ["Du 1er juin au 15 septembre de chaque annÃ©e, activation dâ€™une veille saisonniÃ¨re sur lâ€™Ã©volution climatique et sanitaire ;", "Lâ€™ARS PACA prÃ©pare et met en Å“uvre la communication prÃ©ventive au plan local."]}, {"heading": "Niveau 2 : Avertissement chaleur", "items": ["Phase de veille renforcÃ©e", "Une information factuelle des maires par le prÃ©fet (SIRACEDPC) sur la base du bulletin spÃ©cial de MÃ©tÃ©o France,", "- des actions de communication prÃ©parÃ©es par lâ€™ARS et coordonnÃ©es avec le service communication de la prÃ©fecture de rÃ©gion et de dÃ©partement,"]}, {"heading": "Conditions de dÃ©clenchement", "items": ["Le PrÃ©fet, au regard de lâ€™expertise de lâ€™ARS, dÃ©cide du passage du dÃ©partement en niveau 3 Â« alerte canicule Â».", "Le SIRACEDPC envoie lâ€™alerte aux services concernÃ©s.", "Une cellule de suivi est activÃ©e Ã  la prÃ©fecture avec des remontÃ©es dâ€™information quotidiennes auprÃ¨s du COZ."]}, {"heading": "Composition de la cellule de suivie :", "items": ["PrÃ©fecture â€“ SIRACEDPC/SRCI", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ©", "Agence rÃ©gionale de santÃ© PACA (coordination de lâ€™organisation sanitaire et mÃ©dico-sociale conformÃ©ment aux dispositions du volet ORSAN-CLIM)", "MÃ©tÃ©o-France", "SDIS 13", "BMPM", "DIRECCTE", "DDDCS", "DDPP", "DDTM", "Conseil dÃ©partemental", "MÃ©tropole Aix Marseille Provence", "Mairie de Marseille", "DASEN (en pÃ©riode scolaire)"]}, {"heading": "Mesures Ã©ventuelles :", "items": ["Interdiction de manifestations festives, sportivesâ€¦.", "Actions de communication prÃ©ventive.", "Le prÃ©fet peut mettre en place certaines des mesures dÃ©partementales."]}, {"heading": "Conditions de dÃ©clenchement", "items": ["Le Premier Ministre peut demander au prÃ©fet dâ€™activer le niveau de mobilisation maximale.", "Le prÃ©fet peut Ã©galement proposer dâ€™activer le niveau de mobilisation maximale en fonction de lâ€™expertise de lâ€™ARS, des donnÃ©es mÃ©tÃ©orologiques et de la constatation dâ€™effets collatÃ©raux (sÃ©cheresse, pannes ou dÃ©lestages Ã©lectriques, saturation des hÃ´pitaux, pollution de lâ€™air, â€¦)", "DÃ¨s le dÃ©clenchement du niveau 4 Â« mobilisation maximale Â», le prÃ©fet :", "Alerte les services selon les mÃªmes modalitÃ©s que pour le niveau 3 Â« alerte canicule Â» ;", "Active le COD ;", "Met en Å“uvre les Ã©lÃ©ments du dispositif ORSEC pour traiter les diffÃ©rents aspects de la situation.", "Dans ce cadre le COD :", "Se tient informer de la situation sur le terrain ;", "Propose au prÃ©fet les mesures nÃ©cessaires en vue dâ€™assurer la protection des populations, des biens et de lâ€™environnement ;", "PrÃ©pare les Ã©ventuelles rÃ©quisitions de moyens publics ou privÃ©s ;", "PrÃ©pare et transmet les Ã©ventuelles demandes au COZ en matiÃ¨re de renforts extÃ©rieurs ;", "Dirige et coordonne lâ€™action de ces renforts ;", "Rends compte aux Ã©chelons supÃ©rieurs (COZ et COGIC) ;", "Fourni Ã  la cellule communication les renseignements nÃ©cessaires Ã  lâ€™information des mÃ©dias.", "Point particulier :", "Le COD peut solliciter auprÃ¨s des maires la communication des registres nominatifs quâ€™ils ont constituÃ©s pour le recensement des personnes Ã¢gÃ©es et des personnes en situation de handicap qui en ont fait la demande."]}]}, {"code": "2.G", "title": "SÃ©isme et effondrements de bÃ¢timents", "family": "Risques naturels", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Sâ€™applique :", "Ã€ tout Ã©vÃ©nement sismique susceptible dâ€™occasionner des dommages significatifs aux personnes, aux infrastructures ou aux rÃ©seaux essentiels ;", "En cas dâ€™effondrements multiples de bÃ¢timents, quelle quâ€™en soit la cause, dÃ¨s lors que lâ€™ampleur des dommages est Ã©tendue sur plusieurs communes ou que le nombre potentiel de victimes dÃ©passe les capacitÃ©s de rÃ©ponse courante communale."]}, {"heading": "Alerte initiale", "items": ["Alerte sismique via bulletin du CEA ou COGIS OU Information / Perception du territoire (CF Fiche B1.1)"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision du prÃ©fet.", "(Pour une simple secousse, DOS MAIRE avec communication centralisÃ©e par SRCI)"]}, {"heading": "Scenarii de rÃ©fÃ©nrece", "items": ["4 scenarii de rÃ©fÃ©rence (Cf stratÃ©gie de rÃ©ponse â€“ Fiche B4) :", "Scenario MINEUR (simple secousse) â€“ Cf Fiche 5.1", "Scenario MOYEN (sÃ©isme avec dÃ©gÃ¢ts lÃ©ger sans rupture de flux) - Cf Fiche 5.2", "Scenario MAJEUR (sÃ©isme majeur avec rupture de flux) - Cf Fiche 5.3", "Effondrements multiples de bÃ¢timents (Ex : TempÃªte ALEX - Alpes Maritimes) â€“ Cf Fiche 5.4"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Cf Fiche B1.1 et D1 â€“ Messages FR-ALERT", "Actions rÃ©flexes", "Prise en compte de la vraisemblance dâ€™un sÃ©isme :", "Observer lâ€™activitÃ© sismique relevÃ©e Ã  partir du site Internet https://sismoazur.oca.eu/#/", "Observer et suivre les relevÃ©s dâ€™intensitÃ© Ã  partir du site Internet https://www.franceseisme.fr/", "Informer la chaÃ®ne ORSEC via GEDICOM (Cf. Fiche B1.2)", "Solliciter des expertises (Cf. Fiche B3) :", "Du BRGM (Permanence tÃ©lÃ©phonique 24 / 24 â€“ 02 38 64 34 34)", "Forces dâ€™expertise via le COZ :", "du Groupe dâ€™intervention macrosismique (GIM) ;", "de lâ€™Association franÃ§aise du gÃ©nie parasismique (AFPS) ;", "du Service de traitement dâ€™image et de tÃ©lÃ©dÃ©tection (SERTIT).", "Mise en Å“uvre prÃ©ventive des moyens permettant la continuitÃ© des transmissions Ã  savoir les moyens satellitaires et le rÃ©seau radio ADRASEC (Cf. Fiche C7 â€“ D3).", "Risques technologiques"]}]}, {"code": "3.A", "title": "NOVI (Â« nombreuses victimes Â»)", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Nombreuses victimes impliquant lâ€™intervention dâ€™importants moyens mÃ©dicaux (incendie, accident de transport, attentat, effondrement dâ€™immeuble...)"]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM Ã  lâ€™autoritÃ© prÃ©fectorale â€“ CORG â€“ CIC â€“ SAMU", "Ã‰valuation : oÃ¹ - quand - quoi - moyens- enjeux ?"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale sur proposition du CODIS ou COSSIM", "Dans le cadre dâ€™Ã©vÃ¨nements Ã  vocation purement sanitaire (hors secours Ã  personne), lâ€™ARS et/ou le SAMU propose(nt) au PrÃ©fet ou son reprÃ©sentant de mobiliser les acteurs et/ou services concernÃ©s (notamment les Ã©tablissements de santÃ© et mÃ©dicosociaux, les professionnels de santÃ©, les acteurs extra sanitaires)."]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Cas gÃ©nÃ©ral de mise en alerte des services (hors services de secours/ CORG/CIC et SAMU) :", "Astreinte SIRACEDPC pour grÃ©ement du COD", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ©", "DDTM (coordination des gestionnaires routiers)", "Conseil DÃ©partemental (PC sÃ»retÃ©)", "ARS /APHM", "DREAL", "Sous-prÃ©fet(s) dâ€™arrondissement(s) concernÃ©(s)", "Communication prÃ©fecture", "SINSIC", "COZ (information)"]}, {"heading": "Direction des opÃ©rations", "items": ["Le prÃ©fet, DOS (Directeur des OpÃ©rations de secours), dÃ©cide la mise en Å“uvre du plan.", "Active le COD comme base arriÃ¨re des opÃ©rations de secours : PP13, SIRACEDPC, SINSIC, Communication PrÃ©fecture, reprÃ©sentants des services concernÃ©s (dont DDTM et ARS).", "Habituellement dirigÃ© par le directeur de cabinet, le SIRACEDPC en assure le fonctionnement.", "DÃ©signe un membre du corps prÃ©fectoral auprÃ¨s du COS chargÃ© de diriger le PCO (ou PC interservices auprÃ¨s du PC de site)", "DÃ©cide de lâ€™activation de la CUMP selon lâ€™Ã©valuation faite par APHM et SAMU", "Autorise la levÃ©e du plan quand lâ€™opÃ©ration est terminÃ©e, en maintenant un dispositif allÃ©gÃ© dans lâ€™attente dâ€™un bilan dÃ©finitif qui sera diffusÃ© Ã  la presse.", "Le SDIS ou le BMPM dÃ©signe le Commandant des OpÃ©rations de Secours (COS)", "LE COS :", "diffuse lâ€™arrÃªtÃ© de dÃ©clenchement Ã  : SAMU, CORG, CIC (DIPN), DDTM, maire(s), sous-prÃ©fet dâ€™arrondissement, autoritÃ© judiciaire ;", "mobilise les moyens de secours et de sÃ©curitÃ©", "active le PCS (poste de commandement de site inter services) implantÃ© sur le terrain, armÃ© par moyens mobiles SDIS/BMP. Il est dirigÃ© par un membre du corps prÃ©fectoral, habituellement le sous-prÃ©fet dâ€™arrondissement. Si nÃ©cessaire le volet interservices peut Ãªtre regroupÃ© au sein dâ€™un PCO distinct sous lâ€™autoritÃ© du sous-prÃ©fet dÃ©signÃ© (en rÃ¨gle gÃ©nÃ©rale, le sous-prÃ©fet dâ€™arrondissement).", "est assistÃ© par :", "Le DSI : Directeur Sauvetage Incendie, chargÃ© des opÃ©rations non mÃ©dicales ;", "Le DSM : Directeur des Secours MÃ©dicaux, qui peut Ãªtre :", "le mÃ©decin chef du SDIS, sur le dÃ©partement hors Marseille ;", "le mÃ©decin chef du BMP sur la ville de Marseille ;", "le mÃ©decin chef du SAMU sur lâ€™aÃ©roport Marseille Provence.", "un PMA Â« poste mÃ©dical avancÃ© Â» qui regroupe, trie, Ã©vacue les victimes ;", "le SAMU qui apporte son concours, assure rÃ©partition et accueil en hÃ´pitaux ;", "la CUMP : cellule dâ€™urgence mÃ©dico psychologique organisÃ©e par lâ€™APHM et activÃ©e selon lâ€™Ã©valuation faite par le SAMU"]}]}, {"code": "3.B", "title": "Novis sinus", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Nombreuses victimes impliquant lâ€™intervention dâ€™importants moyens mÃ©dicaux (incendie, accident de transport, attentat, effondrement dâ€™immeuble...)", "Information outil", "Le portail SINUS est lâ€™outil national unique par lequel les autoritÃ©s accÃ¨dent Ã  la totalitÃ© du dÃ©nombrement des victimes.", "Il permet de fournir le plus dâ€™informations possibles sur les victimes afin de faciliter leur identification par lâ€™autoritÃ© judiciaire et les services dâ€™enquÃªte compÃ©tents, leur prise en charge mÃ©dicale par les Ã©tablissements de santÃ© (ES) et lâ€™information des familles et des proches, assurÃ©e par la CIAV.", "ProcÃ©dure", "Ainsi, lors dâ€™un Ã©vÃ©nement gÃ©nÃ©rant de nombreuses victimes (accident, attentat..), SINUS va permettre Ã  tous les services de partager les informations relatives aux victimes :", "Les primo-intervenants (pompiers, policiers), vont doter les victimes dâ€™un bracelet SINUS ;", "Au PMA : les victimes seront catÃ©gorisÃ©es (UA, UR) et orientÃ©es vers une structure dâ€™accueil.", "A chaque Ã©tape de la chaÃ®ne des secours, de nouvelles informations viendront enrichir la base SINUS (pour les personnes ne passant pas par le PMA, ce sont les centres hospitaliers qui les doteront dâ€™un bracelet dâ€™identification).", "Au final, les listes pourront Ãªtre Ã©ditÃ©es en COD Ã  destination des autoritÃ©s :", "par catÃ©gorisation : UA, UR, DCD ;", "par identitÃ© ;", "par destination hospitaliÃ¨re.", "ATTENTION : pour les personnes dÃ©cÃ©dÃ©es, lâ€™autoritÃ© judiciaire peut bloquer la liste nominative.", "Adresses SINUS :", "https://sinus.novi.interieur.gouv.fr (pour les cas rÃ©els)", "https://formation.sinus.novi.interieur.gouv.fr (pour sâ€™entraÃ®ner, pour les exercices).", "Connexion :", "EN COD, SINUS NE PERMET QUE LA CONSULTATION OU Lâ€™EDITION DE LISTES"]}]}, {"code": "3.C", "title": "Plan particulier dâ€™intervention", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Accident industriel concernant un Ã©tablissement SEVESO II - seuil haut â€“ (donc dotÃ© dâ€™un plan particulier dâ€™intervention)"]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM Ã  lâ€™autoritÃ© prÃ©fectorale â€“ CORG â€“ CIC â€“ SAMU", "Ã‰valuation : oÃ¹ - quand - quoi - moyens- enjeux ?"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["CODIS / COSSIM assurent la transmission de lâ€™alerte aux mairies, organismes et services figurant dans le schÃ©ma dâ€™alerte du PPI concernÃ©.", "En cas dâ€™extrÃªme urgence, lâ€™exploitant est compÃ©tent pour demander directement auprÃ¨s des services concernÃ©s la mise en Å“uvre de contre-mesures immÃ©diates (interruption trafic routier, ferroviaire, â€¦)", "Astreinte SIRACEDPC pour grÃ©ement du COD", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ©", "DDTM (coordination des gestionnaires routiers)", "Conseil DÃ©partemental (PC sÃ»retÃ©)", "ARS /APHM", "DREAL", "Sous-prÃ©fet(s) dâ€™arrondissement(s) concernÃ©(s)", "Communication prÃ©fecture", "SINSIC", "COZ (information)", "Organisation de commandement", "Le prÃ©fet, DOS (Directeur des OpÃ©rations de secours) :", "Active le COD (SIRACEDPC)", "DÃ©signe le sous-prÃ©fet qui dirige le PCO (mis en place par le commandant des opÃ©rations de secours)", "Fait prÃ©parer un premier communiquÃ© de presse", "Fait rÃ©diger le message de mise en Å“uvre du PPI et le fait diffuser par le CODIS / COSSIM", "DÃ©clenche les contre-mesures externes immÃ©diates (si celles-ci nâ€™ont pas Ã©tÃ© activÃ©es ou demandÃ©es en mode rÃ©flexe par lâ€™exploitant) :", "Alerte des populations par : (au signal dâ€™alerte : mise Ã  lâ€™abri, Ã©coute de la radio)", "sirÃ¨ne PPI (exploitant)", "sirÃ¨ne SAIP (COZ)", "ensemble Mobiles dâ€™alerte (mairie/BMPM/SDIS)", "Interruption des circulations de transit : RoutiÃ¨re / Ferroviaire / AÃ©rienne (mesure prise par DSAC)", "Fait diffuser par les radios des messages Ã©tablis par le service Communication", "Si nÃ©cessaire, met en Å“uvre des mesures de sauvegarde complÃ©mentaires :", "Ã‰vacuation partielle, totale, ou confinement gÃ©nÃ©ral ;", "Bouclage et surveillance de la zone ;", "Installation de postes mÃ©dicaux avancÃ©s (PMA) ;", "DÃ©clenchement Ã©ventuel du NOVI ;", "Ouverture de Centres MÃ©dicaux dâ€™Evacuation ;", "Cellule dâ€™Urgence mÃ©dico-psychologique ;", "Centre dâ€™Accueil et de REgroupement (CARE) des communes dans le cadre de leurs PCS.", "ProcÃ¨de rÃ©guliÃ¨rement Ã  :", "points de situation avec PCO et Exploitant ;", "points presse et communiquÃ©s ;", "compte-rendus aux autoritÃ©s centrales via le COZ ;", "tenue de tableaux des moyens mis en Å“uvre et demandes de renforts ;", "contacts avec les Ã©lus ;", "bilans prÃ©cis des victimes.", "Active, si nÃ©cessaire, une cellule de rÃ©ponse aux appels du public", "Autorise la levÃ©e du dispositif", "CIPChef d'Incident PrincipalInterlocuteur unique du DOSInterface avec les services de l'EIC PACAet de l'EF SNCFCILChef d'Incident LocalInterlocuteur unique du COSAssure la protection despersonnels prÃ©sents surle siteInterface avec leCOGCCOGCCentre rÃ©gionalInterlocuteur du CODISAssure la gestion de l'incidentAssure la diffusion de l'informationSupplÃ©e le CIL en son absenceDOSDirige les opÃ©rations de secoursCOSMets en Å“uvre les opÃ©rations de secoursCODIS / COSSIMMise en Å“uvre de l'alerteAssure l'interface entre COS etCOGC en l'absence du CIL EIC PACAPREFECTUREServices de secours", "CIP", "Chef d'Incident Principal", "Interlocuteur unique", "du DOS", "Interface avec les", "services de l'EIC PACA", "et de l'EF SNCF", "CIL", "Chef d'Incident Local", "Interlocuteur unique", "du COS", "Assure la protection des", "personnels prÃ©sents sur", "le site", "Interface avec le", "COGC", "COGC", "Centre rÃ©gional", "Interlocuteur", "du CODIS", "Assure la gestion de", "l'incident", "Assure la diffusion de", "l'information", "SupplÃ©e le CIL en", "son absence", "DOS", "Dirige les opÃ©rations de secours", "COS", "Mets en Å“uvre", "les opÃ©rations de secours", "CODIS / COSSIM", "Mise en Å“uvre de l'alerte", "Assure l'interface entre COS et", "COGC en l'absence du CIL", "EIC PACA", "PREFECTURE", "Services de secours"]}]}, {"code": "3.D", "title": "RÃ©seaux ferroviaires", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Accident grave de chemin de fer impliquant lâ€™intervention de moyens complÃ©mentaires Ã  ceux du plan dâ€™intervention et de sÃ©curitÃ© (PIS) de lâ€™EIC PACA.", "DÃ©clenchement possible simultanÃ© des dispositions ORSEC NOVI et TMD."]}, {"heading": "Alerte initiale", "items": ["par EXPLOITANT Ã  lâ€™autoritÃ© prÃ©fectorale â€“ CORG â€“ CIC â€“ SAMU", "Ã‰valuation : oÃ¹ - quand - quoi - moyens- enjeux ?"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale sur proposition de lâ€™exploitant", "Zones de compÃ©tences", "SDIS :", "aux tÃªtes nord des tunnels de la Nerthe et de Marseille ;", "aux tÃªtes nord et sud des tunnels du Mussuguet et des Janots.", "BMPM :", "aux tÃªtes sud des tunnels de la Nerthe et de Marseille."]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["En cas dâ€™Ã©vÃ¨nements graves ou prÃ©sentant d'emblÃ©e un caractÃ¨re spÃ©cifique susceptible d'entraÃ®ner une dÃ©gradation de la situation des passagers et/ou des riverains tels que :", "arrÃªt prolongÃ© d'un train de voyageurs dans un tunnel ;", "accident de personnes ;", "feu sur rame ;", "accident impliquant de nombreuses victimes ;", "fuite d'une substance chimique ou radioactive ;", "Le gestionnaire ferroviaire concernÃ©, active son PIS ou sa procÃ©dure d'urgence. Il alerte immÃ©diatement et systÃ©matiquement les services publics pour permettre la montÃ©e en puissance rapide des moyens de secours. Si un Ã©vÃ¨nement est signalÃ© directement aux services d'incendie et de secours, ces derniers transmettent immÃ©diatement l'information au gestionnaire ferroviaire compÃ©tent : CRC du COGC (EIC PACA).", "NB : Le Grand Port Maritime de Marseille et la RDT 13 sont Ã©galement gestionnaires de rÃ©seaux ferroviaires."]}]}, {"code": "3.E", "title": "AÃ©roport Marseille-Provence", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Accident ou risque dâ€™accident dâ€™un aÃ©ronef intervenant", "en ZA (zone dâ€™aÃ©rodrome = dans lâ€™emprise de lâ€™aÃ©roport Marseille-Provence)", "en ZVA (zone voisine dâ€™aÃ©rodrome = limitÃ©e dans le PSS)"]}, {"heading": "Alerte initiale", "items": ["par Tour de contrÃ´le aÃ©roport Marseille-Provence"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale Ã  la demande du directeur de lâ€™aÃ©roport", "Phases", "VEILLE :Il y a Ã©tat de veille si un pilote signale, ou si lâ€™on soupÃ§onne des dÃ©faillances Ã  bord, mais non des dÃ©faillances de nature Ã  entraÃ®ner normalement des difficultÃ©s graves Ã  lâ€™atterrissage (mouvements dâ€™aÃ©ronef en essais ou au stade dâ€™expÃ©rimentation, vibration moteur, mauvaises conditions de visibilitÃ© mÃ©tÃ©orologique.....).", "ALERTE : Il y a Ã©tat dâ€™alerte si lâ€™on signale ou lâ€™on soupÃ§onne quâ€™un aÃ©ronef a subi, ou risque de subir une dÃ©faillance de nature Ã  entraÃ®ner un risque dâ€™accident (voyant incendie allumÃ©, fuite dâ€™huile, baisse de pression hydraulique des freins, fumÃ©e ou odeur anormale Ã  lâ€™ intÃ©rieur de lâ€™aÃ©ronef, train dâ€™atterrissage, alerte Ã  la bombe, mauvaises conditions mÃ©tÃ©orologiques...).", "ACCIDENT : Il y a ï¾ Ã©tat dâ€™accidentï¾ lorsquâ€™un Ã©vÃ©nement mettant en cause la sÃ©curitÃ© de lâ€™aÃ©ronef ou de ses passagers (chute, incendie en vol ou au roulage, etc.) vient de se produire ou va inÃ©vitablement se produire.", "Ã€ la demande du Directeur de lâ€™exploitant de lâ€™aÃ©rodrome (CCIMP) ou de son reprÃ©sentant, le PrÃ©fet met en Å“uvre les dispositions spÃ©cifiques de lâ€™AÃ©roport Marseille-Provence."]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Ouverture dâ€™une cellule de crise (PCO) dÃ¨s la phase dâ€™alerte, avec les services suivants :", "SIRACEDPC", "Services du cabinet du prÃ©fet de police dÃ©lÃ©guÃ©", "DDTM (coordination des gestionnaires routiers)", "Communication prÃ©fecture", "SINSIC", "SDIS/BMPM", "GGD", "Compagnie aÃ©rienne exploitante ou assistante", "DSAC", "DÃ¨s rÃ©ception du message dâ€™alerte et/ou du message dâ€™accident, le PCO est ouvert et armÃ© par lâ€™exploitant dâ€™aÃ©rodrome. Ce dernier installe et sâ€™assure du bon fonctionnement des moyens de communication et de logistique.", "Un PCO (PC directeur) est ouvert et armÃ© par la SPAF avec lâ€™aide de la CCIMP", "Un COD (base arriÃ¨re) est ouvert en prÃ©fecture."]}, {"heading": "Direction des opÃ©rations", "items": ["-en ZA et ZVA : la Direction des OpÃ©rations de Secours (D.O.S.) est assurÃ©e par lâ€™autoritÃ© prÃ©fectorale. Le DOS (Sous-PrÃ©fet dâ€™Istres ou Directeur de Cabinet) est installÃ© dans le PC OpÃ©rationnel.", "en ZVA maritime : la responsabilitÃ© de la direction des opÃ©rations de secours incombe au PrÃ©fet des Bouches-du-RhÃ´ne."]}]}, {"code": "3.F", "title": "BA 125 (Istres)", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Accident dâ€™un aÃ©ronef intervenant en :", "ZA (zone dâ€™aÃ©rodrome)", "ZVA (zone voisine dâ€™aÃ©rodrome )"]}, {"heading": "Alerte initiale", "items": ["par BA 125"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale sur proposition du commandant de la BA 125 ou du CODIS"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Bilan :", "Type dâ€™appareil", "Heure de lâ€™accident", "CoordonnÃ©es de lâ€™accident", "Nombre de passagers ou capacitÃ© maximale dâ€™aÃ©ronef", "Incendie observÃ© ou non (ampleur des dÃ©gÃ¢ts)", "Dangers reprÃ©sentÃ©s par lâ€™Ã©pave (matiÃ¨res dangereuses, munitionsâ€¦)", "Etcâ€¦", "Services prÃ©sents au COD :", "Sous-prÃ©fet dâ€™Istres ou autre sous-prÃ©fet dÃ©signÃ©", "SDIS", "SAMU / APHM / ARS", "DIPN", "Gendarmerie", "Mairies dâ€™Istres, Fos-sur-Mer, Saint Martin de Crau", "Conseil GÃ©nÃ©ral", "SINSIC", "Communication prÃ©fecture"]}, {"heading": "Direction des opÃ©rations", "items": ["Le PrÃ©fet est le DOS, Directeur des OpÃ©rations de Secours.", "Le Directeur dÃ©partemental du SDIS est le COS, Commandant des OpÃ©rations de Secours.", "Le COS dÃ©termine lâ€™emplacement du Poste de Commandement AvancÃ©/Poste de Commandement de Site (PCA/PCS) et mobilise les moyens de secours et de sÃ©curitÃ©.", "Un COD est activÃ© Ã  la prÃ©fecture des Bouches-du-RhÃ´ne.", "ACTION PREFECTORALE", "faire diffuser lâ€™alerte des services par le CODIS conformÃ©ment au schÃ©ma gÃ©nÃ©ral dâ€™alerte,", "prendre lâ€™arrÃªtÃ© de dÃ©clenchement des dispositions spÃ©cifiques ORSEC BA 125 et le faire diffuser par le CODIS 13 conformÃ©ment au schÃ©ma gÃ©nÃ©ral dâ€™alerte,", "dÃ©signer un membre du corps prÃ©fectoral auprÃ¨s du COS,", "faire prÃ©parer dÃ¨s que possible par le service communication de la prÃ©fecture, le message dâ€™alerte aux radios et le premier communiquÃ© de presse,", "informer lâ€™Ã©chelon national via le COZ sud,", "faire prÃ©parer lâ€™arrÃªtÃ© de levÃ©e du plan lorsque la situation le permet."]}]}, {"code": "3.G", "title": "Sauvetage aÃ©ro-terrestre (Sater)", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Les dispositions spÃ©cifiques Orsec pour sauvetage aÃ©ro-terresre (Sater) ont pour objet la recherche terrestre et la localisation prÃ©cise d'un aÃ©ronef en dÃ©tresse et de leurs occupants.", "La localisation de lâ€™Ã©pave provoque lâ€™arrÃªt des recherches et lâ€™engagement effectif de la phase de secours aux victimes.", "Celle-ci peut nÃ©cessiter lâ€™activation des dispositions Orsec NOVI.", "Organisation", "Lâ€™organisation Â« Sater Â» est dÃ©clinÃ©e en phases opÃ©rationnelles.", "En coordination avec lâ€™ARCC, correspondant aÃ©ronautique compÃ©tent au titre des recherches aÃ©riennes, le prÃ©fet de dÃ©partement est le directeur des opÃ©rations de recherches terrestres (DOR) dans les phases BRAVO Ã  CHARLIE. Le commandant de la gendarmerie dÃ©partementale ou le directeur dÃ©partemental de la sÃ©curitÃ© publique est le commandant des opÃ©rations de recherches terrestre (COR) dans les phases BRAVO Ã  CHARLIE", "Lâ€™ARCC de Lyon informe la prÃ©fecture de sa dÃ©cision dâ€™engager lâ€™ADRASEC par tÃ©lÃ©phone et par fax de confirmation.", "Prendre contact avec :", "CODIS / COSSIM (prÃ©venu par le COZ sud)", "CORG / CIC", "ADRASEC", "ARCC (pour le tenir informÃ©)"]}]}, {"code": "3.H", "title": "Pollution marine (POLMAR/Terre)", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Les dispositions spÃ©cifiques Â« POLMAR/Terre Â» du plan ORSEC des Bouches-du-RhÃ´ne ont pour objet de faire face Ã  une pollution marine de grande ampleur, par hydrocarbures ou tout autre produit (notamment chimique), rÃ©sultant d'un accident ou d'une avarie maritime, terrestre ou aÃ©rienne."]}, {"heading": "Alerte initiale", "items": ["par CROSSMED, CODIS, COSSIM, GIE, plaisanciersâ€¦."]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Recouper lâ€™information et obtenir tous renseignements utiles en liaison avec :", "PREMAR ;", "CROSSMED pour apprÃ©cier les capacitÃ©s des moyens de lutte en mer Ã  rÃ©sorber la pollution et Ã©pargner les cÃ´tes et anticiper la mise en Å“uvre Ã©ventuelle du dispositif de lutte Ã  terre ;", "MÃ©tÃ©o-France ;", "CEDRE ;", "CODIS/COSSIM ;", "COZ SUD.", "Anticiper la mise en oeuvre Ã©ventuelle du dispositif de lutte Ã  terre par lâ€™alerte/mobilisation :", "du sous-prÃ©fet dâ€™arrondissement potentiellement concernÃ© ;", "du/des maire(s), de la /des intercommunalitÃ©s potentiellement concernÃ©(s) ;", "du conseil gÃ©nÃ©ral ;", "de la DDTM, de la DREAL, du GPMM et de lâ€™IFREMER.", "Si la situation menace dâ€™Ã©voluer vers une pollution de grande ampleur, le PrÃ©fet dÃ©cide la mise en Å“uvre, des dispositions spÃ©cifiques POLMAR/Terre :", "le DDSIS ou le commandant du BMPM est le COS selon le secteur territorial principalement concernÃ©. Le PrÃ©fet lui fait prÃ©parer la montÃ©e en puissance du schÃ©ma de conduite des opÃ©rations de lutte ;", "le PrÃ©fet donne lâ€™ordre au CODIS (ou au COSSIM) de dÃ©clencher lâ€™alerte en vue de lâ€™activation du COD ;", "il fait activer, par le COS, le ou les PCOpÃ©rationnel(s) et PCAvancÃ©s nÃ©cessaires (jusquâ€™Ã  4 PCO et 11 PCA prÃ©dÃ©terminÃ©s) et les chantiers ;", "il convoque au COD les experts (CEDRE, IFREMER.â€¦) ;", "il informe le COZ chargÃ© de lâ€™information des dÃ©partements littoraux limitrophes (Gard, Var) ;", "il fait procÃ©der Ã  lâ€™Ã©change Â« dâ€™officiers de liaison Â» avec PREMAR, et Ã  lâ€™activation dâ€™une cellule communication/presse conjointe si possible."]}, {"heading": "Direction des opÃ©rations", "items": ["En mer : Si la menace de pollution ou la pollution en mer prÃ©sente un degrÃ© Ã©levÃ© de gravitÃ© ou de complexitÃ©, notamment s'il n'est pas possible d'y faire face avec les seuls moyens ordinaires des administrations, le prÃ©fet maritime met en oeuvre le plan ORSEC Maritime, dispositions spÃ©cifiques Â« POLMAR Â».", "Le prÃ©fet maritime est alors chargÃ© de la direction des opÃ©rations de lutte en mer sous l'autoritÃ© directe du Premier ministre.", "A terre : Si la menace de pollution ou la pollution s'exerce sur le littoral et prÃ©sente un degrÃ© Ã©levÃ© de gravitÃ© ou de complexitÃ©, notamment s'il n'est pas possible d'y faire face avec les", "seuls moyens ordinaires des collectivitÃ©s locales et de l'Ã‰tat, le prÃ©fet de dÃ©partement met en oeuvre les dispositions spÃ©cifiques Â« POLMAR/Terre Â».", "Le prÃ©fet de dÃ©partement est alors chargÃ© de la direction des opÃ©rations de lutte Ã  terre sous l'autoritÃ© du ministre de l'IntÃ©rieur.", "(pollutions de petite et moyenne ampleur = Â« infra polmar Â» = compÃ©tence du maire)", "Face aux pollutions de faible et moyenne ampleur ; les opÃ©rations de lutte incombent aux communes et sont dirigÃ©es par les Maires qui en supportent le coÃ»t financier.", "Si nÃ©cessaire, une cellule dâ€™appui aux collectivitÃ©s peut Ãªtre rÃ©unie autour de lâ€™autoritÃ© prÃ©fectorale. Elle est composÃ©e de la prÃ©fecture, de la DDTM, de lâ€™ARS, du SDIS, du BMPM, de la DIRM, de la DREAL, de la DRFiP, de la gendarmerie et/ou de la DIPN, de la DDPP. Orsec POLMAR Terre nâ€™est pas mis en Å“uvre ."]}]}, {"code": "3.I", "title": "Barrage de Bimont", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Risque de rupture ou rupture du barrage de Bimont.", "Inondation de la vallÃ©e de lâ€™Arc, soit 8 communes impactÃ©es :", "Zone de proximitÃ© immÃ©diate : Le Tholonet, Aix-en-Provence, Meyreuil", "Zone dâ€™inondation spÃ©cifique : Ventabren, Velaux, Coudoux, La Fare-les-Oliviers, Berre-lâ€™Etang"]}, {"heading": "Alerte initiale", "items": ["Alerte initiale : SociÃ©tÃ© du canal de Provence vers PrÃ©fet, DREAL", "En cas dâ€™extrÃªme urgence, lâ€™exploitant est compÃ©tent pour demander directement auprÃ¨s des services concernÃ©s la mise en Å“uvre de contre-mesures immÃ©diates (interruption trafic routier, ferroviaire, â€¦)", "CIC", "CODIS", "sous-prÃ©fet de permanence", "prÃ©fet de police", "Maire des communes concernÃ©es", "DREAL"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Cf. ci-aprÃ¨s"]}]}, {"code": "3.J", "title": "SpÃ©lÃ©o-secours", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Accident de spÃ©lÃ©ologie."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM (sur appel dâ€™un particulier)"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale sur proposition du CODIS ou COSSIM"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["ALERTE DES SERVICES :", "Astreintes SIRACEDPC et Cabinet PrÃ©fet de Police", "FÃ©dÃ©ration FranÃ§aise de SpÃ©lÃ©o : Conseiller Technique DÃ©partemental (CTD)", "COG (groupement de gendarmerie 13)", "DIPN (CIC : centre dâ€™information et de commandement)", "CODIS/COSSIM", "SAMU /APHM /ARS", "Mairie concernÃ©e", "Sous-prÃ©fet dâ€™arrondissement concernÃ©", "CMIR sud-est", "Communication prÃ©fecture", "COZ sud"]}, {"heading": "Direction des opÃ©rations", "items": ["Le prÃ©fet, DOS (Directeur des OpÃ©rations de secours),", "DÃ©signe le COS : Directeur du SDIS ou Commandant du BMPM (selon zone accident).", "Le COS :", "dÃ©termine lâ€™emplacement du PCO (avec la participation du CTD, police, gendarmerie) ;", "demande au maire de prendre immÃ©diatement, sous sa responsabilitÃ©, toutes les dispositions nÃ©cessaires Ã  lâ€™installation du PCO, au ravitaillement et Ã  lâ€™hÃ©bergement ;", "est chargÃ© de la coordination des opÃ©rations en surface, et tient le directeur des secours et le maire informÃ©s en permanence ;", "fait acheminer moyens et personnels nÃ©cessaires au dÃ©roulement de lâ€™opÃ©ration.", "Active le COD ou un PCO au plus prÃ¨s de lâ€™Ã©vÃ¨nement :", "Cabinet PrÃ©fet de Police, SIRACEDPC, SINSIC, Communication, reprÃ©sentants des services concernÃ©s.", "Si les circonstances le justifient, le prÃ©fet peut dÃ©cider de faire activer en prÃ©fecture une cellule lÃ©gÃ¨re de suivi, qui monterait en puissance (COD) si les opÃ©rations devaient se prolonger."]}]}, {"code": "3.K", "title": "DÃ©minage", "family": "Risques technologiques", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Interventions sur munitions de guerre", "Interventions sur engins explosifs improvisÃ©s (EEI) ou alerte Ã  la bombe", "SÃ©curisation de voyages officiels (VO) de personnalitÃ©s ou de manifestations socio-culturelles", "RÃ©quisition de terrains privÃ©s aux fins de destruction dâ€™urgence des matiÃ¨res activÃ©s ou des munitions collectÃ©es."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM (sur appel dâ€™un particulier)"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision de lâ€™autoritÃ© prÃ©fectorale sur proposition du CODIS ou COSSIM"]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["Cette fiche rÃ©flexe comprend les actions Ã  conduire en heures ouvrables (J.H.O) et en heures non ouvrables (J.H.N.O).", "Interventions sur munitions de guerre", "J.H.O :", "Le SIRACEDPC peut Ãªtre avisÃ© dâ€™une demande dâ€™intervention : particuliers / maires / forces de l'ordre / services de secours.", "se fait adresser un mail de confirmation comportant tous les renseignements utiles pour lâ€™intervention des dÃ©mineurs, Ã  l'adresse pref-deminage@bouches-du-rhone.gouv.fr", "rappelle les mesures conservatoires Ã  prendre sur les lieux : balisage/interdiction dâ€™accÃ¨s.", "saisie du centre de dÃ©minage de Marseille par mail (cd-marseille@interieur.gouv.fr).", "Si urgence, doubler dâ€™un appel tÃ©lÃ©phonique sur le portable du chef de centre : 06 26 78 00 49 ou 06 26 78 00 35 ou 06 26 78 00 36.", "J.H.N.O :", "le COGIC (centre opÃ©rationnel de gestion interministÃ©rielle des crises) est avisÃ© par les forces de l'ordre ou les services de secours ; il saisit le centre de dÃ©minage (les munitions de guerre ne justifient en principe pas une intervention immÃ©diate).", "Sur le littoral :", "pour engin immergÃ© ou marqueurs marines, alerter le centre des opÃ©rations maritimes (PREMAR), bureau des opÃ©rations cÃ´tiÃ¨res (cf. annuaire ORSEC).", "Interventions sur EEI ou alerte Ã  la bombe", "J.H.O :", "contacter le cabinet du PrÃ©fet de police (secrÃ©tariat : 04 96 10 64 31)", "J.H.N.O :", "contacter lâ€™astreinte Cabinet du PrÃ©fet de police", "Missions de sÃ©curitÃ© sur VO et manifestations", "En principe, ces missions sont programmÃ©es : la demande dâ€™intervention est donc exceptionnelle.", "En J.H.N.O : Saisir le COGIC.", "RÃ©quisition de terrains privÃ©s aux fins de destruction dâ€™urgence", "J.H.O et J.H.N.O :", "Expertise du dÃ©mineur chef de la mission relative Ã  la nÃ©cessitÃ© de dÃ©truire au plus prÃ¨s du lieu de dÃ©couverte de matiÃ¨res actives ou de munitions", "Information du SIRACEDPC / du sous-prÃ©fet de permanence ainsi que des services de police ou gendarmerie territorialement compÃ©tents par le dÃ©mineur chef de la mission en cas de refus de mise Ã  disposition d'un terrain privÃ©", "Prise de contact avec le propriÃ©taire du terrain par les services de police ou gendarmerie territorialement compÃ©tents. En l'absence d'accord Ã  l'amiable, il est rendu compte sans dÃ©lai au SIRACEDPC / au sous-prÃ©fet de permanence du refus et des motifs invoquÃ©s.", "RÃ©daction par le SIRACEDPC / le cadre d'astreinte du SIRACEDPC de l'arrÃªtÃ© de rÃ©quisition et transmission aux services chargÃ©s de son exÃ©cution (Police Nationale = via la C.I.C. / Gendarmerie Nationale = via le CORG)", "Notification au propriÃ©taire par les services de police ou gendarmerie territorialement compÃ©tent et information du maire de la commune concernÃ©e"]}, {"heading": "Direction des opÃ©rations", "items": ["Risques sanitaire", "Risques divers"]}]}, {"code": "5.A", "title": "Electro-secours", "family": "Risques divers", "sections": [{"heading": "Ã‰vÃ©nement concernÃ©", "items": ["Risque de rupture d'approvisionnement en Ã©lectricitÃ© ou rupture de cet approvisionnement Ã  raison d'un alÃ©a climatique, d'une dÃ©faillance technique ou d'un acte de malveillance."]}, {"heading": "Alerte initiales", "items": ["par CODIS, COSSIM"]}, {"heading": "DÃ©clenchement", "items": ["DÃ©cision du PREFET"]}, {"heading": "Direction des opÃ©rations", "items": ["Les rÃ©seaux de transport et de distribution ont pour fonction dâ€™acheminer lâ€™Ã©lectricitÃ© en assurant lâ€™Ã©quilibre entre lâ€™offre et la demande. Cette adÃ©quation garantit lâ€™approvisionnement des", "clients dans des conditions optimales de sÃ»retÃ©, de fiabilitÃ© et de compÃ©titivitÃ©. Deux filiales dâ€™EDF se partagent la tÃ¢che :", "- RTE (RÃ©seau de Transport dâ€™Ã‰lectricitÃ©) transporte lâ€™Ã©lectricitÃ© haute et trÃ¨s haute tension,", "- ENEDIS gÃ¨re le rÃ©seau de distribution qui achemine lâ€™Ã©lectricitÃ© vendue par les fournisseurs dâ€™Ã©nergie, quels quâ€™ils soient aux utilisateurs (particuliers, entreprises, collectivitÃ©s).", "Enedis a :", "- la charge des travaux de rÃ©tablissement du rÃ©seau avec les moyens du plan ADEL et la facilitation des pouvoirs publics ;", "- la responsabilitÃ© technique des raccordements des alimentations de secours pour les usagers sensibles raccordÃ©s au rÃ©seau de distribution basse tension."]}, {"heading": "ModalitÃ©s dâ€™alerte", "items": ["PrÃ©venir le sous-prÃ©fet de permanence. Si plan dÃ©clenchÃ©, aller au point 2.", "Alerte des services :", "BMPM", "DREAL", "ARS", "SAMU", "APHM", "DDTM", "Sous-prÃ©fet dâ€™arrondissement concernÃ©", "Communication prÃ©fecture", "SINSIC", "Personnel SIRACEDPC", "En temps que de besoin : ERDF, RTE, DDPP, DDCS, METEO, MAMP, CD13, PP13, SNCF, DSDEN etc.."]}]}], "glossary": ["ADRASEC : Association dÃ©partementale des radioamateurs au service de la sÃ©curitÃ© civile", "AFPS : Association franÃ§aise du gÃ©nie parasismique", "APHM : Assistance publique â€“ HÃ´pitaux de Marseille", "APIC : Avertissement Pluies Intenses Ã  la Commune (service MÃ©tÃ©o-France)", "ARCC : Centre de coordination et de contrÃ´le des routes aÃ©riennes (Air Route Control Center)", "ARS : Agence rÃ©gionale de santÃ©", "ASF : Autoroutes du Sud de la France", "BA 125 : Base aÃ©rienne 125 d'Istres", "BASC : Base aÃ©rienne de sÃ©curitÃ© civile", "BMPM : Bataillon de marins-pompiers de Marseille", "BRGM : Bureau de recherches gÃ©ologiques et miniÃ¨res", "CCIMP : Chambre de commerce et d'industrie mÃ©tropolitaine Provence", "CEA : Commissariat Ã  l'Ã©nergie atomique et aux Ã©nergies alternatives", "CEDRE : Centre de documentation, de recherche et d'expÃ©rimentations sur les pollutions accidentelles des eaux", "CIAV : Cellule interministÃ©rielle d'aide aux victimes", "CIC : Centre d'information et de commandement (Direction dÃ©partementale de la sÃ©curitÃ© publique)", "CIGT : Centre d'ingÃ©nierie et de gestion du trafic", "CMIR : Centre mÃ©tÃ©orologique interrÃ©gional (MÃ©tÃ©o-France)", "COD : Centre opÃ©rationnel dÃ©partemental", "CODIS : Centre opÃ©rationnel dÃ©partemental d'incendie et de secours", "COG : Centre opÃ©rationnel de la gendarmerie", "COGIC : Centre opÃ©rationnel de gestion interministÃ©rielle des crises", "COGIS : Centre opÃ©rationnel de gestion et d'information sismique (CEA)", "CORG : Centre opÃ©rationnel de la gendarmerie (rÃ©gional)", "COS : Commandant des opÃ©rations de secours", "COSSIM : Centre opÃ©rationnel des services de secours et d''incendie de Marseille", "COZ : Centre opÃ©rationnel de zone", "CRICR : Centre rÃ©gional d'information et de coordination routiÃ¨res", "CROSSMED : Centre rÃ©gional opÃ©rationnel de surveillance et de sauvetage MÃ©diterranÃ©e", "CRS : Compagnie rÃ©publicaine de sÃ©curitÃ©", "CUMP : Cellule d'urgence mÃ©dico-psychologique", "DASEN : Directeur acadÃ©mique des services de l'Ã©ducation nationale", "DDDCS : Direction dÃ©partementale dÃ©lÃ©guÃ©e Ã  la cohÃ©sion sociale", "DDPP : Direction dÃ©partementale de la protection des populations", "DDTM : Direction dÃ©partementale des territoires et de la mer", "DIPN : Direction interdÃ©partementale de la police nationale", "DIRECCTE : Direction rÃ©gionale des entreprises, de la concurrence, de la consommation, du travail et de l'emploi", "DIRM : Direction interrÃ©gionale de la mer", "DMD : DÃ©lÃ©guÃ© militaire dÃ©partemental", "DOS : Directeur des opÃ©rations de secours", "DREAL : Direction rÃ©gionale de l'environnement, de l'amÃ©nagement et du logement", "DSAC : Direction de la sÃ©curitÃ© de l'aviation civile", "EDF : Ã‰lectricitÃ© de France", "EIC PACA : Ã‰tablissement Infrastructure de Circulation PACA (SNCF)", "EMIZDS : Ã‰tat-major interministÃ©riel de zone de dÃ©fense et de sÃ©curitÃ©", "ENEDIS : Gestionnaire du rÃ©seau de distribution d'Ã©lectricitÃ© (ex-ERDF)", "ESCOTA : SociÃ©tÃ© des autoroutes EstÃ©rel CÃ´te d'Azur Provence Alpes", "FR-ALERT : SystÃ¨me national d'alerte et d'information des populations par tÃ©lÃ©phone mobile", "GEDICOM : Outil de gestion de crise du COGIC (remontÃ©e des informations opÃ©rationnelles)", "GGD : Groupement de gendarmerie dÃ©partementale", "GIM : Groupe d'intervention macrosismique", "GPMM : Grand Port Maritime de Marseille", "IFREMER : Institut franÃ§ais de recherche pour l'exploitation de la mer", "MAMP : MÃ©tropole Aix-Marseille-Provence", "NOVI : Nombreuses victimes", "ORSAN-CLIM : Organisation de la rÃ©ponse du systÃ¨me de santÃ© â€“ volet canicule et chaleur extrÃªme", "ORSEC : Organisation de la rÃ©ponse de sÃ©curitÃ© civile", "PC : Poste de commandement", "PCA : Poste de commandement avancÃ©", "PCO : Poste de commandement opÃ©rationnel", "PCS : Plan communal de sauvegarde", "PIS : Poste d'information et de soins", "PMA : Poste mÃ©dical avancÃ©", "POLMAR : Plan de lutte contre les pollutions marines", "PPI : Plan particulier d'intervention", "PREMAR : PrÃ©fet maritime", "PSS : Plan de secours spÃ©cialisÃ©", "RDT 13 : RÃ©gie des transports mÃ©tropolitains (rÃ©seau de transport du dÃ©partement 13)", "RIC : RÃ¨glement de surveillance, de prÃ©vision et de transmission de l'information sur les crues", "RTE : RÃ©seau de transport d'Ã©lectricitÃ©", "SAIP : SystÃ¨me d'alerte et d'information des populations", "SAMU : Service d'aide mÃ©dicale urgente", "SDIS : Service dÃ©partemental d'incendie et de secours", "SERTIT : Service de traitement d'image et de tÃ©lÃ©dÃ©tection (UniversitÃ© de Strasbourg)", "SINSIC : Service de lâ€™innovation numÃ©rique et des systÃ¨mes dâ€™information et de communication", "SINUS : SystÃ¨me d'information numÃ©rique unifiÃ© de suivi des victimes", "SIRACEDPC : Service interministÃ©riel rÃ©gional des affaires civiles et Ã©conomiques de dÃ©fense et de la protection civile", "SNCF : SociÃ©tÃ© nationale des chemins de fer franÃ§ais", "SPC : Service de prÃ©vision des crues", "SPZEF : Bulletin spÃ©cial de zone et espaces frontaliers (MÃ©tÃ©o-France)", "SRCI : Service rÃ©gional de communication et d'information", "TMD : Transport de matiÃ¨res dangereuses", "VNF : Voies navigables de France", "ZA : Zone d'accueil", "ZVA : Zone de vie des victimes autonomes"]};
-const DEFAULT_COMMAND_TYPES = [['Activation de la cellule de suivi',"J'active une cellule de suivi."],['Prise de direction des opÃ©rations',"Je prends la direction des opÃ©rations."],['Mise en oeuvre de certaines mesures d\'un dispositif ORSEC',"Je mets en oeuvre certaines mesures d'un dispositif ORSEC."],['Activation d\'un dispositif opÃ©rationnel ORSEC',"J'active un dispositif opÃ©rationnel ORSEC."],['LevÃ©e de certaines mesures d\'un dispositif ORSEC',"Je lÃ¨ve certaines mesures d'un dispositif ORSEC."],['LevÃ©e de l\'ensemble des mesures d\'un dispositif ORSEC',"Je lÃ¨ve l'ensemble des mesures des dispositions ORSEC mises en oeuvre."]];
+const reflexLibrary = {"fiches": [{"code": "2.A", "title": "Feux de forêt", "family": "Risques naturels", "sections": [{"heading": "Synthèse", "items": ["Evénement concerné", "Feu de forêt impliquant la mise en œuvre de moyens de secours importants avec enjeux humains et/ou économiques (infrastructures)."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM", "Evaluation : où - quand - quoi - moyens- enjeux ? cf. verso"]}, {"heading": "Déclenchement", "items": ["Décision du PREFET"]}, {"heading": "Direction des opérations", "items": ["Activation d’une cellule de suivi ou du COD sur décision de l'autorité préfectorale."]}, {"heading": "Premières questions à poser à l’appel du CODIS ou du COSSIM", "items": ["Où et quand, précisément, le FEU DE FORET s’est-il produit ?", "Quelles sont à ce stade, vos difficultés ?", "Qui est le COS ? (commandant des opérations de secours)", "Quelle est l’autorité de police ou de gendarmerie avec laquelle vous êtes en contact ?", "Y-a-t-il des victimes ?", "Si oui, combien et identité des victimes ?", "Ces victimes sont-elles sur le terrain ?", "Un PMA (Poste médical avancé) a-t-il été mis en place ?", "Le procureur a –t-il été averti ?", "Y-a-t-il des habitations menacées ?", "Si oui, - quel est le village menacé et dans quel délai ?", "quelles sont les mesures prises ? qui avez-vous alerté ? (le maire, le député, le CD13, la GGD,...)", "l’évacuation des habitations doit-elle être envisagée ?", "quelles sont les solutions d’hébergement provisoire déjà à l’étude ?", "Quels sont les moyens engagés (terrestres, aériens) ?", "Avez-vous demandé des renforcements au BMPM ou au SDIS ?", "Si oui lesquels ? Les avez-vous obtenus ? dans quels délais ?", "Avez-vous demandé des renforcements extra-départementaux à l’EMIZDS?", "Si oui lesquels ? (colonnes de renfort, moyens aériens BASC)", "Les avez-vous obtenus ? dans quels délais ?", "A ce stade, avez-vous prévenu la presse ?", "Quelle est l’évolution probable de la situation (météorologie, …) ?"]}, {"heading": "Sur le terrain", "items": ["L’autorité préfectorale s’adresse au COS :", "Quelle est la stratégie de lutte contre le feu de forêt mise en œuvre ?", "Comment avez-vous sectorisé votre dispositif ?", "Comment avez-vous organisé votre PC, vos relèves (commandement, groupes d’intervention, …..) ?", "Envisagez-vous un déplacement de votre PC ? si oui, quand ?", "Où sont fixés (sur le terrain et sur la carte) les points de transit pour l’accueil des colonnes de renfort ?", "Quels sont les élus présents sur le terrain ?", "Où les regroupez-vous dans votre PC pour les tenir informés ?", "Un 1er briefing, à leur intention, a-t-il déjà été fait ?", "Quels sont les organes de presse présents ?", "Où est la zone presse ?", "Un point presse a-t-il déjà été fait ? si oui, par qui ?", "- Quelles sont les informations communiquées à ce stade ?"]}, {"heading": "Modalités d’alerte", "items": ["ALERTE DES SERVICES :", "Astreinte SIRACEDPC (mise en place structure suivi d’événement ou gestion de crise)", "CODIS/COSSIM (pour convocation officier de liaison à la Préfecture)", "DDTM (dispositif forestier de surveillance des massifs et coordination routière)", "Services du cabinet du préfet de police délégué", "COG (groupement de gendarmerie 13) / DIPN (CIC : centre d’information et de commandement)", "EMIZDS (information ouverture de la cellule de suivi ou du COD)", "Sous-préfet d’arrondissement (liaison maire(s) concerné(s))", "Communication préfecture", "SINSIC.", "Selon les enjeux :", "Autoroutes :", "Sur tronçon non concédé : CIGT / Services du cabinet du préfet de police délégué (C.R.S /Gendarmerie) / CRICR", "Sur tronçon concédé : Société d’Autoroute (ESCOTA, ASF) / Services du cabinet du préfet de police délégué (C.R.S /Gendarmerie) / CRICR", "Voies ferrées : EIC PACA (GPMM et RDT 13 sont également gestionnaires de réseaux)", "Ligne HT 400 kV et 225 kV :", "Considérer la ligne comme stratégique avec un enjeu supérieur à celui « feu de forêt»", "En liaison avec l’EMIZDS, prendre contact avec RTE pour connaître :", "l’impact de la coupure (nombre d’abonnés, sites particuliers, …)", "le délai nécessaire à la coupure et celui correspondant au rétablissement", "Les départements concernés devront être informés de l’éventualité de la coupure de la ligne HT"]}]}, {"code": "2.B", "title": "Vigilance Météo APIC", "family": "Risques naturels", "sections": [{"heading": "Synthèse", "items": ["Evénement concerné", "Précipitations intenses et très intenses."]}, {"heading": "Alerte initiale", "items": ["Outil d’avertissement complémentaire aux vigilances météorologiques et crues.", "Information des maires abonnées au service et de la préfecture sur les précipitations intenses ou très intenses détectées dans les communes ou à proximité immédiate (bassin Amont)."]}, {"heading": "Déclenchement", "items": ["L’outil APIC :", "Météo-France a développé un service d’« Avertissement Pluies Intenses pour les Communes », informant les maires des précipitations intenses ou très intenses détectées sur leur commune ou à proximité immédiate.", "Service complémentaire de la vigilance météorologique et de la vigilance crue, APIC est un service gratuit d’avertissement aux communes, il suffit de s’abonner sur le site internet https://apic.meteo.fr", "Conditionné à la disponibilité d’informations reçues de radars météorologiques, qualifiant l’intensité des précipitations (2 niveaux), il permet d’anticiper l’inondation par ruissellement ou crue rapide.", "Toutes les communes des Bouches du Rhône y sont éligibles et l’abonnement APIC permet d’accéder aux avertissements de communes voisines (de 1à10) notamment celles situées en amont."]}, {"heading": "APIC et gestion de crise", "items": ["Accessible aux SDIS et aux préfectures, le SIRACEDPC 13 a créé un compte APIC pour recevoir les avertissements concernant le département des Bouches du Rhône et consulter le site."]}, {"heading": "Réception des avertissements", "items": ["L’appel vocal n’a pas été sélectionné, en conséquence, les avertissements sont envoyés par", "SMS / sur les portables d’astreinte SIRACEDPC aux n° : 06.14.88.88.87 et 06.09.73.86.57", "MEL / sur les adresses génériques : pref-siracedpc@bouches-du-rhone.gouv.fr et pccrise-13@bouches-du-rhone.pref.gouv.fr"]}, {"heading": "Consultation du site", "items": ["On accède au site, exclusivement réservé aux mairies, aux préfectures , aux services de prévision des crues et à Météo-France par l’adresse : https://apic.meteo.fr", "A l’ouverture, cliquer sur « se connecter en tant que préfecture »", "Choisir le département BdR dans le menu déroulant le mot de passe est 3jthoi3e / valider", "Accès à la page d’accueil comportant :", "L’affichage des paramètres de l’abonnement et des moyens de réception", "les onglets « cartographie » et « communes abonnées »", "La cartographie, actualisée de ¼ d’heure en ¼ d’heure, indique :", "en violet les communes subissant des précipitations intenses = niveau1", "en fuschia les communes subissant des précipitations très intenses = niveau 2", "Dans le menu communes abonnées, on trouve la liste des abonnements principaux et celle des communes surveillées, au titre de l’abonnement principal.", "Si un avertissement APIC est en cours, la commune est signalée par un téléphone"]}]}, {"code": "2.C", "title": "Vigilance crue", "family": "Risques naturels", "sections": [{"heading": "Événement concerné", "items": ["Crues suite à phénomène météorologique."]}, {"heading": "Alerte initiale", "items": ["Le département des Bouches-du-Rhône comporte 4 cours d’eau majeurs surveillés par 2 SPC (service de prévision des crues).", "Le niveau de vigilance/alerte est diffusé et consultable sur : www.vigicrues.ecologie.gouv.fr"]}, {"heading": "Déclenchement", "items": ["Prévisions de SPC Grand Delta et SPC Méditerranée Est"]}, {"heading": "Modalités d’alerte", "items": ["ETAT DE VIGILANCE VERT", "Pas d’action particulière requise", "ETAT DE VIGILANCE JAUNE", "Risque de crue ou de montée rapide des eaux n'entraînant pas de dommages significatifs, mais pouvant nécessiter une vigilance particulière dans le cas d'activités saisonnières et/ou exposées. Le CODIS et le COSSIM informe les maires et les services.", "Affiner si nécessaire les prévisions avec le SPC concerné ;", "Rester en contact avec le CODIS et le COSSIM.", "ETAT DE VIGILANCE ORANGE", "Risque de crue génératrice de débordements importants susceptibles d’avoir un impact significatif sur la vie collective et la sécurité. Si l’analyse des bulletins d’informations locaux confirme la nécessité d’une action des pouvoirs publics, la préfecture procèdera à l’alerte de l’ensemble des services opérationnels, et des maires si nécessaires : ouverture d’une cellule de suivi en préfecture.", "Affiner les prévisions avec le SPC concerné et Météo-France (CMIR) ;", "Activation si nécessaire par l’astreinte SIRACEDPC d’une cellule de suivi d’événement en préfecture : SIRACEDPC – services de secours – Communication Préfecture ;", "Avertir le service communication de la préfecture qui prend contact avec les médias locaux et prépare éventuellement un communiqué de presse ;", "Informer, le cas échéant, les maires par fax et/ou SMS (Easylink) ;", "Rester en contact avec le CODIS et le COSSIM.", "ETAT DE VIGILANCE ROUGE", "Risque de crue majeure. Menace directe et généralisée de la sécurité des personnes et des biens. Elle justifie la mobilisation immédiate de l'ensemble des acteurs et des moyens au niveau du département.", "Activation du COD par l’astreinte SIRACEDPC et consolidation des prévisions météorologiques et de crues ;", "Avertir le service communication de la préfecture qui prend contact avec les médias locaux et prépare un communiqué de presse ;", "Informer les maires par fax et/ou SMS (Easylink) ;", "Anticiper les demandes de renforts selon besoins auprès de l’EMIZDS."]}]}, {"code": "2.D", "title": "Inondations", "family": "Risques naturels", "sections": [{"heading": "Événement concerné", "items": ["Inondations suite à phénomène météorologique."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM"]}, {"heading": "Déclenchement", "items": ["Décision du préfet."]}, {"heading": "Modalités d’alerte", "items": ["En complément du dispositif de vigilance crues (cf.Vigilance crue), approuvé dans le cadre du règlement de surveillance, de prévision et de transmission de l’information sur les crues (RIC), les objectifs des dispositions spécifiques ORSEC Inondations sont de :", "Définir les missions des différents services appelés à participer à la gestion des inondations et de leurs conséquences ;", "Arrêter un schéma de coordination des services intervenants, notamment au travers de la mise en place d’une cellule de crise.", "Dans le cas où une cellule de suivi d’événement ne soit pas déjà activée en préfecture , auquel cas les services essentiels à la gestion de crise seront déjà alertés :", "Mise en alerte des services (hors services de secours) :", "Astreinte SIRACEDPC pour gréement du COD ;", "Services du cabinet du préfet de police délégué ;", "CORG (groupement de gendarmerie 13) ;", "CIC (Direction départementale de la sécurité publique) ;", "DDTM (police de l’eau et coordination des gestionnaires routiers) ;", "Conseil Général (PC sûreté) ;", "ARS /APHM /SAMU ;", "DREAL ;", "Sous-préfet(s) d’arrondissement(s) concerné(s) ;", "Communication préfecture ;", "SINSIC ;", "COZ (information)."]}]}, {"code": "2.E", "title": "Évacuation des campings en zone de submersion rapide", "family": "Risques naturels", "sections": [{"heading": "Événement concerné", "items": ["Vigilance crues sur cours d'eau, de niveau ORANGE ou ROUGE.", "Épisodes météorologiques : vigilance météo Orage et/ou Pluies-Inondations, de niveau ORANGE ou ROUGE ."]}, {"heading": "Alerte initiale", "items": ["Pour les cours d’eau : messages vigilance crues émanant des SPC Grand Delta et Méditerranée Est ;", "Pour la météo : bulletins de suivi vigilance pour le département 13 ou bulletins spéciaux zone de défense (SPZEF)."]}, {"heading": "Déclenchement", "items": ["Décision du préfet", "en lien avec le(s) maire(s) concerné(s)"]}, {"heading": "Modalités d’alerte", "items": ["Alerte préfecture – mobilisation des astreintes :", "Astreinte SIRACEDPC pour gréement du COD ou de la cellule de suivi ;", "Services du cabinet du préfet de police délégué ;", "Astreinte Communication."]}, {"heading": "2 niveaux :", "items": ["Niveau ORANGE, relayé par le SIRACEDPC avec réunion éventuelle d’une cellule de suivi en préfecture ;", "Niveau ROUGE, relayé par le SIRACEDPC avec réunion systématique d’un COD en préfecture."]}, {"heading": "Structures :", "items": ["Cellule de suivi : PPOL, SDIS, BMPM, DDTM / par liaison téléphonique : Météo-France, SPC Grand Delta et/ou SPC Med-Est ;", "COD : PPOL, DIPN, GGD, CRS, ARS, DREAL, DDTM, CD 13, SDIS, BMPM, DMD, SAMU / par liaison téléphonique : VNF, Météo-France, SPC Grand Delta et/ou SPC Med-Est."]}, {"heading": "Procédure spécifique « Campings »", "items": ["(instruction du gouvernement du 06 octobre 2014 NOR : DEVP149070J)", "En cas de vigilance ORANGE : point téléphonique sur la situation locale avec le(s) maire(s) concerné(s) pour évaluation de la nécessité d’évacuer les campings en zone de submersion rapide.", "Les remontées d’information seront centralisées par la DDTM (RDI) pour proposition éventuelle d’évacuation, en prenant en compte les mesures de précaution qui auraient déjà été prises par un ou plusieurs maire.", "En cas de vigilance ROUGE : le préfet donne les consignes d’évacuation systématique pour tous les campings concernés.", "Diffusion du message ad hoc (cf. modèle en pièce jointe).", "Observation : Lorsqu’il est procédé à l’évacuation d’un ou plusieurs campings, le(s) maire(s) concerné(s) devra (ont) activer leur PCS."]}]}, {"code": "2.F", "title": "Canicule", "family": "Risques naturels", "sections": [{"heading": "Événement concerné", "items": ["Déclenchement d’un niveau d’alerte du plan canicule (4 niveaux )"]}, {"heading": "Alerte initiale", "items": ["Des épisodes aigus de pollution de l’air à l’ozone peuvent survenir à l’occasion de forte canicule."]}, {"heading": "Déclenchement", "items": ["Niveau 1 – Veille saisonnière", "Niveau 2 – Avertissement chaleur", "Niveau 3 – Alerte canicule", "Niveau 4 – Mobilisation maximale"]}, {"heading": "Conditions d’activation", "items": ["Du 1er juin au 15 septembre de chaque année, activation d’une veille saisonnière sur l’évolution climatique et sanitaire ;", "L’ARS PACA prépare et met en œuvre la communication préventive au plan local."]}, {"heading": "Niveau 2 : Avertissement chaleur", "items": ["Phase de veille renforcée", "Une information factuelle des maires par le préfet (SIRACEDPC) sur la base du bulletin spécial de Météo France,", "- des actions de communication préparées par l’ARS et coordonnées avec le service communication de la préfecture de région et de département,"]}, {"heading": "Conditions de déclenchement", "items": ["Le Préfet, au regard de l’expertise de l’ARS, décide du passage du département en niveau 3 « alerte canicule ».", "Le SIRACEDPC envoie l’alerte aux services concernés.", "Une cellule de suivi est activée à la préfecture avec des remontées d’information quotidiennes auprès du COZ."]}, {"heading": "Composition de la cellule de suivie :", "items": ["Préfecture – SIRACEDPC/SRCI", "Services du cabinet du préfet de police délégué", "Agence régionale de santé PACA (coordination de l’organisation sanitaire et médico-sociale conformément aux dispositions du volet ORSAN-CLIM)", "Météo-France", "SDIS 13", "BMPM", "DIRECCTE", "DDDCS", "DDPP", "DDTM", "Conseil départemental", "Métropole Aix Marseille Provence", "Mairie de Marseille", "DASEN (en période scolaire)"]}, {"heading": "Mesures éventuelles :", "items": ["Interdiction de manifestations festives, sportives….", "Actions de communication préventive.", "Le préfet peut mettre en place certaines des mesures départementales."]}, {"heading": "Conditions de déclenchement", "items": ["Le Premier Ministre peut demander au préfet d’activer le niveau de mobilisation maximale.", "Le préfet peut également proposer d’activer le niveau de mobilisation maximale en fonction de l’expertise de l’ARS, des données météorologiques et de la constatation d’effets collatéraux (sécheresse, pannes ou délestages électriques, saturation des hôpitaux, pollution de l’air, …)", "Dès le déclenchement du niveau 4 « mobilisation maximale », le préfet :", "Alerte les services selon les mêmes modalités que pour le niveau 3 « alerte canicule » ;", "Active le COD ;", "Met en œuvre les éléments du dispositif ORSEC pour traiter les différents aspects de la situation.", "Dans ce cadre le COD :", "Se tient informer de la situation sur le terrain ;", "Propose au préfet les mesures nécessaires en vue d’assurer la protection des populations, des biens et de l’environnement ;", "Prépare les éventuelles réquisitions de moyens publics ou privés ;", "Prépare et transmet les éventuelles demandes au COZ en matière de renforts extérieurs ;", "Dirige et coordonne l’action de ces renforts ;", "Rends compte aux échelons supérieurs (COZ et COGIC) ;", "Fourni à la cellule communication les renseignements nécessaires à l’information des médias.", "Point particulier :", "Le COD peut solliciter auprès des maires la communication des registres nominatifs qu’ils ont constitués pour le recensement des personnes âgées et des personnes en situation de handicap qui en ont fait la demande."]}]}, {"code": "2.G", "title": "Séisme et effondrements de bâtiments", "family": "Risques naturels", "sections": [{"heading": "Événement concerné", "items": ["S’applique :", "À tout événement sismique susceptible d’occasionner des dommages significatifs aux personnes, aux infrastructures ou aux réseaux essentiels ;", "En cas d’effondrements multiples de bâtiments, quelle qu’en soit la cause, dès lors que l’ampleur des dommages est étendue sur plusieurs communes ou que le nombre potentiel de victimes dépasse les capacités de réponse courante communale."]}, {"heading": "Alerte initiale", "items": ["Alerte sismique via bulletin du CEA ou COGIS OU Information / Perception du territoire (CF Fiche B1.1)"]}, {"heading": "Déclenchement", "items": ["Décision du préfet.", "(Pour une simple secousse, DOS MAIRE avec communication centralisée par SRCI)"]}, {"heading": "Scenarii de réfénrece", "items": ["4 scenarii de référence (Cf stratégie de réponse – Fiche B4) :", "Scenario MINEUR (simple secousse) – Cf Fiche 5.1", "Scenario MOYEN (séisme avec dégâts léger sans rupture de flux) - Cf Fiche 5.2", "Scenario MAJEUR (séisme majeur avec rupture de flux) - Cf Fiche 5.3", "Effondrements multiples de bâtiments (Ex : Tempête ALEX - Alpes Maritimes) – Cf Fiche 5.4"]}, {"heading": "Modalités d’alerte", "items": ["Cf Fiche B1.1 et D1 – Messages FR-ALERT", "Actions réflexes", "Prise en compte de la vraisemblance d’un séisme :", "Observer l’activité sismique relevée à partir du site Internet https://sismoazur.oca.eu/#/", "Observer et suivre les relevés d’intensité à partir du site Internet https://www.franceseisme.fr/", "Informer la chaîne ORSEC via GEDICOM (Cf. Fiche B1.2)", "Solliciter des expertises (Cf. Fiche B3) :", "Du BRGM (Permanence téléphonique 24 / 24 – 02 38 64 34 34)", "Forces d’expertise via le COZ :", "du Groupe d’intervention macrosismique (GIM) ;", "de l’Association française du génie parasismique (AFPS) ;", "du Service de traitement d’image et de télédétection (SERTIT).", "Mise en œuvre préventive des moyens permettant la continuité des transmissions à savoir les moyens satellitaires et le réseau radio ADRASEC (Cf. Fiche C7 – D3).", "Risques technologiques"]}]}, {"code": "3.A", "title": "NOVI (« nombreuses victimes »)", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Nombreuses victimes impliquant l’intervention d’importants moyens médicaux (incendie, accident de transport, attentat, effondrement d’immeuble...)"]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM à l’autorité préfectorale – CORG – CIC – SAMU", "Évaluation : où - quand - quoi - moyens- enjeux ?"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale sur proposition du CODIS ou COSSIM", "Dans le cadre d’évènements à vocation purement sanitaire (hors secours à personne), l’ARS et/ou le SAMU propose(nt) au Préfet ou son représentant de mobiliser les acteurs et/ou services concernés (notamment les établissements de santé et médicosociaux, les professionnels de santé, les acteurs extra sanitaires)."]}, {"heading": "Modalités d’alerte", "items": ["Cas général de mise en alerte des services (hors services de secours/ CORG/CIC et SAMU) :", "Astreinte SIRACEDPC pour gréement du COD", "Services du cabinet du préfet de police délégué", "DDTM (coordination des gestionnaires routiers)", "Conseil Départemental (PC sûreté)", "ARS /APHM", "DREAL", "Sous-préfet(s) d’arrondissement(s) concerné(s)", "Communication préfecture", "SINSIC", "COZ (information)"]}, {"heading": "Direction des opérations", "items": ["Le préfet, DOS (Directeur des Opérations de secours), décide la mise en œuvre du plan.", "Active le COD comme base arrière des opérations de secours : PP13, SIRACEDPC, SINSIC, Communication Préfecture, représentants des services concernés (dont DDTM et ARS).", "Habituellement dirigé par le directeur de cabinet, le SIRACEDPC en assure le fonctionnement.", "Désigne un membre du corps préfectoral auprès du COS chargé de diriger le PCO (ou PC interservices auprès du PC de site)", "Décide de l’activation de la CUMP selon l’évaluation faite par APHM et SAMU", "Autorise la levée du plan quand l’opération est terminée, en maintenant un dispositif allégé dans l’attente d’un bilan définitif qui sera diffusé à la presse.", "Le SDIS ou le BMPM désigne le Commandant des Opérations de Secours (COS)", "LE COS :", "diffuse l’arrêté de déclenchement à : SAMU, CORG, CIC (DIPN), DDTM, maire(s), sous-préfet d’arrondissement, autorité judiciaire ;", "mobilise les moyens de secours et de sécurité", "active le PCS (poste de commandement de site inter services) implanté sur le terrain, armé par moyens mobiles SDIS/BMP. Il est dirigé par un membre du corps préfectoral, habituellement le sous-préfet d’arrondissement. Si nécessaire le volet interservices peut être regroupé au sein d’un PCO distinct sous l’autorité du sous-préfet désigné (en règle générale, le sous-préfet d’arrondissement).", "est assisté par :", "Le DSI : Directeur Sauvetage Incendie, chargé des opérations non médicales ;", "Le DSM : Directeur des Secours Médicaux, qui peut être :", "le médecin chef du SDIS, sur le département hors Marseille ;", "le médecin chef du BMP sur la ville de Marseille ;", "le médecin chef du SAMU sur l’aéroport Marseille Provence.", "un PMA « poste médical avancé » qui regroupe, trie, évacue les victimes ;", "le SAMU qui apporte son concours, assure répartition et accueil en hôpitaux ;", "la CUMP : cellule d’urgence médico psychologique organisée par l’APHM et activée selon l’évaluation faite par le SAMU"]}]}, {"code": "3.B", "title": "Novis sinus", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Nombreuses victimes impliquant l’intervention d’importants moyens médicaux (incendie, accident de transport, attentat, effondrement d’immeuble...)", "Information outil", "Le portail SINUS est l’outil national unique par lequel les autorités accèdent à la totalité du dénombrement des victimes.", "Il permet de fournir le plus d’informations possibles sur les victimes afin de faciliter leur identification par l’autorité judiciaire et les services d’enquête compétents, leur prise en charge médicale par les établissements de santé (ES) et l’information des familles et des proches, assurée par la CIAV.", "Procédure", "Ainsi, lors d’un événement générant de nombreuses victimes (accident, attentat..), SINUS va permettre à tous les services de partager les informations relatives aux victimes :", "Les primo-intervenants (pompiers, policiers), vont doter les victimes d’un bracelet SINUS ;", "Au PMA : les victimes seront catégorisées (UA, UR) et orientées vers une structure d’accueil.", "A chaque étape de la chaîne des secours, de nouvelles informations viendront enrichir la base SINUS (pour les personnes ne passant pas par le PMA, ce sont les centres hospitaliers qui les doteront d’un bracelet d’identification).", "Au final, les listes pourront être éditées en COD à destination des autorités :", "par catégorisation : UA, UR, DCD ;", "par identité ;", "par destination hospitalière.", "ATTENTION : pour les personnes décédées, l’autorité judiciaire peut bloquer la liste nominative.", "Adresses SINUS :", "https://sinus.novi.interieur.gouv.fr (pour les cas réels)", "https://formation.sinus.novi.interieur.gouv.fr (pour s’entraîner, pour les exercices).", "Connexion :", "EN COD, SINUS NE PERMET QUE LA CONSULTATION OU L’EDITION DE LISTES"]}]}, {"code": "3.C", "title": "Plan particulier d’intervention", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Accident industriel concernant un établissement SEVESO II - seuil haut – (donc doté d’un plan particulier d’intervention)"]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM à l’autorité préfectorale – CORG – CIC – SAMU", "Évaluation : où - quand - quoi - moyens- enjeux ?"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale"]}, {"heading": "Modalités d’alerte", "items": ["CODIS / COSSIM assurent la transmission de l’alerte aux mairies, organismes et services figurant dans le schéma d’alerte du PPI concerné.", "En cas d’extrême urgence, l’exploitant est compétent pour demander directement auprès des services concernés la mise en œuvre de contre-mesures immédiates (interruption trafic routier, ferroviaire, …)", "Astreinte SIRACEDPC pour gréement du COD", "Services du cabinet du préfet de police délégué", "DDTM (coordination des gestionnaires routiers)", "Conseil Départemental (PC sûreté)", "ARS /APHM", "DREAL", "Sous-préfet(s) d’arrondissement(s) concerné(s)", "Communication préfecture", "SINSIC", "COZ (information)", "Organisation de commandement", "Le préfet, DOS (Directeur des Opérations de secours) :", "Active le COD (SIRACEDPC)", "Désigne le sous-préfet qui dirige le PCO (mis en place par le commandant des opérations de secours)", "Fait préparer un premier communiqué de presse", "Fait rédiger le message de mise en œuvre du PPI et le fait diffuser par le CODIS / COSSIM", "Déclenche les contre-mesures externes immédiates (si celles-ci n’ont pas été activées ou demandées en mode réflexe par l’exploitant) :", "Alerte des populations par : (au signal d’alerte : mise à l’abri, écoute de la radio)", "sirène PPI (exploitant)", "sirène SAIP (COZ)", "ensemble Mobiles d’alerte (mairie/BMPM/SDIS)", "Interruption des circulations de transit : Routière / Ferroviaire / Aérienne (mesure prise par DSAC)", "Fait diffuser par les radios des messages établis par le service Communication", "Si nécessaire, met en œuvre des mesures de sauvegarde complémentaires :", "Évacuation partielle, totale, ou confinement général ;", "Bouclage et surveillance de la zone ;", "Installation de postes médicaux avancés (PMA) ;", "Déclenchement éventuel du NOVI ;", "Ouverture de Centres Médicaux d’Evacuation ;", "Cellule d’Urgence médico-psychologique ;", "Centre d’Accueil et de REgroupement (CARE) des communes dans le cadre de leurs PCS.", "Procède régulièrement à :", "points de situation avec PCO et Exploitant ;", "points presse et communiqués ;", "compte-rendus aux autorités centrales via le COZ ;", "tenue de tableaux des moyens mis en œuvre et demandes de renforts ;", "contacts avec les élus ;", "bilans précis des victimes.", "Active, si nécessaire, une cellule de réponse aux appels du public", "Autorise la levée du dispositif", "CIPChef d'Incident PrincipalInterlocuteur unique du DOSInterface avec les services de l'EIC PACAet de l'EF SNCFCILChef d'Incident LocalInterlocuteur unique du COSAssure la protection despersonnels présents surle siteInterface avec leCOGCCOGCCentre régionalInterlocuteur du CODISAssure la gestion de l'incidentAssure la diffusion de l'informationSupplée le CIL en son absenceDOSDirige les opérations de secoursCOSMets en œuvre les opérations de secoursCODIS / COSSIMMise en œuvre de l'alerteAssure l'interface entre COS etCOGC en l'absence du CIL EIC PACAPREFECTUREServices de secours", "CIP", "Chef d'Incident Principal", "Interlocuteur unique", "du DOS", "Interface avec les", "services de l'EIC PACA", "et de l'EF SNCF", "CIL", "Chef d'Incident Local", "Interlocuteur unique", "du COS", "Assure la protection des", "personnels présents sur", "le site", "Interface avec le", "COGC", "COGC", "Centre régional", "Interlocuteur", "du CODIS", "Assure la gestion de", "l'incident", "Assure la diffusion de", "l'information", "Supplée le CIL en", "son absence", "DOS", "Dirige les opérations de secours", "COS", "Mets en œuvre", "les opérations de secours", "CODIS / COSSIM", "Mise en œuvre de l'alerte", "Assure l'interface entre COS et", "COGC en l'absence du CIL", "EIC PACA", "PREFECTURE", "Services de secours"]}]}, {"code": "3.D", "title": "Réseaux ferroviaires", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Accident grave de chemin de fer impliquant l’intervention de moyens complémentaires à ceux du plan d’intervention et de sécurité (PIS) de l’EIC PACA.", "Déclenchement possible simultané des dispositions ORSEC NOVI et TMD."]}, {"heading": "Alerte initiale", "items": ["par EXPLOITANT à l’autorité préfectorale – CORG – CIC – SAMU", "Évaluation : où - quand - quoi - moyens- enjeux ?"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale sur proposition de l’exploitant", "Zones de compétences", "SDIS :", "aux têtes nord des tunnels de la Nerthe et de Marseille ;", "aux têtes nord et sud des tunnels du Mussuguet et des Janots.", "BMPM :", "aux têtes sud des tunnels de la Nerthe et de Marseille."]}, {"heading": "Modalités d’alerte", "items": ["En cas d’évènements graves ou présentant d'emblée un caractère spécifique susceptible d'entraîner une dégradation de la situation des passagers et/ou des riverains tels que :", "arrêt prolongé d'un train de voyageurs dans un tunnel ;", "accident de personnes ;", "feu sur rame ;", "accident impliquant de nombreuses victimes ;", "fuite d'une substance chimique ou radioactive ;", "Le gestionnaire ferroviaire concerné, active son PIS ou sa procédure d'urgence. Il alerte immédiatement et systématiquement les services publics pour permettre la montée en puissance rapide des moyens de secours. Si un évènement est signalé directement aux services d'incendie et de secours, ces derniers transmettent immédiatement l'information au gestionnaire ferroviaire compétent : CRC du COGC (EIC PACA).", "NB : Le Grand Port Maritime de Marseille et la RDT 13 sont également gestionnaires de réseaux ferroviaires."]}]}, {"code": "3.E", "title": "Aéroport Marseille-Provence", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Accident ou risque d’accident d’un aéronef intervenant", "en ZA (zone d’aérodrome = dans l’emprise de l’aéroport Marseille-Provence)", "en ZVA (zone voisine d’aérodrome = limitée dans le PSS)"]}, {"heading": "Alerte initiale", "items": ["par Tour de contrôle aéroport Marseille-Provence"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale à la demande du directeur de l’aéroport", "Phases", "VEILLE :Il y a état de veille si un pilote signale, ou si l’on soupçonne des défaillances à bord, mais non des défaillances de nature à entraîner normalement des difficultés graves à l’atterrissage (mouvements d’aéronef en essais ou au stade d’expérimentation, vibration moteur, mauvaises conditions de visibilité météorologique.....).", "ALERTE : Il y a état d’alerte si l’on signale ou l’on soupçonne qu’un aéronef a subi, ou risque de subir une défaillance de nature à entraîner un risque d’accident (voyant incendie allumé, fuite d’huile, baisse de pression hydraulique des freins, fumée ou odeur anormale à l’ intérieur de l’aéronef, train d’atterrissage, alerte à la bombe, mauvaises conditions météorologiques...).", "ACCIDENT : Il y a  état d’accident lorsqu’un événement mettant en cause la sécurité de l’aéronef ou de ses passagers (chute, incendie en vol ou au roulage, etc.) vient de se produire ou va inévitablement se produire.", "À la demande du Directeur de l’exploitant de l’aérodrome (CCIMP) ou de son représentant, le Préfet met en œuvre les dispositions spécifiques de l’Aéroport Marseille-Provence."]}, {"heading": "Modalités d’alerte", "items": ["Ouverture d’une cellule de crise (PCO) dès la phase d’alerte, avec les services suivants :", "SIRACEDPC", "Services du cabinet du préfet de police délégué", "DDTM (coordination des gestionnaires routiers)", "Communication préfecture", "SINSIC", "SDIS/BMPM", "GGD", "Compagnie aérienne exploitante ou assistante", "DSAC", "Dès réception du message d’alerte et/ou du message d’accident, le PCO est ouvert et armé par l’exploitant d’aérodrome. Ce dernier installe et s’assure du bon fonctionnement des moyens de communication et de logistique.", "Un PCO (PC directeur) est ouvert et armé par la SPAF avec l’aide de la CCIMP", "Un COD (base arrière) est ouvert en préfecture."]}, {"heading": "Direction des opérations", "items": ["-en ZA et ZVA : la Direction des Opérations de Secours (D.O.S.) est assurée par l’autorité préfectorale. Le DOS (Sous-Préfet d’Istres ou Directeur de Cabinet) est installé dans le PC Opérationnel.", "en ZVA maritime : la responsabilité de la direction des opérations de secours incombe au Préfet des Bouches-du-Rhône."]}]}, {"code": "3.F", "title": "BA 125 (Istres)", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Accident d’un aéronef intervenant en :", "ZA (zone d’aérodrome)", "ZVA (zone voisine d’aérodrome )"]}, {"heading": "Alerte initiale", "items": ["par BA 125"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale sur proposition du commandant de la BA 125 ou du CODIS"]}, {"heading": "Modalités d’alerte", "items": ["Bilan :", "Type d’appareil", "Heure de l’accident", "Coordonnées de l’accident", "Nombre de passagers ou capacité maximale d’aéronef", "Incendie observé ou non (ampleur des dégâts)", "Dangers représentés par l’épave (matières dangereuses, munitions…)", "Etc…", "Services présents au COD :", "Sous-préfet d’Istres ou autre sous-préfet désigné", "SDIS", "SAMU / APHM / ARS", "DIPN", "Gendarmerie", "Mairies d’Istres, Fos-sur-Mer, Saint Martin de Crau", "Conseil Général", "SINSIC", "Communication préfecture"]}, {"heading": "Direction des opérations", "items": ["Le Préfet est le DOS, Directeur des Opérations de Secours.", "Le Directeur départemental du SDIS est le COS, Commandant des Opérations de Secours.", "Le COS détermine l’emplacement du Poste de Commandement Avancé/Poste de Commandement de Site (PCA/PCS) et mobilise les moyens de secours et de sécurité.", "Un COD est activé à la préfecture des Bouches-du-Rhône.", "ACTION PREFECTORALE", "faire diffuser l’alerte des services par le CODIS conformément au schéma général d’alerte,", "prendre l’arrêté de déclenchement des dispositions spécifiques ORSEC BA 125 et le faire diffuser par le CODIS 13 conformément au schéma général d’alerte,", "désigner un membre du corps préfectoral auprès du COS,", "faire préparer dès que possible par le service communication de la préfecture, le message d’alerte aux radios et le premier communiqué de presse,", "informer l’échelon national via le COZ sud,", "faire préparer l’arrêté de levée du plan lorsque la situation le permet."]}]}, {"code": "3.G", "title": "Sauvetage aéro-terrestre (Sater)", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Les dispositions spécifiques Orsec pour sauvetage aéro-terresre (Sater) ont pour objet la recherche terrestre et la localisation précise d'un aéronef en détresse et de leurs occupants.", "La localisation de l’épave provoque l’arrêt des recherches et l’engagement effectif de la phase de secours aux victimes.", "Celle-ci peut nécessiter l’activation des dispositions Orsec NOVI.", "Organisation", "L’organisation « Sater » est déclinée en phases opérationnelles.", "En coordination avec l’ARCC, correspondant aéronautique compétent au titre des recherches aériennes, le préfet de département est le directeur des opérations de recherches terrestres (DOR) dans les phases BRAVO à CHARLIE. Le commandant de la gendarmerie départementale ou le directeur départemental de la sécurité publique est le commandant des opérations de recherches terrestre (COR) dans les phases BRAVO à CHARLIE", "L’ARCC de Lyon informe la préfecture de sa décision d’engager l’ADRASEC par téléphone et par fax de confirmation.", "Prendre contact avec :", "CODIS / COSSIM (prévenu par le COZ sud)", "CORG / CIC", "ADRASEC", "ARCC (pour le tenir informé)"]}]}, {"code": "3.H", "title": "Pollution marine (POLMAR/Terre)", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Les dispositions spécifiques « POLMAR/Terre » du plan ORSEC des Bouches-du-Rhône ont pour objet de faire face à une pollution marine de grande ampleur, par hydrocarbures ou tout autre produit (notamment chimique), résultant d'un accident ou d'une avarie maritime, terrestre ou aérienne."]}, {"heading": "Alerte initiale", "items": ["par CROSSMED, CODIS, COSSIM, GIE, plaisanciers…."]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale"]}, {"heading": "Modalités d’alerte", "items": ["Recouper l’information et obtenir tous renseignements utiles en liaison avec :", "PREMAR ;", "CROSSMED pour apprécier les capacités des moyens de lutte en mer à résorber la pollution et épargner les côtes et anticiper la mise en œuvre éventuelle du dispositif de lutte à terre ;", "Météo-France ;", "CEDRE ;", "CODIS/COSSIM ;", "COZ SUD.", "Anticiper la mise en oeuvre éventuelle du dispositif de lutte à terre par l’alerte/mobilisation :", "du sous-préfet d’arrondissement potentiellement concerné ;", "du/des maire(s), de la /des intercommunalités potentiellement concerné(s) ;", "du conseil général ;", "de la DDTM, de la DREAL, du GPMM et de l’IFREMER.", "Si la situation menace d’évoluer vers une pollution de grande ampleur, le Préfet décide la mise en œuvre, des dispositions spécifiques POLMAR/Terre :", "le DDSIS ou le commandant du BMPM est le COS selon le secteur territorial principalement concerné. Le Préfet lui fait préparer la montée en puissance du schéma de conduite des opérations de lutte ;", "le Préfet donne l’ordre au CODIS (ou au COSSIM) de déclencher l’alerte en vue de l’activation du COD ;", "il fait activer, par le COS, le ou les PCOpérationnel(s) et PCAvancés nécessaires (jusqu’à 4 PCO et 11 PCA prédéterminés) et les chantiers ;", "il convoque au COD les experts (CEDRE, IFREMER.…) ;", "il informe le COZ chargé de l’information des départements littoraux limitrophes (Gard, Var) ;", "il fait procéder à l’échange « d’officiers de liaison » avec PREMAR, et à l’activation d’une cellule communication/presse conjointe si possible."]}, {"heading": "Direction des opérations", "items": ["En mer : Si la menace de pollution ou la pollution en mer présente un degré élevé de gravité ou de complexité, notamment s'il n'est pas possible d'y faire face avec les seuls moyens ordinaires des administrations, le préfet maritime met en oeuvre le plan ORSEC Maritime, dispositions spécifiques « POLMAR ».", "Le préfet maritime est alors chargé de la direction des opérations de lutte en mer sous l'autorité directe du Premier ministre.", "A terre : Si la menace de pollution ou la pollution s'exerce sur le littoral et présente un degré élevé de gravité ou de complexité, notamment s'il n'est pas possible d'y faire face avec les", "seuls moyens ordinaires des collectivités locales et de l'État, le préfet de département met en oeuvre les dispositions spécifiques « POLMAR/Terre ».", "Le préfet de département est alors chargé de la direction des opérations de lutte à terre sous l'autorité du ministre de l'Intérieur.", "(pollutions de petite et moyenne ampleur = « infra polmar » = compétence du maire)", "Face aux pollutions de faible et moyenne ampleur ; les opérations de lutte incombent aux communes et sont dirigées par les Maires qui en supportent le coût financier.", "Si nécessaire, une cellule d’appui aux collectivités peut être réunie autour de l’autorité préfectorale. Elle est composée de la préfecture, de la DDTM, de l’ARS, du SDIS, du BMPM, de la DIRM, de la DREAL, de la DRFiP, de la gendarmerie et/ou de la DIPN, de la DDPP. Orsec POLMAR Terre n’est pas mis en œuvre ."]}]}, {"code": "3.I", "title": "Barrage de Bimont", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Risque de rupture ou rupture du barrage de Bimont.", "Inondation de la vallée de l’Arc, soit 8 communes impactées :", "Zone de proximité immédiate : Le Tholonet, Aix-en-Provence, Meyreuil", "Zone d’inondation spécifique : Ventabren, Velaux, Coudoux, La Fare-les-Oliviers, Berre-l’Etang"]}, {"heading": "Alerte initiale", "items": ["Alerte initiale : Société du canal de Provence vers Préfet, DREAL", "En cas d’extrême urgence, l’exploitant est compétent pour demander directement auprès des services concernés la mise en œuvre de contre-mesures immédiates (interruption trafic routier, ferroviaire, …)", "CIC", "CODIS", "sous-préfet de permanence", "préfet de police", "Maire des communes concernées", "DREAL"]}, {"heading": "Modalités d’alerte", "items": ["Cf. ci-après"]}]}, {"code": "3.J", "title": "Spéléo-secours", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Accident de spéléologie."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM (sur appel d’un particulier)"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale sur proposition du CODIS ou COSSIM"]}, {"heading": "Modalités d’alerte", "items": ["ALERTE DES SERVICES :", "Astreintes SIRACEDPC et Cabinet Préfet de Police", "Fédération Française de Spéléo : Conseiller Technique Départemental (CTD)", "COG (groupement de gendarmerie 13)", "DIPN (CIC : centre d’information et de commandement)", "CODIS/COSSIM", "SAMU /APHM /ARS", "Mairie concernée", "Sous-préfet d’arrondissement concerné", "CMIR sud-est", "Communication préfecture", "COZ sud"]}, {"heading": "Direction des opérations", "items": ["Le préfet, DOS (Directeur des Opérations de secours),", "Désigne le COS : Directeur du SDIS ou Commandant du BMPM (selon zone accident).", "Le COS :", "détermine l’emplacement du PCO (avec la participation du CTD, police, gendarmerie) ;", "demande au maire de prendre immédiatement, sous sa responsabilité, toutes les dispositions nécessaires à l’installation du PCO, au ravitaillement et à l’hébergement ;", "est chargé de la coordination des opérations en surface, et tient le directeur des secours et le maire informés en permanence ;", "fait acheminer moyens et personnels nécessaires au déroulement de l’opération.", "Active le COD ou un PCO au plus près de l’évènement :", "Cabinet Préfet de Police, SIRACEDPC, SINSIC, Communication, représentants des services concernés.", "Si les circonstances le justifient, le préfet peut décider de faire activer en préfecture une cellule légère de suivi, qui monterait en puissance (COD) si les opérations devaient se prolonger."]}]}, {"code": "3.K", "title": "Déminage", "family": "Risques technologiques", "sections": [{"heading": "Événement concerné", "items": ["Interventions sur munitions de guerre", "Interventions sur engins explosifs improvisés (EEI) ou alerte à la bombe", "Sécurisation de voyages officiels (VO) de personnalités ou de manifestations socio-culturelles", "Réquisition de terrains privés aux fins de destruction d’urgence des matières activés ou des munitions collectées."]}, {"heading": "Alerte initiale", "items": ["par CODIS ou COSSIM (sur appel d’un particulier)"]}, {"heading": "Déclenchement", "items": ["Décision de l’autorité préfectorale sur proposition du CODIS ou COSSIM"]}, {"heading": "Modalités d’alerte", "items": ["Cette fiche réflexe comprend les actions à conduire en heures ouvrables (J.H.O) et en heures non ouvrables (J.H.N.O).", "Interventions sur munitions de guerre", "J.H.O :", "Le SIRACEDPC peut être avisé d’une demande d’intervention : particuliers / maires / forces de l'ordre / services de secours.", "se fait adresser un mail de confirmation comportant tous les renseignements utiles pour l’intervention des démineurs, à l'adresse pref-deminage@bouches-du-rhone.gouv.fr", "rappelle les mesures conservatoires à prendre sur les lieux : balisage/interdiction d’accès.", "saisie du centre de déminage de Marseille par mail (cd-marseille@interieur.gouv.fr).", "Si urgence, doubler d’un appel téléphonique sur le portable du chef de centre : 06 26 78 00 49 ou 06 26 78 00 35 ou 06 26 78 00 36.", "J.H.N.O :", "le COGIC (centre opérationnel de gestion interministérielle des crises) est avisé par les forces de l'ordre ou les services de secours ; il saisit le centre de déminage (les munitions de guerre ne justifient en principe pas une intervention immédiate).", "Sur le littoral :", "pour engin immergé ou marqueurs marines, alerter le centre des opérations maritimes (PREMAR), bureau des opérations côtières (cf. annuaire ORSEC).", "Interventions sur EEI ou alerte à la bombe", "J.H.O :", "contacter le cabinet du Préfet de police (secrétariat : 04 96 10 64 31)", "J.H.N.O :", "contacter l’astreinte Cabinet du Préfet de police", "Missions de sécurité sur VO et manifestations", "En principe, ces missions sont programmées : la demande d’intervention est donc exceptionnelle.", "En J.H.N.O : Saisir le COGIC.", "Réquisition de terrains privés aux fins de destruction d’urgence", "J.H.O et J.H.N.O :", "Expertise du démineur chef de la mission relative à la nécessité de détruire au plus près du lieu de découverte de matières actives ou de munitions", "Information du SIRACEDPC / du sous-préfet de permanence ainsi que des services de police ou gendarmerie territorialement compétents par le démineur chef de la mission en cas de refus de mise à disposition d'un terrain privé", "Prise de contact avec le propriétaire du terrain par les services de police ou gendarmerie territorialement compétents. En l'absence d'accord à l'amiable, il est rendu compte sans délai au SIRACEDPC / au sous-préfet de permanence du refus et des motifs invoqués.", "Rédaction par le SIRACEDPC / le cadre d'astreinte du SIRACEDPC de l'arrêté de réquisition et transmission aux services chargés de son exécution (Police Nationale = via la C.I.C. / Gendarmerie Nationale = via le CORG)", "Notification au propriétaire par les services de police ou gendarmerie territorialement compétent et information du maire de la commune concernée"]}, {"heading": "Direction des opérations", "items": ["Risques sanitaire", "Risques divers"]}]}, {"code": "5.A", "title": "Electro-secours", "family": "Risques divers", "sections": [{"heading": "Événement concerné", "items": ["Risque de rupture d'approvisionnement en électricité ou rupture de cet approvisionnement à raison d'un aléa climatique, d'une défaillance technique ou d'un acte de malveillance."]}, {"heading": "Alerte initiales", "items": ["par CODIS, COSSIM"]}, {"heading": "Déclenchement", "items": ["Décision du PREFET"]}, {"heading": "Direction des opérations", "items": ["Les réseaux de transport et de distribution ont pour fonction d’acheminer l’électricité en assurant l’équilibre entre l’offre et la demande. Cette adéquation garantit l’approvisionnement des", "clients dans des conditions optimales de sûreté, de fiabilité et de compétitivité. Deux filiales d’EDF se partagent la tâche :", "- RTE (Réseau de Transport d’Électricité) transporte l’électricité haute et très haute tension,", "- ENEDIS gère le réseau de distribution qui achemine l’électricité vendue par les fournisseurs d’énergie, quels qu’ils soient aux utilisateurs (particuliers, entreprises, collectivités).", "Enedis a :", "- la charge des travaux de rétablissement du réseau avec les moyens du plan ADEL et la facilitation des pouvoirs publics ;", "- la responsabilité technique des raccordements des alimentations de secours pour les usagers sensibles raccordés au réseau de distribution basse tension."]}, {"heading": "Modalités d’alerte", "items": ["Prévenir le sous-préfet de permanence. Si plan déclenché, aller au point 2.", "Alerte des services :", "BMPM", "DREAL", "ARS", "SAMU", "APHM", "DDTM", "Sous-préfet d’arrondissement concerné", "Communication préfecture", "SINSIC", "Personnel SIRACEDPC", "En temps que de besoin : ERDF, RTE, DDPP, DDCS, METEO, MAMP, CD13, PP13, SNCF, DSDEN etc.."]}]}], "glossary": ["ADRASEC : Association départementale des radioamateurs au service de la sécurité civile", "AFPS : Association française du génie parasismique", "APHM : Assistance publique – Hôpitaux de Marseille", "APIC : Avertissement Pluies Intenses à la Commune (service Météo-France)", "ARCC : Centre de coordination et de contrôle des routes aériennes (Air Route Control Center)", "ARS : Agence régionale de santé", "ASF : Autoroutes du Sud de la France", "BA 125 : Base aérienne 125 d'Istres", "BASC : Base aérienne de sécurité civile", "BMPM : Bataillon de marins-pompiers de Marseille", "BRGM : Bureau de recherches géologiques et minières", "CCIMP : Chambre de commerce et d'industrie métropolitaine Provence", "CEA : Commissariat à l'énergie atomique et aux énergies alternatives", "CEDRE : Centre de documentation, de recherche et d'expérimentations sur les pollutions accidentelles des eaux", "CIAV : Cellule interministérielle d'aide aux victimes", "CIC : Centre d'information et de commandement (Direction départementale de la sécurité publique)", "CIGT : Centre d'ingénierie et de gestion du trafic", "CMIR : Centre météorologique interrégional (Météo-France)", "COD : Centre opérationnel départemental", "CODIS : Centre opérationnel départemental d'incendie et de secours", "COG : Centre opérationnel de la gendarmerie", "COGIC : Centre opérationnel de gestion interministérielle des crises", "COGIS : Centre opérationnel de gestion et d'information sismique (CEA)", "CORG : Centre opérationnel de la gendarmerie (régional)", "COS : Commandant des opérations de secours", "COSSIM : Centre opérationnel des services de secours et d''incendie de Marseille", "COZ : Centre opérationnel de zone", "CRICR : Centre régional d'information et de coordination routières", "CROSSMED : Centre régional opérationnel de surveillance et de sauvetage Méditerranée", "CRS : Compagnie républicaine de sécurité", "CUMP : Cellule d'urgence médico-psychologique", "DASEN : Directeur académique des services de l'éducation nationale", "DDDCS : Direction départementale déléguée à la cohésion sociale", "DDPP : Direction départementale de la protection des populations", "DDTM : Direction départementale des territoires et de la mer", "DIPN : Direction interdépartementale de la police nationale", "DIRECCTE : Direction régionale des entreprises, de la concurrence, de la consommation, du travail et de l'emploi", "DIRM : Direction interrégionale de la mer", "DMD : Délégué militaire départemental", "DOS : Directeur des opérations de secours", "DREAL : Direction régionale de l'environnement, de l'aménagement et du logement", "DSAC : Direction de la sécurité de l'aviation civile", "EDF : Électricité de France", "EIC PACA : Établissement Infrastructure de Circulation PACA (SNCF)", "EMIZDS : État-major interministériel de zone de défense et de sécurité", "ENEDIS : Gestionnaire du réseau de distribution d'électricité (ex-ERDF)", "ESCOTA : Société des autoroutes Estérel Côte d'Azur Provence Alpes", "FR-ALERT : Système national d'alerte et d'information des populations par téléphone mobile", "GEDICOM : Outil de gestion de crise du COGIC (remontée des informations opérationnelles)", "GGD : Groupement de gendarmerie départementale", "GIM : Groupe d'intervention macrosismique", "GPMM : Grand Port Maritime de Marseille", "IFREMER : Institut français de recherche pour l'exploitation de la mer", "MAMP : Métropole Aix-Marseille-Provence", "NOVI : Nombreuses victimes", "ORSAN-CLIM : Organisation de la réponse du système de santé – volet canicule et chaleur extrême", "ORSEC : Organisation de la réponse de sécurité civile", "PC : Poste de commandement", "PCA : Poste de commandement avancé", "PCO : Poste de commandement opérationnel", "PCS : Plan communal de sauvegarde", "PIS : Poste d'information et de soins", "PMA : Poste médical avancé", "POLMAR : Plan de lutte contre les pollutions marines", "PPI : Plan particulier d'intervention", "PREMAR : Préfet maritime", "PSS : Plan de secours spécialisé", "RDT 13 : Régie des transports métropolitains (réseau de transport du département 13)", "RIC : Règlement de surveillance, de prévision et de transmission de l'information sur les crues", "RTE : Réseau de transport d'électricité", "SAIP : Système d'alerte et d'information des populations", "SAMU : Service d'aide médicale urgente", "SDIS : Service départemental d'incendie et de secours", "SERTIT : Service de traitement d'image et de télédétection (Université de Strasbourg)", "SINSIC : Service de l’innovation numérique et des systèmes d’information et de communication", "SINUS : Système d'information numérique unifié de suivi des victimes", "SIRACEDPC : Service interministériel régional des affaires civiles et économiques de défense et de la protection civile", "SNCF : Société nationale des chemins de fer français", "SPC : Service de prévision des crues", "SPZEF : Bulletin spécial de zone et espaces frontaliers (Météo-France)", "SRCI : Service régional de communication et d'information", "TMD : Transport de matières dangereuses", "VNF : Voies navigables de France", "ZA : Zone d'accueil", "ZVA : Zone de vie des victimes autonomes"]};
+const DEFAULT_COMMAND_TYPES = [['Activation de la cellule de suivi',"J'active une cellule de suivi."],['Prise de direction des opérations',"Je prends la direction des opérations."],['Mise en oeuvre de certaines mesures d\'un dispositif ORSEC',"Je mets en oeuvre certaines mesures d'un dispositif ORSEC."],['Activation d\'un dispositif opérationnel ORSEC',"J'active un dispositif opérationnel ORSEC."],['Levée de certaines mesures d\'un dispositif ORSEC',"Je lève certaines mesures d'un dispositif ORSEC."],['Levée de l\'ensemble des mesures d\'un dispositif ORSEC',"Je lève l'ensemble des mesures des dispositions ORSEC mises en oeuvre."]];
 let commandTypes = DEFAULT_COMMAND_TYPES.map(x => x.slice());
 
-const defaultServices = ['SDIS','BMPM','SAMU','ARS','DDTM','DREAL','DZSI','DZPAF','GMAR','PP13','DDSP','GGD','CRS','DMD','MÃ‰TROPOLE','SRCI','GPMM','DIPJ'].map(name => ({name, cod: false, pco: false}));
+const defaultServices = ['SDIS','BMPM','SAMU','ARS','DDTM','DREAL','DZSI','DZPAF','GMAR','PP13','DDSP','GGD','CRS','DMD','MÉTROPOLE','SRCI','GPMM','DIPJ'].map(name => ({name, cod: false, pco: false}));
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 2. COUCHE STORAGE (isolÃ©e â€” synchro locale + Supabase)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 2. COUCHE STORAGE (isolée — synchro locale + Supabase)
+// ────────────────────────────────────────────────────────────────────────────
 const Storage = window.SICODApi?.storage || {
   load() { return null; },
   save() {}
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 3. Ã‰TAT APPLICATIF â€” unique, initialisÃ© une seule fois
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 3. ÉTAT APPLICATIF — unique, initialisé une seule fois
+// ────────────────────────────────────────────────────────────────────────────
 const DEFAULT_DYNAMIC_LISTS = {
-  directoryGroups: ['AutoritÃ© - Ordre public - Justice','Secours - SantÃ© - MÃ©dical','Environnement - Energie','Circulation - Transport','Militaire','CIP','CollectivitÃ©s territoriales','Autres'],
-  planTypes: ["DG (Dispositions gÃ©nÃ©rales)","DS (Dispositions spÃ©cifiques)","PPI (Plan particulier d'intervention)"],
+  directoryGroups: ['Autorité - Ordre public - Justice','Secours - Santé - Médical','Environnement - Energie','Circulation - Transport','Militaire','CIP','Collectivités territoriales','Autres'],
+  planTypes: ["DG (Dispositions générales)","DS (Dispositions spécifiques)","PPI (Plan particulier d'intervention)"],
   planPriorities: ['P1','P2','P3'],
   planStatuses: ['A jour','A programmer','En cours'],
-  planRiskTypes: ['Naturel','Technologique','Sanitaire','SÃ©curitÃ© publique','Transport','Autre'],
+  planRiskTypes: ['Naturel','Technologique','Sanitaire','Sécurité publique','Transport','Autre'],
   dutyRoles: ['Astreinte 1','Astreinte 2'],
   dutyAgents: ['Agent 1','Agent 2'],
   reflexFamilies: ['Risques naturels','Risques technologiques','Risques divers','Autres'],
@@ -86,7 +86,7 @@ const DEFAULT_DYNAMIC_LISTS = {
 const DEFAULT_SETTINGS = {
   theme: 'light',
   psFormat: 'detail',
-  classification: 'Non protÃ©gÃ©',
+  classification: 'Non protégé',
   author: 'SIRACEDPC',
   dutySignerLastName: 'ALLIO',
   dutySignerFirstName: 'Julien',
@@ -139,7 +139,7 @@ function buildDefaultState() {
   };
 }
 
-// Chargement unique de l'Ã©tat
+// Chargement unique de l'état
 function isAuthLocked() {
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
   return !!authState.configured && !authState.authenticated;
@@ -183,7 +183,7 @@ function ensureStateIntegrity() {
 ensureStateIntegrity();
 clearLocalStateCache();
 
-// persist() â€” unique, stable
+// persist() — unique, stable
 function persist() {
   Storage.save(state);
 }
@@ -203,21 +203,21 @@ function resetStateToDefaults() {
   ensureStateIntegrity();
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 4. UTILITAIRES GLOBAUX
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
-/** Ã‰chappe le HTML pour insertion sÃ©curisÃ©e */
+/** Échappe le HTML pour insertion sécurisée */
 function esc(s) {
   return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
 
-/** Convertit les sauts de ligne en <br> avec Ã©chappement */
+/** Convertit les sauts de ligne en <br> avec échappement */
 function nl2br(s) {
   return esc(s).replace(/\n/g, '<br>');
 }
 
-/** GÃ©nÃ¨re un identifiant unique court */
+/** Génère un identifiant unique court */
 function uid(prefix) {
   return prefix + '_' + Math.random().toString(36).slice(2, 10);
 }
@@ -240,9 +240,9 @@ function isLinkedToActiveEvent(record) {
   return getActiveEventIds().has(record.eventId);
 }
 
-/** Retourne le titre d'un Ã©vÃ©nement depuis son id */
+/** Retourne le titre d'un événement depuis son id */
 function getEventTitle(id) {
-  return (byId(state.events, id) || {}).title || 'Ã‰vÃ©nement supprimÃ©';
+  return (byId(state.events, id) || {}).title || 'Événement supprimé';
 }
 
 /** Formate une date ISO locale (YYYY-MM-DD) */
@@ -259,7 +259,7 @@ function todayISO() {
   return toLocalISO(new Date());
 }
 
-/** Formate une date ISO ou Date en format franÃ§ais jj/mm/aaaa */
+/** Formate une date ISO ou Date en format français jj/mm/aaaa */
 function formatDateFR(value){if(!value)return '';const m=String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return `${m[3]}/${m[2]}/${m[1]}`;const d=new Date(value);if(Number.isNaN(d.getTime()))return String(value);return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;}
 
 /** Retourne l'heure actuelle HH:MM */
@@ -267,34 +267,34 @@ function timeHHMM() {
   return new Date().toTimeString().slice(0, 5);
 }
 
-/** GÃ©nÃ¨re un badge HTML selon le statut */
+/** Génère un badge HTML selon le statut */
 function badge(status) {
-  if (status === 'ArchivÃ©') return `<span class="badge warning">ArchivÃ©</span>`;
-  if (status === 'DiffusÃ©' || status === 'ValidÃ©') return `<span class="badge success">${esc(status)}</span>`;
+  if (status === 'Archivé') return `<span class="badge warning">Archivé</span>`;
+  if (status === 'Diffusé' || status === 'Validé') return `<span class="badge success">${esc(status)}</span>`;
   return `<span class="badge info">${esc(status || 'Brouillon')}</span>`;
 }
 
-/** Parse une date locale ISO en objet Date (Ã  midi pour Ã©viter les dÃ©calages TZ) */
-const PS_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
-const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
+/** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
+const PS_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
+const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
 
 function normalizePublishStatus(status, fallback = 'Brouillon') {
   const value = String(status || '').trim();
   if (!value) return fallback;
-  if (value === 'DiffusÃ©' || value === 'ValidÃ©') return 'DiffusÃ©';
+  if (value === 'Diffusé' || value === 'Validé') return 'Diffusé';
   if (value === 'Brouillon' || value === 'Ouvert') return 'Brouillon';
   return fallback;
 }
 
 function isPublishedStatus(status) {
-  return normalizePublishStatus(status) === 'DiffusÃ©';
+  return normalizePublishStatus(status) === 'Diffusé';
 }
 
 function buildFixedSignatureLines(signature) {
   const sig = signature || {};
   const lines = [];
   if (sig.mode === 'delegation') {
-    lines.push('Pour le prÃ©fet, par dÃ©lÃ©gation');
+    lines.push('Pour le préfet, par délégation');
     if (sig.role) lines.push(sig.role);
     if (sig.name) {
       lines.push('');
@@ -302,7 +302,7 @@ function buildFixedSignatureLines(signature) {
     }
     return lines;
   }
-  lines.push('Le prÃ©fet');
+  lines.push('Le préfet');
   if (sig.name) {
     lines.push('');
     lines.push(sig.name);
@@ -348,9 +348,9 @@ function parseDateLocal(s) {
   return new Date(y, m - 1, d, 12, 0, 0, 0);
 }
 
-/** Formate une Date en chaÃ®ne locale franÃ§aise */
+/** Formate une Date en chaîne locale française */
 function formatDateLocal(dt) {
-  if (!dt || isNaN(dt)) return 'â€”';
+  if (!dt || isNaN(dt)) return '—';
   return dt.toLocaleDateString('fr-FR');
 }
 
@@ -363,7 +363,7 @@ function startOfMonday(dt) {
   return d;
 }
 
-/** Retourne le dimanche (fin inclusive) d'une semaine dÃ©marrant le lundi */
+/** Retourne le dimanche (fin inclusive) d'une semaine démarrant le lundi */
 function weekEndInclusive(monday) {
   const d = new Date(monday);
   d.setDate(d.getDate() + 6);
@@ -371,7 +371,7 @@ function weekEndInclusive(monday) {
   return d;
 }
 
-/** Retourne la liste dynamique configurÃ©e pour une clÃ©, avec fallback */
+/** Retourne la liste dynamique configurée pour une clé, avec fallback */
 function getDynamicList(key) {
   const labels = window.SICODDataModel?.getReferenceLabels(state, key, DEFAULT_DYNAMIC_LISTS);
   return Array.isArray(labels) && labels.length ? labels : (DEFAULT_DYNAMIC_LISTS[key] || []).slice();
@@ -457,7 +457,7 @@ function showToast(msg, type = 'success', duration = 3500) {
   }, duration);
 }
 
-/** Affiche une boÃ®te de confirmation asynchrone â€” retourne Promise<boolean> */
+/** Affiche une boîte de confirmation asynchrone — retourne Promise<boolean> */
 function confirmAsync(msg) {
   return new Promise(resolve => {
     let dialog = document.getElementById('confirmDialog');
@@ -480,14 +480,14 @@ function confirmAsync(msg) {
 /** Marque binaire pour les exports PDF */
 function mark(v) { return v ? '[X]' : '[ ]'; }
 
-/** Ã‰chappe une valeur pour CSV */
+/** Échappe une valeur pour CSV */
 function csvEscape(v) {
   const s = String(v ?? '');
   return (s.includes('"') || s.includes(';') || s.includes(',') || s.includes('\n'))
     ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-/** TÃ©lÃ©charge un Blob sous forme de fichier */
+/** Télécharge un Blob sous forme de fichier */
 function downloadBlob(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -497,13 +497,13 @@ function downloadBlob(blob, name) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 200);
 }
 
-/** GÃ©nÃ¨re et tÃ©lÃ©charge un CSV */
+/** Génère et télécharge un CSV */
 function downloadCSV(filename, rows) {
   const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
   downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
 }
 
-/** Retourne la source logo courante (personnalisÃ©e ou dÃ©faut) */
+/** Retourne la source logo courante (personnalisée ou défaut) */
 const DEFAULT_BRAND_LOGO = 'assets/logo.png';
 const DEFAULT_FAVICON = 'assets/favicon.ico';
 const DEFAULT_DASHBOARD_BANNER = 'assets/banniere.png';
@@ -685,8 +685,8 @@ function drawPdfSignatureBlock(doc, x, y, opts = {}) {
   const lineGap = opts.lineGap || 5;
   const blockWidth = opts.blockWidth || 62;
   const lines = sig.mode === 'delegation'
-    ? ['Pour le prÃ©fet, par dÃ©lÃ©gation', sig.role || '', sig.name || ''].filter(Boolean)
-    : ['Le prÃ©fet,', sig.name || ''].filter(Boolean);
+    ? ['Pour le préfet, par délégation', sig.role || '', sig.name || ''].filter(Boolean)
+    : ['Le préfet,', sig.name || ''].filter(Boolean);
   if (!lines.length) return y;
   lines.forEach((line, idx) => {
     doc.setFont('helvetica', 'bold');
@@ -702,9 +702,9 @@ function renderPSSignatureHtml() {
   const sig = getEligiblePdfSignatureConfig('ps');
   if (!sig.name && !sig.role) return '';
   if (sig.mode === 'delegation') {
-    return `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le prÃ©fet, par dÃ©lÃ©gation</div><div class="sig-line2">${esc(sig.role || '')}</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
+    return `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le préfet, par délégation</div><div class="sig-line2">${esc(sig.role || '')}</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
   }
-  return `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Le prÃ©fet</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
+  return `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Le préfet</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
 }
 
 /** Applique les assets de marque (logo/favicon) */
@@ -752,14 +752,14 @@ function toggleSidebar() {
   layout.dataset.sidebarCollapsed = collapsed ? '1' : '0';
 }
 
-/** Applique le thÃ¨me clair/sombre */
+/** Applique le thème clair/sombre */
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const label = document.getElementById('themeLabel');
   if (label) label.textContent = theme === 'dark' ? 'Mode clair' : 'Mode sombre';
 }
 
-/** Bascule le thÃ¨me */
+/** Bascule le thème */
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || state.settings.theme || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
@@ -770,14 +770,14 @@ function toggleTheme() {
   persist();
 }
 
-/** GÃ©nÃ¨re une URL favicon Ã  partir d'une URL de site */
+/** Génère une URL favicon à partir d'une URL de site */
 function guessFavicon(url) {
   try { return new URL(url).origin + '/favicon.ico'; } catch (e) { return ''; }
 }
 
 // Construit le HTML du cartouche PS
 function psCartouche(ps, event) {
-  const dateStr = ps.updatedAt ? new Date(ps.updatedAt).toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'}) : 'â€”';
+  const dateStr = ps.updatedAt ? new Date(ps.updatedAt).toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'}) : '—';
   return `<div class="ps-cartouche"><table class="table"><thead><tr><th>Date / heure</th><th>Statut</th><th>Classification</th><th>Auteur</th><th>ID Synergi</th></tr></thead><tbody><tr><td>${esc(dateStr)}</td><td>${esc(ps.status||'')}</td><td>${esc(ps.classification||'')}</td><td>${esc(ps.author||'')}</td><td>${esc(event?.synergi||'')}</td></tr></tbody></table></div>`;
 }
 
@@ -806,9 +806,9 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
       </div>
       {{cartouche}}
       <table class="ps-detail-table">
-        <tr><td style="width:24%"><div class="ps-section-title">Situation gÃ©nÃ©rale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
+        <tr><td style="width:24%"><div class="ps-section-title">Situation générale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
         <tr><td><div class="ps-section-title">Bilan</div></td><td><div class="ps-content">{{bilan}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Moyens engagÃ©s</div></td><td><div class="ps-content">{{means}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Moyens engagés</div></td><td><div class="ps-content">{{means}}</div></td></tr>
         <tr><td><div class="ps-section-title">Mesures prises</div></td><td><div class="ps-content">{{measures}}</div></td></tr>
         <tr><td><div class="ps-section-title">Points d'attention</div></td><td><div class="ps-content">{{attention}}</div></td></tr>
         <tr><td><div class="ps-section-title">Communication</div></td><td><div class="ps-content">{{communication}}</div></td></tr>
@@ -832,7 +832,7 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
           <div class="focus-box"><div class="focus-label">Moyens</div><div class="focus-body">{{means}}</div></div>
         </div>
         <div class="focus-center">
-          <div class="focus-box"><div class="focus-label">Situation gÃ©nÃ©rale</div><div class="focus-body">{{situation}}</div></div>
+          <div class="focus-box"><div class="focus-label">Situation générale</div><div class="focus-body">{{situation}}</div></div>
           <div class="focus-box"><div class="focus-label">Cartographie</div><div class="focus-map">{{image}}</div></div>
           <div class="focus-box"><div class="focus-label">Mesures prises</div><div class="focus-body">{{measures}}</div></div>
         </div>
@@ -852,25 +852,25 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
         <div class="cmd-headtext">
           <div style="font-size:.875rem;line-height:1.45;text-align:left;margin-bottom:.5rem">
             <div><strong>SIRACEDPC</strong></div>
-            <div>TÃ©lÃ©phone : {{contactPhone}}</div>
-            <div>TÃ©lÃ©copie : {{contactFax}}</div>
+            <div>Téléphone : {{contactPhone}}</div>
+            <div>Télécopie : {{contactFax}}</div>
             <div>Courriel : {{contactEmail}}</div>
             <div>Audio-conf. : {{contactAudioConf}}</div>
           </div>
           <div class="meta-line"><table class="table"><tbody><tr><th>Date</th><th>Heure</th></tr><tr><td>{{date}}</td><td>{{time}}</td></tr></tbody></table></div>
           <p class="cmd-redtitle">{{typeLabel}}</p>
           <h2>{{eventTitle}}</h2>
-          <div class="help">Site / lieu de l'Ã©vÃ©nement : {{site}}</div>
+          <div class="help">Site / lieu de l'événement : {{site}}</div>
         </div>
       </div>
       <div class="cmd-urgent">MESSAGE URGENT</div>
       <p class="cmd-autotext">{{autoText}}</p>
-      <div class="meta-line"><table class="table"><thead><tr><th>Dispositif de rÃ©fÃ©rence</th><th>Heure d'activation</th><th>Localisation du PCO</th></tr></thead><tbody><tr><td>{{reference}}</td><td>{{activation}}</td><td>{{pcoLocation}}</td></tr></tbody></table></div>
+      <div class="meta-line"><table class="table"><thead><tr><th>Dispositif de référence</th><th>Heure d'activation</th><th>Localisation du PCO</th></tr></thead><tbody><tr><td>{{reference}}</td><td>{{activation}}</td><td>{{pcoLocation}}</td></tr></tbody></table></div>
       <table class="table"><tbody>
         <tr><th style="width:78%">Mesures</th><th>Valeur</th></tr>
         {{measuresRows}}
       </tbody></table>
-      <div style="margin-top:1rem"><table class="table"><thead><tr><th>Services / entitÃ©s</th><th>COD</th><th>PCO</th></tr></thead><tbody>{{servicesRows}}</tbody></table></div>
+      <div style="margin-top:1rem"><table class="table"><thead><tr><th>Services / entités</th><th>COD</th><th>PCO</th></tr></thead><tbody>{{servicesRows}}</tbody></table></div>
       <div style="margin-top:1.25rem;display:flex;justify-content:flex-end;text-align:right">{{signature}}</div>
       <div style="margin-top:.75rem;text-align:right"><strong>{{originalSigned}}</strong></div>
       <div class="exercise-banner" style="margin-top:1rem;{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
@@ -884,7 +884,7 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
         <div class="spacer"></div>
       </div>
       <table class="table">
-        <thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>EntrÃ©e</th></tr></thead>
+        <thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead>
         <tbody>{{entriesRows}}</tbody>
       </table>
       {{signature}}
@@ -964,7 +964,7 @@ function mountStoredHtmlTemplatePreview(container, key, tokens, options = {}) {
   if (!container) return;
   const iframe = document.createElement('iframe');
   iframe.className = `template-preview-frame ${options.className || ''}`.trim();
-  iframe.setAttribute('title', options.title || 'AperÃ§u du document');
+  iframe.setAttribute('title', options.title || 'Aperçu du document');
   iframe.setAttribute('sandbox', 'allow-same-origin');
   iframe.srcdoc = buildTemplateHtmlDocument(key, tokens || {}, options);
   container.innerHTML = '';
@@ -989,14 +989,18 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
     showToast("Le moteur d'export HTML vers PDF n'est pas disponible.", 'error');
     return;
   }
+  const isLandscape = options.orientation === 'landscape';
+  const pageViewport = isLandscape
+    ? { width: 1588, height: 1123 }
+    : { width: 1123, height: 1588 };
   const iframe = document.createElement('iframe');
   iframe.setAttribute('aria-hidden', 'true');
   iframe.setAttribute('sandbox', 'allow-same-origin');
   iframe.style.position = 'fixed';
   iframe.style.left = '-10000px';
   iframe.style.top = '0';
-  iframe.style.width = options.orientation === 'landscape' ? '1240px' : '920px';
-  iframe.style.height = '2000px';
+  iframe.style.width = `${pageViewport.width}px`;
+  iframe.style.height = `${pageViewport.height}px`;
   iframe.style.opacity = '0';
   iframe.style.pointerEvents = 'none';
   iframe.style.border = '0';
@@ -1004,34 +1008,37 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
   document.body.appendChild(iframe);
   try {
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('Le rendu du document a expirÃ©.')), 12000);
+      const timer = setTimeout(() => reject(new Error('Le rendu du document a expiré.')), 12000);
       iframe.onload = () => {
         clearTimeout(timer);
         resolve();
       };
     });
     const frameDocument = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!frameDocument) throw new Error("Le document HTML n'a pas pu Ãªtre initialisÃ©.");
+    if (!frameDocument) throw new Error("Le document HTML n'a pas pu être initialisé.");
     await waitForFrameAssets(frameDocument);
     const target = frameDocument.querySelector('.document-page') || frameDocument.body;
     const doc = new window.jspdf.jsPDF({
       unit: 'mm',
       format: 'a4',
-      orientation: options.orientation === 'landscape' ? 'landscape' : 'portrait'
+      orientation: isLandscape ? 'landscape' : 'portrait'
     });
     await new Promise((resolve, reject) => {
       try {
         doc.html(target, {
           margin: [0, 0, 0, 0],
           autoPaging: 'text',
+          width: doc.internal.pageSize.getWidth(),
           html2canvas: {
-            scale: 2,
+            scale: Math.min(window.devicePixelRatio || 1, 1.25),
             useCORS: true,
-            allowTaint: true,
+            allowTaint: false,
             backgroundColor: '#ffffff',
             logging: false,
-            windowWidth: Math.max(target.scrollWidth, target.clientWidth || 0),
-            windowHeight: Math.max(target.scrollHeight, target.clientHeight || 0)
+            imageTimeout: 8000,
+            removeContainer: true,
+            windowWidth: pageViewport.width,
+            windowHeight: pageViewport.height
           },
           callback: (pdf) => {
             pdf.save(fileName || `${slugify(options.title || key || 'document')}.pdf`);
@@ -1063,7 +1070,7 @@ function buildPSHtmlTokens(ps) {
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
   const attention = ps.attention ?? ps.points ?? '';
-  const title = `POINT DE SITUATION NÂ° ${ps.number}`;
+  const title = `POINT DE SITUATION N° ${ps.number}`;
   return {
     logo: currentLogoSrc(),
     title: esc(title),
@@ -1076,7 +1083,7 @@ function buildPSHtmlTokens(ps) {
     attention: nl2br(attention),
     communication: nl2br(ps.communication || '') + (ps.format === 'focus' ? psSourcesHtml(ps) : ''),
     image: ps.image ? `<img src="${ps.image}" alt="Visuel">` : '<span class="note">Aucun visuel joint</span>',
-    image_row: ps.image ? `<tr><td><div class="ps-section-title">Visuel associÃ©</div></td><td><div class="ps-content"><img src="${ps.image}" alt="Visuel" style="max-width:100%;max-height:18rem;width:auto;height:auto;display:block;margin:0 auto;object-fit:contain">${ps.imageCaption ? `<div class="source-note">${esc(ps.imageCaption)}</div>` : ''}</div></td></tr>` : '',
+    image_row: ps.image ? `<tr><td><div class="ps-section-title">Visuel associé</div></td><td><div class="ps-content"><img src="${ps.image}" alt="Visuel" style="max-width:100%;max-height:18rem;width:auto;height:auto;display:block;margin:0 auto;object-fit:contain">${ps.imageCaption ? `<div class="source-note">${esc(ps.imageCaption)}</div>` : ''}</div></td></tr>` : '',
     sources_row: (ps.audioData || ps.transcript) ? `<tr><td><div class="ps-section-title">Sources</div></td><td><div class="ps-content">${psSourcesHtml(ps)}</div></td></tr>` : '',
     signature: renderPSSignatureHtml()
   };
@@ -1090,16 +1097,16 @@ function buildCommandHtmlTokens(d) {
   const sig = getCommandSignatureConfig();
   const signature = shouldApplyPdfSignature('command')
     ? (sig.mode === 'delegation'
-      ? `<div><strong>Pour le prÃ©fet, par dÃ©lÃ©gation</strong><div>${esc(sig.role || '')}</div><div>${esc(sig.name || '')}</div></div>`
-      : `<div><strong>Le prÃ©fet</strong><div>${esc(sig.name || '')}</div></div>`)
+      ? `<div><strong>Pour le préfet, par délégation</strong><div>${esc(sig.role || '')}</div><div>${esc(sig.name || '')}</div></div>`
+      : `<div><strong>Le préfet</strong><div>${esc(sig.name || '')}</div></div>`)
     : '';
   const measuresRows = [
     ['Activation de la cellule de suivi', mark(d.suivi)],
-    ['Prise de direction des opÃ©rations / activation du COD', mark(d.cod)],
+    ['Prise de direction des opérations / activation du COD', mark(d.cod)],
     ['Activation du PCO', mark(d.pco)],
-    ['Activation du plan de rÃ©fÃ©rence', mark(d.planActive) + (d.plan ? ` â€” ${esc(d.plan)}` : '')],
-    ['Mise en oeuvre limitÃ©e Ã  certaines mesures', mark(d.limited)],
-    ["Activation d'une alerte sirÃ¨ne", mark(d.siren) + (d.sirenLabel ? ` â€” ${esc(d.sirenLabel)}` : '')]
+    ['Activation du plan de référence', mark(d.planActive) + (d.plan ? ` — ${esc(d.plan)}` : '')],
+    ['Mise en oeuvre limitée à certaines mesures', mark(d.limited)],
+    ["Activation d'une alerte sirène", mark(d.siren) + (d.sirenLabel ? ` — ${esc(d.sirenLabel)}` : '')]
   ].map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`).join('');
   const servicesRows = (d.services || []).map(s => `<tr><td>${esc(s.name)}</td><td>${mark(s.cod)}</td><td>${mark(s.pco)}</td></tr>`).join('');
   return {
@@ -1113,7 +1120,7 @@ function buildCommandHtmlTokens(d) {
     date: esc(d.date || ''),
     time: esc(d.time || ''),
     typeLabel: esc((d.typeLabel || '').toUpperCase()),
-    eventTitle: esc(d.event || 'Ã‰VÃ‰NEMENT Ã€ RENSEIGNER'),
+    eventTitle: esc(d.event || 'ÉVÉNEMENT À RENSEIGNER'),
     site: esc(d.site || ''),
     autoText: esc(d.autoText || ''),
     reference: esc(d.reference || ''),
@@ -1122,7 +1129,7 @@ function buildCommandHtmlTokens(d) {
     measuresRows,
     servicesRows,
     signature,
-    originalSigned: d.originalSigned ? 'Original signÃ©' : ''
+    originalSigned: d.originalSigned ? 'Original signé' : ''
   };
 }
 
@@ -1133,24 +1140,24 @@ function buildEventLogHtmlTokens(eventId) {
     ? (() => {
         const sig = getEventSignatureConfig();
         return sig.mode === 'delegation'
-          ? `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le prÃ©fet, par dÃ©lÃ©gation</div><div class="sig-line2">${esc(sig.role || '')}</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`
-          : `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Le prÃ©fet</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
+          ? `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le préfet, par délégation</div><div class="sig-line2">${esc(sig.role || '')}</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`
+          : `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Le préfet</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
       })()
     : '';
   return {
     logo: currentLogoSrc(),
     eventTitle: esc(e?.title || ''),
-    eventMeta: esc([e?.type || 'â€”', e?.location || 'â€”', e?.level || 'â€”'].join(' Â· ')),
+    eventMeta: esc([e?.type || '—', e?.location || '—', e?.level || '—'].join(' · ')),
     entriesRows: items.length
       ? items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')
-      : '<tr><td colspan="3"><p class="help">Aucune entrÃ©e de main courante.</p></td></tr>',
+      : '<tr><td colspan="3"><p class="help">Aucune entrée de main courante.</p></td></tr>',
     signature
   };
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 5. NAVIGATION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function goPage(page) {
   if (isAuthLocked()) return;
@@ -1180,16 +1187,16 @@ function ensureEventArchivesPage() {
     <section class="page" id="page-event-archives">
       <div class="page-inner">
         <div class="page-header">
-          <div><h1>Archives des Ã©vÃ©nements</h1></div>
+          <div><h1>Archives des événements</h1></div>
           <div class="event-page-actions">
-            <button class="fr-btn secondary" type="button" onclick="goPage('events')">Retour aux Ã©vÃ©nements</button>
+            <button class="fr-btn secondary" type="button" onclick="goPage('events')">Retour aux événements</button>
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h2 class="card-title">Ã‰vÃ©nements archivÃ©s</h2></div>
+          <div class="card-header"><h2 class="card-title">Événements archivés</h2></div>
           <div class="card-body">
             <div class="events-toolbar">
-              <input class="list-search" id="eventArchiveSearch" type="search" placeholder="Rechercher un Ã©vÃ©nement archivÃ©â€¦" oninput="renderEventArchives()">
+              <input class="list-search" id="eventArchiveSearch" type="search" placeholder="Rechercher un événement archivé…" oninput="renderEventArchives()">
             </div>
             <div class="grid-2" id="eventArchivesList"></div>
           </div>
@@ -1217,20 +1224,20 @@ function ensureEventPageEnhancements() {
   if (cardBody && !document.getElementById('eventSearch')) {
     cardBody.insertAdjacentHTML('afterbegin', `
       <div class="events-toolbar">
-        <input class="list-search" id="eventSearch" type="search" placeholder="Rechercher par libellÃ©, type, commune, niveau ou ID Synergiâ€¦" oninput="renderEvents()">
+        <input class="list-search" id="eventSearch" type="search" placeholder="Rechercher par libellé, type, commune, niveau ou ID Synergi…" oninput="renderEvents()">
       </div>
     `);
   }
   const archivedCard = Array.from(document.querySelectorAll('#page-events .card')).find((card) =>
-    card.querySelector('.card-title')?.textContent?.trim() === 'Ã‰vÃ©nements archivÃ©s'
+    card.querySelector('.card-title')?.textContent?.trim() === 'Événements archivés'
   );
   if (archivedCard) archivedCard.remove();
   ensureEventArchivesPage();
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 6. MODULE DASHBOARD
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function renderDashboard() {
   refreshDashboardBanner();
@@ -1243,12 +1250,12 @@ function renderDashboard() {
   const kpiPlansInProgress = document.getElementById('kpiPlansInProgress');
 
   const planItems = getActiveItems(state.planItems);
-  const activeEvents = getActiveItems(state.events).filter(e => e.status !== 'ArchivÃ©');
-  const archivedEvents = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'ArchivÃ©');
+  const activeEvents = getActiveItems(state.events).filter(e => e.status !== 'Archivé');
+  const archivedEvents = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'Archivé');
   const activePS = getActiveItems(state.ps);
   const planStatusNorm = (value) => String(value || '').trim().toLowerCase();
-  const isPlanUpToDate = (p) => planStatusNorm(p?.status) === 'a jour' || planStatusNorm(p?.status) === 'Ã  jour';
-  const isPlanTodo = (p) => planStatusNorm(p?.status) === 'a programmÃ©' || planStatusNorm(p?.status) === 'Ã  programmer' || planStatusNorm(p?.status) === 'a programmer';
+  const isPlanUpToDate = (p) => planStatusNorm(p?.status) === 'a jour' || planStatusNorm(p?.status) === 'à jour';
+  const isPlanTodo = (p) => planStatusNorm(p?.status) === 'a programmé' || planStatusNorm(p?.status) === 'à programmer' || planStatusNorm(p?.status) === 'a programmer';
   const isPlanInProgress = (p) => planStatusNorm(p?.status) === 'en cours';
 
   if (kpiEvents) kpiEvents.textContent = activeEvents.length;
@@ -1264,14 +1271,14 @@ function renderDashboard() {
     const active = activeEvents.slice(0, 4);
     dashEvents.innerHTML = active.length
       ? active.map(e => `<div class="event-card"><h3>${esc(e.title)}</h3><div class="event-meta"><span>${esc(e.type||'')}</span><span>${esc(e.location||'')}</span><span>${badge(e.status)}</span></div></div>`).join('')
-      : '<p class="help">Aucun Ã©vÃ©nement actif.</p>';
+      : '<p class="help">Aucun événement actif.</p>';
   }
 
   const dashPS = document.getElementById('dashboardPS');
   if (dashPS) {
     const latestPS = [...activePS].sort((a, b) => (b.updatedAt||'').localeCompare(a.updatedAt||'')).slice(0, 5);
     dashPS.innerHTML = latestPS.length
-      ? `<table class="table"><thead><tr><th>NÂ°</th><th>Ã‰vÃ©nement</th><th>Auteur</th><th>Statut</th></tr></thead><tbody>${latestPS.map(ps => `<tr><td>${esc(ps.number)}</td><td>${esc(getEventTitle(ps.eventId))}</td><td>${esc(ps.author)}</td><td>${badge(ps.status)}</td></tr>`).join('')}</tbody></table>`
+      ? `<table class="table"><thead><tr><th>N°</th><th>Événement</th><th>Auteur</th><th>Statut</th></tr></thead><tbody>${latestPS.map(ps => `<tr><td>${esc(ps.number)}</td><td>${esc(getEventTitle(ps.eventId))}</td><td>${esc(ps.author)}</td><td>${badge(ps.status)}</td></tr>`).join('')}</tbody></table>`
       : '<p class="help">Aucun point de situation.</p>';
   }
 
@@ -1279,7 +1286,7 @@ function renderDashboard() {
   if (dashPlans) {
     const inProgress = planItems.filter(p => !isPlanUpToDate(p)).slice(0, 5);
     dashPlans.innerHTML = inProgress.length
-      ? `<table class="table"><thead><tr><th>Item</th><th>PrioritÃ©</th><th>Statut</th></tr></thead><tbody>${inProgress.map(p => `<tr><td>${esc(p.item||'')}</td><td>${esc(p.priority||'')}</td><td>${badge(p.status||'')}</td></tr>`).join('')}</tbody></table>`
+      ? `<table class="table"><thead><tr><th>Item</th><th>Priorité</th><th>Statut</th></tr></thead><tbody>${inProgress.map(p => `<tr><td>${esc(p.item||'')}</td><td>${esc(p.priority||'')}</td><td>${badge(p.status||'')}</td></tr>`).join('')}</tbody></table>`
       : '<p class="help">Aucun plan en attente.</p>';
   }
 
@@ -1290,26 +1297,26 @@ function renderDashboard() {
     if (week) {
       const roles = getDynamicList('dutyRoles');
       dashDuty.innerHTML = `<table class="table"><tbody>
-        <tr><th>${esc(roles[0]||'Astreinte 1')}</th><td>${esc(week.agent1?.name || 'â€”')}</td></tr>
-        <tr><th>${esc(roles[1]||'Astreinte 2')}</th><td>${esc(week.agent2?.name || 'â€”')}</td></tr>
+        <tr><th>${esc(roles[0]||'Astreinte 1')}</th><td>${esc(week.agent1?.name || '—')}</td></tr>
+        <tr><th>${esc(roles[1]||'Astreinte 2')}</th><td>${esc(week.agent2?.name || '—')}</td></tr>
       </tbody></table><p class="help">Semaine du ${esc(formatDateFR(week.start))} au ${esc(formatDateFR(week.end))}</p>`;
     } else {
-      dashDuty.innerHTML = '<p class="help">Aucun planning gÃ©nÃ©rÃ© pour cette semaine.</p>';
+      dashDuty.innerHTML = '<p class="help">Aucun planning généré pour cette semaine.</p>';
     }
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 7. MODULE Ã‰VÃ‰NEMENTS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 7. MODULE ÉVÉNEMENTS
+// ────────────────────────────────────────────────────────────────────────────
 
 
-const DEFAULT_EVENT_TYPES = ['Accident','Feu','IntempÃ©ries','Inondation','Mouvement social','Pollution','Risque sanitaire','SÃ©curitÃ© publique','Transport','Autre'];
-const COMMUNES_13 = ['13100 - Aix-en-Provence','13190 - Allauch','13980 - Alleins','13200 - Arles','13400 - Aubagne','13930 - Aureille','13390 - Auriol','13121 - Aurons','13330 - La Barben','13570 - Barbentane','13520 - Les Baux-de-Provence','13100 - Beaurecueil','13720 - BelcodÃ¨ne',"13130 - Berre-l'Ã‰tang",'13320 - Bouc-Bel-Air','13720 - La Bouilladisse','13150 - Boulbon','13440 - Cabannes','13480 - CabriÃ¨s','13950 - Cadolive','13470 - Carnoux-en-Provence','13620 - Carry-le-Rouet','13260 - Cassis','13600 - Ceyreste','13350 - Charleval','13790 - ChÃ¢teauneuf-le-Rouge','13220 - ChÃ¢teauneuf-les-Martigues','13160 - ChÃ¢teaurenard','13600 - La Ciotat','13250 - Cornillon-Confoux','13111 - Coudoux','13780 - Cuges-les-Pins','13112 - La Destrousse','13510 - Ã‰guilles','13820 - EnsuÃ¨s-la-Redonne','13810 - EygaliÃ¨res','13430 - EyguiÃ¨res','13630 - Eyragues','13580 - La Fare-les-Oliviers','13990 - Fontvieille','13270 - Fos-sur-Mer','13710 - Fuveau','13120 - Gardanne','13420 - GÃ©menos','13180 - Gignac-la-Nerthe','13450 - Grans','13690 - Graveson','13850 - GrÃ©asque','13800 - Istres','13490 - Jouques','13113 - Lamanon','13410 - Lambesc','13680 - LanÃ§on-Provence','13910 - Maillane','13370 - Mallemort','13700 - Marignane','13000 - Marseille','13500 - Martigues','13103 - Mas-Blanc-des-Alpilles','13520 - Maussane-les-Alpilles','13650 - Meyrargues','13590 - Meyreuil','13105 - Mimet','13140 - Miramas','13940 - MollÃ©gÃ¨s','13890 - MouriÃ¨s','13550 - Noves','13660 - Orgon','13520 - Paradou','13330 - PÃ©lissanne','13821 - La Penne-sur-Huveaune','13170 - Les Pennes-Mirabeau','13790 - Peynier','13124 - Peypin','13860 - Peyrolles-en-Provence','13380 - Plan-de-Cuques',"13750 - Plan-d'Orgon",'13110 - Port-de-Bouc','13230 - Port-Saint-Louis-du-RhÃ´ne','13114 - Puyloubier','13610 - Le Puy-Sainte-RÃ©parade','13340 - Rognac','13840 - Rognes','13870 - Rognonas',"13640 - La Roque-d'AnthÃ©ron",'13830 - Roquefort-la-BÃ©doule','13360 - Roquevaire','13790 - Rousset','13740 - Le Rove','13670 - Saint-Andiol','13100 - Saint-Antonin-sur-Bayon','13760 - Saint-Cannat','13250 - Saint-Chamas','13610 - Saint-EstÃ¨ve-Janson','13103 - Saint-Ã‰tienne-du-GrÃ¨s','13100 - Saint-Marc-Jaumegarde','13310 - Saint-Martin-de-Crau','13920 - Saint-Mitre-les-Remparts','13115 - Saint-Paul-lÃ¨s-Durance','13150 - Saint-Pierre-de-MÃ©zoargues','13210 - Saint-RÃ©my-de-Provence','13119 - Saint-Savournin','13730 - Saint-Victoret','13460 - Saintes-Maries-de-la-Mer','13300 - Salon-de-Provence','13960 - Sausset-les-Pins','13560 - SÃ©nas','13240 - SeptÃ¨mes-les-Vallons','13109 - Simiane-Collongue','13150 - Tarascon','13100 - Le Tholonet','13530 - Trets','13126 - Vauvenargues','13880 - Velaux','13770 - Venelles','13122 - Ventabren','13116 - VernÃ¨gues','13670 - VerquiÃ¨res','13127 - Vitrolles'];
+const DEFAULT_EVENT_TYPES = ['Accident','Feu','Intempéries','Inondation','Mouvement social','Pollution','Risque sanitaire','Sécurité publique','Transport','Autre'];
+const COMMUNES_13 = ['13100 - Aix-en-Provence','13190 - Allauch','13980 - Alleins','13200 - Arles','13400 - Aubagne','13930 - Aureille','13390 - Auriol','13121 - Aurons','13330 - La Barben','13570 - Barbentane','13520 - Les Baux-de-Provence','13100 - Beaurecueil','13720 - Belcodène',"13130 - Berre-l'Étang",'13320 - Bouc-Bel-Air','13720 - La Bouilladisse','13150 - Boulbon','13440 - Cabannes','13480 - Cabriès','13950 - Cadolive','13470 - Carnoux-en-Provence','13620 - Carry-le-Rouet','13260 - Cassis','13600 - Ceyreste','13350 - Charleval','13790 - Châteauneuf-le-Rouge','13220 - Châteauneuf-les-Martigues','13160 - Châteaurenard','13600 - La Ciotat','13250 - Cornillon-Confoux','13111 - Coudoux','13780 - Cuges-les-Pins','13112 - La Destrousse','13510 - Éguilles','13820 - Ensuès-la-Redonne','13810 - Eygalières','13430 - Eyguières','13630 - Eyragues','13580 - La Fare-les-Oliviers','13990 - Fontvieille','13270 - Fos-sur-Mer','13710 - Fuveau','13120 - Gardanne','13420 - Gémenos','13180 - Gignac-la-Nerthe','13450 - Grans','13690 - Graveson','13850 - Gréasque','13800 - Istres','13490 - Jouques','13113 - Lamanon','13410 - Lambesc','13680 - Lançon-Provence','13910 - Maillane','13370 - Mallemort','13700 - Marignane','13000 - Marseille','13500 - Martigues','13103 - Mas-Blanc-des-Alpilles','13520 - Maussane-les-Alpilles','13650 - Meyrargues','13590 - Meyreuil','13105 - Mimet','13140 - Miramas','13940 - Mollégès','13890 - Mouriès','13550 - Noves','13660 - Orgon','13520 - Paradou','13330 - Pélissanne','13821 - La Penne-sur-Huveaune','13170 - Les Pennes-Mirabeau','13790 - Peynier','13124 - Peypin','13860 - Peyrolles-en-Provence','13380 - Plan-de-Cuques',"13750 - Plan-d'Orgon",'13110 - Port-de-Bouc','13230 - Port-Saint-Louis-du-Rhône','13114 - Puyloubier','13610 - Le Puy-Sainte-Réparade','13340 - Rognac','13840 - Rognes','13870 - Rognonas',"13640 - La Roque-d'Anthéron",'13830 - Roquefort-la-Bédoule','13360 - Roquevaire','13790 - Rousset','13740 - Le Rove','13670 - Saint-Andiol','13100 - Saint-Antonin-sur-Bayon','13760 - Saint-Cannat','13250 - Saint-Chamas','13610 - Saint-Estève-Janson','13103 - Saint-Étienne-du-Grès','13100 - Saint-Marc-Jaumegarde','13310 - Saint-Martin-de-Crau','13920 - Saint-Mitre-les-Remparts','13115 - Saint-Paul-lès-Durance','13150 - Saint-Pierre-de-Mézoargues','13210 - Saint-Rémy-de-Provence','13119 - Saint-Savournin','13730 - Saint-Victoret','13460 - Saintes-Maries-de-la-Mer','13300 - Salon-de-Provence','13960 - Sausset-les-Pins','13560 - Sénas','13240 - Septèmes-les-Vallons','13109 - Simiane-Collongue','13150 - Tarascon','13100 - Le Tholonet','13530 - Trets','13126 - Vauvenargues','13880 - Velaux','13770 - Venelles','13122 - Ventabren','13116 - Vernègues','13670 - Verquières','13127 - Vitrolles'];
 function getEventTypeOptions(){ const configured = (state.settings?.dynamicLists||{}).eventTypes; return Array.isArray(configured) && configured.length ? configured : DEFAULT_EVENT_TYPES.slice(); }
 function populateEventTypeSelect(selected){ const el=document.getElementById('eventType'); if(!el) return; setSelectOptions(el,getEventTypeOptions(),selected||''); }
 function populateCommuneDatalist(){ const list=document.getElementById('communes13List'); if(!list) return; const extra=getActiveItems(state.events).map(e=>e.location).filter(Boolean); const items=[...new Set([...COMMUNES_13,...extra])].sort((a,b)=>a.localeCompare(b,'fr')); list.innerHTML=items.map(v=>`<option value="${esc(v)}"></option>`).join(''); }
-function isEventArchived(eventId){ const e=byId(state.events,eventId); return !!e && e.status==='ArchivÃ©'; }
+function isEventArchived(eventId){ const e=byId(state.events,eventId); return !!e && e.status==='Archivé'; }
 function nowFR(){ return new Date().toLocaleString('fr-FR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
 function formatDateTimeValueFR(iso){ const d=new Date(iso); if(Number.isNaN(d.getTime())) return esc(iso||''); return d.toLocaleString('fr-FR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}); }
 
@@ -1331,10 +1338,10 @@ function openEventForm(id) {
 function saveEvent() {
   const idEl = document.getElementById('eventId');
   const titleEl = document.getElementById('eventTitle');
-  if (!titleEl || !titleEl.value.trim()) { showToast('Le libellÃ© est requis.', 'error'); return; }
+  if (!titleEl || !titleEl.value.trim()) { showToast('Le libellé est requis.', 'error'); return; }
   const id = idEl?.value || uid('evt');
   const existing = byId(state.events, id);
-  if (existing && existing.status === 'ArchivÃ©') { showToast('Un Ã©vÃ©nement archivÃ© ne peut pas Ãªtre modifiÃ©.', 'error'); return; }
+  if (existing && existing.status === 'Archivé') { showToast('Un événement archivé ne peut pas être modifié.', 'error'); return; }
   const typeSnapshot = getReferenceSnapshot('eventTypes', document.getElementById('eventType').value.trim());
   const data = {
     id,
@@ -1359,7 +1366,7 @@ function saveEvent() {
 function archiveEvent(id) {
   const e = byId(state.events, id);
   if (!e) return;
-  e.status = 'ArchivÃ©';
+  e.status = 'Archivé';
   e.updatedAt = new Date().toISOString();
   if (state.currentEventId === id) state.currentEventId = null;
   persist();
@@ -1376,7 +1383,7 @@ function reactivateEvent(id) {
 }
 
 async function deleteEvent(id) {
-  if (!await confirmAsync('Supprimer cet Ã©vÃ©nement et les points de situation rattachÃ©s ?')) return;
+  if (!await confirmAsync('Supprimer cet événement et les points de situation rattachés ?')) return;
   window.SICODDataModel?.archiveRecord(state.events, id);
   getActiveItems(state.ps).filter(ps => ps.eventId === id).forEach(ps => {
     window.SICODDataModel?.archiveRecord(state.ps, ps.id);
@@ -1401,8 +1408,8 @@ function openEvent(id) {
 function openEventEntryForm() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
-  if (!e) { showToast('SÃ©lectionnez un Ã©vÃ©nement.', 'error'); return; }
-  if (e.status === 'ArchivÃ©') { showToast('Un Ã©vÃ©nement archivÃ© ne peut pas Ãªtre enrichi.', 'error'); return; }
+  if (!e) { showToast('Sélectionnez un événement.', 'error'); return; }
+  if (e.status === 'Archivé') { showToast('Un événement archivé ne peut pas être enrichi.', 'error'); return; }
   document.getElementById('eventLogEventId').value = eventId;
   document.getElementById('eventLogDateTime').value = nowFR();
   document.getElementById('eventLogAuthor').value = 'SIRACEDPC';
@@ -1415,7 +1422,7 @@ function saveEventLogEntry() {
   const eventId = document.getElementById('eventLogEventId').value;
   const e = byId(state.events, eventId);
   if (!e) return;
-  if (e.status === 'ArchivÃ©') { showToast('Un Ã©vÃ©nement archivÃ© ne peut pas Ãªtre enrichi.', 'error'); return; }
+  if (e.status === 'Archivé') { showToast('Un événement archivé ne peut pas être enrichi.', 'error'); return; }
   const title = (document.getElementById('eventLogTitle').value || '').trim();
   const detail = (document.getElementById('eventLogDetail').value || '').trim();
   const author = (document.getElementById('eventLogAuthor').value || '').trim() || 'SIRACEDPC';
@@ -1438,19 +1445,19 @@ function getEventTimelineItems(eventId) {
     detail: item.detail || ''
   }));
   const relatedPS = getActiveItems(state.ps)
-    .filter(ps => ps.eventId === eventId && ps.status === 'DiffusÃ©')
+    .filter(ps => ps.eventId === eventId && ps.status === 'Diffusé')
     .map(ps => ({
       date: ps.updatedAt || ps.createdAt || new Date().toISOString(),
       author: ps.author || 'SIRACEDPC',
       title: ps.title || `Point de situation ${ps.number || ''}`.trim(),
-      detail: `Point de situation ${ps.number ? 'nÂ° ' + ps.number : ''}${ps.status ? ' â€” ' + ps.status : ''}`
+      detail: `Point de situation ${ps.number ? 'n° ' + ps.number : ''}${ps.status ? ' — ' + ps.status : ''}`
     }));
   const commandItems = getActiveItems(state.commandMessages)
-    .filter(cmd => cmd.eventId === eventId && cmd.status === 'DiffusÃ©')
+    .filter(cmd => cmd.eventId === eventId && cmd.status === 'Diffusé')
     .map(cmd => ({
       date: cmd.updatedAt || cmd.createdAt || new Date().toISOString(),
       author: 'SIRACEDPC',
-      title: `${cmd.typeLabel || 'Message de commandement'}${cmd.number ? ' nÂ° ' + cmd.number : ''}`,
+      title: `${cmd.typeLabel || 'Message de commandement'}${cmd.number ? ' n° ' + cmd.number : ''}`,
       detail: `Message de commandement ${cmd.status.toLowerCase()}`
     }));
   return manual.concat(relatedPS, commandItems).sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')));
@@ -1467,16 +1474,16 @@ function renderEventTimeline(eventId) {
     return;
   }
   card.style.display = '';
-  header.innerHTML = `<h3>${esc(e.title)}</h3><div class="help">${esc(e.type || 'â€”')} Â· ${esc(e.location || 'â€”')} Â· ${esc(e.level || 'â€”')}</div>`;
+  header.innerHTML = `<h3>${esc(e.title)}</h3><div class="help">${esc(e.type || '—')} · ${esc(e.location || '—')} · ${esc(e.level || '—')}</div>`;
   const items = getEventTimelineItems(e.id);
-  tableWrap.innerHTML = items.length ? `<table class="table"><thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>EntrÃ©e</th></tr></thead><tbody>${items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrÃ©e de main courante.</p>';
+  tableWrap.innerHTML = items.length ? `<table class="table"><thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead><tbody>${items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrée de main courante.</p>';
 }
 
 function exportEventLogPDF() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
   if (!e) {
-    showToast('SÃ©lectionnez un Ã©vÃ©nement.', 'error');
+    showToast('Sélectionnez un événement.', 'error');
     return;
   }
   return openHtmlTemplatePdf(
@@ -1492,7 +1499,7 @@ function renderEvents() {
   const eventList = document.getElementById('eventList');
   if (!eventList) return;
 
-  const active = getActiveItems(state.events).filter(e => e.status !== 'ArchivÃ©');
+  const active = getActiveItems(state.events).filter(e => e.status !== 'Archivé');
   const q = (document.getElementById('eventSearch')?.value || '').toLowerCase().trim();
   const filteredActive = q
     ? active.filter(e => [e.title, e.type, e.location, e.level, e.synergi].join(' ').toLowerCase().includes(q))
@@ -1510,8 +1517,8 @@ function renderEvents() {
         ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
       </div>
       <div class="event-actions">
-        ${e.status === 'ArchivÃ©'
-          ? `<button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">RÃ©activer</button>
+        ${e.status === 'Archivé'
+          ? `<button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
              <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
           : `<button class="fr-btn small" onclick="openEvent('${e.id}')">${openLabel}</button>
              <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>
@@ -1522,7 +1529,7 @@ function renderEvents() {
     </div>`;
   };
 
-  eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun Ã©vÃ©nement actif. CrÃ©er un premier Ã©vÃ©nement.', 'Nouvel Ã©vÃ©nement', 'openEventForm()') || '<p class="help">Aucun Ã©vÃ©nement actif.</p>');
+  eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   updatePSEventSelect();
   populateCommuneDatalist();
   renderEventTimeline(state.currentEventId);
@@ -1532,7 +1539,7 @@ function renderEventArchives() {
   ensureEventArchivesPage();
   const archiveList = document.getElementById('eventArchivesList');
   if (!archiveList) return;
-  const archived = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'ArchivÃ©');
+  const archived = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'Archivé');
   const q = (document.getElementById('eventArchiveSearch')?.value || '').toLowerCase().trim();
   const filtered = q
     ? archived.filter(e => [e.title, e.type, e.location, e.level, e.synergi].join(' ').toLowerCase().includes(q))
@@ -1546,7 +1553,7 @@ function renderEventArchives() {
       ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
     </div>
     <div class="event-actions">
-      <button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">RÃ©activer</button>
+      <button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
       <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>
     </div>
   </div>`;
@@ -1556,13 +1563,13 @@ function renderEventArchives() {
 function updatePSEventSelect() {
   const psEvent = document.getElementById('psEvent');
   if (!psEvent) return;
-  const active = getActiveItems(state.events).filter(e => e.status !== 'ArchivÃ©');
+  const active = getActiveItems(state.events).filter(e => e.status !== 'Archivé');
   psEvent.innerHTML = active.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
   if (state.currentEventId && active.some(e => e.id === state.currentEventId)) psEvent.value = state.currentEventId;
 }
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 8. MODULE POINTS DE SITUATION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 let psMediaRecorder = null, psChunks = [];
 
@@ -1571,16 +1578,16 @@ function openPSForm(id) {
   const ps = id ? byId(state.ps, id) : null;
   const draft = !ps ? window.SICODPS?.loadDraft?.() : null;
   const targetEventId = ps?.eventId || state.currentEventId || document.getElementById('psEvent')?.value || '';
-  if (targetEventId && isEventArchived(targetEventId)) { showToast("Les points de situation d'un Ã©vÃ©nement archivÃ© ne sont pas modifiables.", 'error'); return; }
+  if (targetEventId && isEventArchived(targetEventId)) { showToast("Les points de situation d'un événement archivé ne sont pas modifiables.", 'error'); return; }
   document.getElementById('psId').value = ps?.id || '';
 
   const psEvent = document.getElementById('psEvent');
-  const firstActiveEvent = getActiveItems(state.events).find(e => e.status !== 'ArchivÃ©');
+  const firstActiveEvent = getActiveItems(state.events).find(e => e.status !== 'Archivé');
   if (psEvent) psEvent.value = ps?.eventId || draft?.eventId || state.currentEventId || firstActiveEvent?.id || '';
 
   document.getElementById('psAuthor').value = ps?.author || draft?.author || state.settings?.author || 'SIRACEDPC';
   document.getElementById('psStatus').value = normalizePublishStatus(ps?.status || draft?.status, 'Brouillon');
-  document.getElementById('psClassification').value = ps?.classification || draft?.classification || state.settings?.classification || 'Non protÃ©gÃ©';
+  document.getElementById('psClassification').value = ps?.classification || draft?.classification || state.settings?.classification || 'Non protégé';
   document.getElementById('psFormat').value = ps?.format || draft?.format || state.settings?.psFormat || 'detail';
   document.getElementById('psTitle').value = ps?.title || draft?.title || '';
   document.getElementById('psSituation').value = ps?.situation || draft?.situation || '';
@@ -1605,7 +1612,7 @@ function openPSForm(id) {
     audioPrev.src = ps?.audioData || '';
     audioPrev.style.display = ps?.audioData ? 'block' : 'none';
   }
-  if (audioMeta) audioMeta.textContent = ps?.audioData ? 'Source audio enregistrÃ©e ou importÃ©e' : 'Aucune source audio';
+  if (audioMeta) audioMeta.textContent = ps?.audioData ? 'Source audio enregistrée ou importée' : 'Aucune source audio';
 
   const recStatus = document.getElementById('psRecordStatus');
   const recBtn = document.getElementById('psRecordBtn');
@@ -1655,11 +1662,11 @@ function savePS() {
   const id = idEl?.value || uid('ps');
   const existing = byId(state.ps, id);
   const eventId = psEvent?.value || '';
-  if (eventId && isEventArchived(eventId)) { showToast('Impossible de modifier un point de situation rattachÃ© Ã  un Ã©vÃ©nement archivÃ©.', 'error'); return; }
+  if (eventId && isEventArchived(eventId)) { showToast('Impossible de modifier un point de situation rattaché à un événement archivé.', 'error'); return; }
   const siblings = state.ps.filter(p => p.eventId === eventId && p.id !== id);
 
   const audioEl = document.getElementById('psAudioPreview');
-  // Ne stocker les donnÃ©es audio que si c'est un data URI (pas une blob URL non persistante)
+  // Ne stocker les données audio que si c'est un data URI (pas une blob URL non persistante)
   const audioData = audioEl?.src && audioEl.src.startsWith('data:') ? audioEl.src : (existing?.audioData || '');
   const format = document.getElementById('psFormat').value;
   const template = window.SICODPdfTemplates?.getTemplate(state, 'point_situation', format === 'focus' ? 'focus' : 'detail');
@@ -1738,7 +1745,7 @@ function duplicatePS(id) {
   state.selectedPSId = copy.id;
   persist();
   renderAll();
-  showToast('Point de situation dupliquÃ©.');
+  showToast('Point de situation dupliqué.');
 }
 
 function filterPSByEvent(eventId) {
@@ -1755,7 +1762,7 @@ function renderPSList() {
   const psEventFilter = document.getElementById('psEventFilter');
   if (psEventFilter) {
     const events = getActiveItems(state.events);
-    psEventFilter.innerHTML = '<option value="">Tous les Ã©vÃ©nements</option>' +
+    psEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
       events.map(e => `<option value="${esc(e.id)}" ${state.currentEventId === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
   }
 
@@ -1772,7 +1779,7 @@ function renderPSList() {
     : list;
   const sorted = [...filtered].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   psList.innerHTML = sorted.length
-    ? `<table class="table"><thead><tr><th>Horodatage</th><th>NumÃ©ro</th><th>Ã‰vÃ¨nement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
+    ? `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
         sorted.map(ps => `<tr>
           <td>${esc(formatDateTimeValueFR(ps.updatedAt || ps.createdAt || ''))}</td>
           <td>PS ${esc(ps.number || '')}</td>
@@ -1784,7 +1791,7 @@ function renderPSList() {
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : (window.SICODUI?.setEmptyState?.('Aucun point de situation. CrÃ©er un premier point de situation.', 'Ajouter un point de situation', 'openPSForm()') || '<p class="help">Aucun point de situation.</p>');
+    : (window.SICODUI?.setEmptyState?.('Aucun point de situation. Créer un premier point de situation.', 'Ajouter un point de situation', 'openPSForm()') || '<p class="help">Aucun point de situation.</p>');
   renderPSPreview();
 }
 
@@ -1793,7 +1800,7 @@ function renderPSPreview() {
   if (!psPreview) return;
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
-    psPreview.innerHTML = '<p class="help">SÃ©lectionnez un point de situation.</p>';
+    psPreview.innerHTML = '<p class="help">Sélectionnez un point de situation.</p>';
   } else {
     mountStoredHtmlTemplatePreview(
       psPreview,
@@ -1866,7 +1873,7 @@ async function togglePSRecording() {
     const recStatus = document.getElementById('psRecordStatus');
     const recBtn = document.getElementById('psRecordBtn');
     const stopBtn = document.getElementById('psStopBtn');
-    if (recStatus) recStatus.textContent = 'Enregistrement terminÃ©';
+    if (recStatus) recStatus.textContent = 'Enregistrement terminé';
     if (recBtn) recBtn.textContent = 'Enregistrer en direct';
     if (stopBtn) stopBtn.style.display = 'none';
   };
@@ -1874,7 +1881,7 @@ async function togglePSRecording() {
   const recStatus = document.getElementById('psRecordStatus');
   const recBtn = document.getElementById('psRecordBtn');
   const stopBtn = document.getElementById('psStopBtn');
-  if (recStatus) recStatus.textContent = 'Enregistrement en coursâ€¦';
+  if (recStatus) recStatus.textContent = 'Enregistrement en cours…';
   if (recBtn) recBtn.textContent = 'Enregistrement en cours';
   if (stopBtn) stopBtn.style.display = 'inline-flex';
 }
@@ -1912,7 +1919,7 @@ function exportPSFocusPDF(ps) {
   const measures = ps.measures ?? ps.mesures ?? '';
   const attention = ps.attention ?? ps.points ?? '';
   const signature = shouldApplyPdfSignature('ps') ? getPSSignatureConfig() : { mode: 'prefet', name: '', role: '' };
-  const title = `POINT DE SITUATION NÂ° ${ps.number}`;
+  const title = `POINT DE SITUATION N° ${ps.number}`;
   const contentTop = 46;
   const contentBottomReserve = signature.name ? 22 : 8;
   const gridTop = contentTop;
@@ -1930,7 +1937,7 @@ function exportPSFocusPDF(ps) {
   const box3TopH = gridH * (1 / 2.25);
   const box3BottomH = gridH - box3TopH;
 
-  const wrap = (txt, w) => doc.splitTextToSize(String(txt || 'â€”'), w);
+  const wrap = (txt, w) => doc.splitTextToSize(String(txt || '—'), w);
 
   const drawImageContain = (src, x, yPos, w, h, emptyLabel='') => {
     doc.setDrawColor(...border);
@@ -1986,7 +1993,7 @@ function exportPSFocusPDF(ps) {
     values.forEach((v, i) => {
       doc.setDrawColor(...border); doc.rect(x, y + 7, widths[i], 8);
       doc.setTextColor(...textColor); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
-      doc.text(String(v || 'â€”'), x + widths[i] / 2, y + 12.2, { align: 'center', maxWidth: widths[i] - 2 });
+      doc.text(String(v || '—'), x + widths[i] / 2, y + 12.2, { align: 'center', maxWidth: widths[i] - 2 });
       x += widths[i];
     });
   };
@@ -2068,8 +2075,8 @@ function exportPSFocusPDF(ps) {
   const drawSignature = () => {
     if (!signature.name && !signature.role) return;
     const lines = signature.mode === 'delegation'
-      ? ['Pour le prÃ©fet, par dÃ©lÃ©gation', signature.role || '', signature.name || ''].filter(Boolean)
-      : ['Le prÃ©fet', signature.name || ''].filter(Boolean);
+      ? ['Pour le préfet, par délégation', signature.role || '', signature.name || ''].filter(Boolean)
+      : ['Le préfet', signature.name || ''].filter(Boolean);
     const x = pageW - m - 68;
     const y = pageH - m - (lines.length * 4.5 + 2);
     doc.setTextColor(...textColor);
@@ -2092,7 +2099,7 @@ function exportPSFocusPDF(ps) {
   drawHeader();
   drawBilanBox(m, gridTop, col1W, box1TopH);
   drawTextBox(m, gridTop + box1TopH, col1W, box1BottomH, 'Moyens', means);
-  drawTextBox(m + col1W, gridTop, col2W, centerTopH, 'Situation gÃ©nÃ©rale', ps.situation || '');
+  drawTextBox(m + col1W, gridTop, col2W, centerTopH, 'Situation générale', ps.situation || '');
   drawTextBox(m + col1W, gridTop + centerTopH, col2W, centerMidH, 'Cartographie', ps.image || '', { image: true });
   drawTextBox(m + col1W, gridTop + centerTopH + centerMidH, col2W, centerBottomH, 'Mesures prises', measures);
   drawTextBox(m + col1W + col2W, gridTop, col3W, box3TopH, "Points d'attention", attention);
@@ -2108,7 +2115,7 @@ function openPrintWindow() { exportPSPDF(); }
 function exportPSPDF() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
-    showToast('SÃ©lectionnez un point de situation.', 'error');
+    showToast('Sélectionnez un point de situation.', 'error');
     return;
   }
   const templateKey = ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail';
@@ -2121,9 +2128,9 @@ function exportPSPDF() {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 9. MODULE MESSAGES DE COMMANDEMENT
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function getCommandTypesList() {
   const lines = getDynamicList('commandTypes');
@@ -2164,12 +2171,12 @@ function initCommandForm() {
 
 
 function getOpenEvents(){
-  return getActiveItems(state.events).filter(e => e.status !== 'ArchivÃ©');
+  return getActiveItems(state.events).filter(e => e.status !== 'Archivé');
 }
 function populateCommandEventSelect(selectedEventId){
   const el = document.getElementById('cmdEvent');
   if(!el) return;
-  const options = [['', 'SÃ©lectionner un Ã©vÃ©nement']].concat(
+  const options = [['', 'Sélectionner un événement']].concat(
     getOpenEvents().map(e => [e.id, e.title])
   );
   el.innerHTML = options.map(([value,label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
@@ -2184,9 +2191,9 @@ function syncCommandEventContext(){
   }
 }
 function injectCommandIntoEventLog(cmd){
-  if(!cmd || !cmd.eventId || cmd.status !== 'DiffusÃ©') return;
+  if(!cmd || !cmd.eventId || cmd.status !== 'Diffusé') return;
   const e = byId(state.events, cmd.eventId);
-  if(!e || e.status === 'ArchivÃ©') return;
+  if(!e || e.status === 'Archivé') return;
   e.logEntries = Array.isArray(e.logEntries) ? e.logEntries : [];
   const existing = e.logEntries.find(item => item.commandMessageId === cmd.id);
   const payload = {
@@ -2194,7 +2201,7 @@ function injectCommandIntoEventLog(cmd){
     commandMessageId: cmd.id,
     createdAt: cmd.updatedAt || cmd.createdAt || new Date().toISOString(),
     author: 'SIRACEDPC',
-    title: `${cmd.typeLabel || 'Message de commandement'}${cmd.number ? ' nÂ° ' + cmd.number : ''}`,
+    title: `${cmd.typeLabel || 'Message de commandement'}${cmd.number ? ' n° ' + cmd.number : ''}`,
     detail: `Message de commandement ${cmd.status.toLowerCase()}`
   };
   if(existing) Object.assign(existing, payload);
@@ -2310,7 +2317,7 @@ function saveCommandMessage() {
 }
 
 async function deleteSelectedCommand() {
-  if (!state.selectedCommandId) { showToast('SÃ©lectionnez un message de commandement', 'error'); return; }
+  if (!state.selectedCommandId) { showToast('Sélectionnez un message de commandement', 'error'); return; }
   const record = byId(state.commandMessages, state.selectedCommandId);
   if (!record) return;
   if (!await confirmAsync('Supprimer ce message de commandement ?')) return;
@@ -2356,7 +2363,7 @@ function renderCommandList() {
   if (cmdEventFilter) {
     const events = getActiveItems(state.events);
     const cur = state.selectedCommandEventFilter || '';
-    cmdEventFilter.innerHTML = '<option value="">Tous les Ã©vÃ©nements</option>' +
+    cmdEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
       events.map(e => `<option value="${esc(e.id)}" ${cur === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
   }
 
@@ -2371,14 +2378,14 @@ function renderCommandList() {
   if (q) items = items.filter(i => [i.number, i.typeLabel, i.status, i.event, getEventTitle(i.eventId)].join(' ').toLowerCase().includes(q));
 
   if (!items.length) {
-    el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. CrÃ©er un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistrÃ©.</p>';
+    el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. Créer un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistré.</p>';
     return;
   }
-  el.innerHTML = `<table class="table"><thead><tr><th>Horodatage</th><th>NumÃ©ro</th><th>Ã‰vÃ¨nement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
+  el.innerHTML = `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
     items.map(item => `<tr class="${item.id === state.selectedCommandId ? 'is-selected' : ''}">
       <td>${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</td>
       <td><div class="event-title-block"><span class="event-label">Message ${esc(item.number || '')}</span><span class="table-meta">${esc(item.typeLabel || '')}</span></div></td>
-      <td>${esc(item.event || getEventTitle(item.eventId) || 'Ã‰vÃ¨nement supprimÃ©')}</td>
+      <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
       <td>${badge(item.status)}</td>
       <td><div class="list-actions">
         <button class="fr-btn secondary small" type="button" onclick="toggleCommandPreview('${item.id}')">${item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir'}</button>
@@ -2403,7 +2410,7 @@ function duplicateCommand(id) {
   persist();
   renderCommandList();
   renderCommandPreview(copy);
-  showToast('Message de commandement dupliquÃ©.');
+  showToast('Message de commandement dupliqué.');
 }
 
 function addServiceRow(data) {
@@ -2422,7 +2429,7 @@ function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
   svcRows.innerHTML = state.services.map((svc, i) => `<div class="svc-row">
-    <input value="${esc(svc.name)}" placeholder="Service / entitÃ©" oninput="state.services[${i}].name=this.value;renderCommandPreview(getCommandData())">
+    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value;renderCommandPreview(getCommandData())">
     <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked;renderCommandPreview(getCommandData())"> COD</label>
     <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked;renderCommandPreview(getCommandData())"> PCO</label>
     <button class="fr-btn danger small" type="button" onclick="removeServiceRow(${i})">Retirer</button>
@@ -2466,7 +2473,7 @@ function renderCommandPreview(data) {
   if (!commandPreview) return;
   const d = data || (state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   if (!d) {
-    commandPreview.innerHTML = '<p class="help">SÃ©lectionnez un message de commandement.</p>';
+    commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
     return;
   }
   mountStoredHtmlTemplatePreview(commandPreview, 'command_message', buildCommandHtmlTokens(d), {
@@ -2479,7 +2486,7 @@ function renderCommandPreview(data) {
 function exportCommandPDF() {
   const d = state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null;
   if (!d) {
-    showToast('SÃ©lectionnez un message de commandement.', 'error');
+    showToast('Sélectionnez un message de commandement.', 'error');
     return;
   }
   return openHtmlTemplatePdf(
@@ -2490,9 +2497,9 @@ function exportCommandPDF() {
   );
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 10. MODULE FICHES RÃ‰FLEXES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 10. MODULE FICHES RÉFLEXES
+// ────────────────────────────────────────────────────────────────────────────
 
 function getReflexFiches() {
   if (!Array.isArray(state.reflexFiches) || !state.reflexFiches.length) {
@@ -2527,7 +2534,7 @@ function parseFicheSections(raw) {
       current = { heading: 'Contenu', items: [] };
       sections.push(current);
     }
-    current.items.push(trimmed.replace(/^[-â€¢]\s*/, ''));
+    current.items.push(trimmed.replace(/^[-•]\s*/, ''));
   });
   return sections.filter(sec => sec.heading && sec.items.length);
 }
@@ -2576,7 +2583,7 @@ function saveFiche() {
   if (!code || !title) { showToast('Renseignez au minimum le code et le titre.', 'error'); return; }
   if (!sections.length) { showToast('Ajoutez au moins une section avec du contenu.', 'error'); return; }
   const duplicate = fiches.find(f => f.code === code && f.code !== originalCode);
-  if (duplicate) { showToast('Une fiche avec ce code existe dÃ©jÃ .', 'error'); return; }
+  if (duplicate) { showToast('Une fiche avec ce code existe déjà.', 'error'); return; }
   const payload = { code, title, family: familySnapshot.label, familyId: familySnapshot.id, familyLabelSnapshot: familySnapshot.label, sections };
   const index = fiches.findIndex(f => f.code === originalCode);
   if (index >= 0) fiches[index] = payload;
@@ -2595,7 +2602,7 @@ async function deleteSelectedFiche() {
   const fiches = getReflexFiches();
   const fiche = fiches.find(f => f.code === state.selectedFiche);
   if (!fiche) return;
-  if (!await confirmAsync(`Supprimer la fiche ${fiche.code} Â· ${fiche.title} ?`)) return;
+  if (!await confirmAsync(`Supprimer la fiche ${fiche.code} · ${fiche.title} ?`)) return;
   fiche.deletedAt = new Date().toISOString();
   fiche.updatedAt = new Date().toISOString();
   state.selectedFiche = (getReflexFiches()[0] || {}).code || 'glossary';
@@ -2619,9 +2626,9 @@ function renderFiches() {
 
   ficheNav.innerHTML = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([family, items]) =>
     `<div class="group"><h3>${esc(family)}</h3>${
-      items.sort((a, b) => `${a.code} ${a.title}`.localeCompare(`${b.code} ${b.title}`, 'fr')).map(f => `<button class="fiche-link ${state.selectedFiche === f.code ? 'active' : ''}" onclick="selectFiche('${esc(f.code)}')">${esc(f.code)} Â· ${esc(f.title)}</button>`).join('')
+      items.sort((a, b) => `${a.code} ${a.title}`.localeCompare(`${b.code} ${b.title}`, 'fr')).map(f => `<button class="fiche-link ${state.selectedFiche === f.code ? 'active' : ''}" onclick="selectFiche('${esc(f.code)}')">${esc(f.code)} · ${esc(f.title)}</button>`).join('')
     }</div>`
-  ).join('') + (!q ? `<div class="group"><h3>ComplÃ©ments</h3><button class="fiche-link ${state.selectedFiche === 'glossary' ? 'active' : ''}" onclick="selectFiche('glossary')">Glossaire</button></div>` : '');
+  ).join('') + (!q ? `<div class="group"><h3>Compléments</h3><button class="fiche-link ${state.selectedFiche === 'glossary' ? 'active' : ''}" onclick="selectFiche('glossary')">Glossaire</button></div>` : '');
 
   if (state.selectedFiche === 'glossary') {
     ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter une fiche</button></div><h2>Glossaire</h2><div class="fiche-section"><ul>${glossary.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`;
@@ -2634,7 +2641,7 @@ function renderFiches() {
     return;
   }
   state.selectedFiche = fiche.code;
-  ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn secondary small" type="button" onclick="openFicheForm('${esc(fiche.code)}')">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedFiche()">Supprimer</button></div><h2>${esc(fiche.code)} Â· ${esc(fiche.title)}</h2><div class="fiche-meta"><span><strong>Famille :</strong> ${esc(fiche.family)}</span></div>${
+  ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn secondary small" type="button" onclick="openFicheForm('${esc(fiche.code)}')">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedFiche()">Supprimer</button></div><h2>${esc(fiche.code)} · ${esc(fiche.title)}</h2><div class="fiche-meta"><span><strong>Famille :</strong> ${esc(fiche.family)}</span></div>${
     fiche.sections.map(sec => `<section class="fiche-section"><h3>${esc(sec.heading)}</h3><ul>${(sec.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul></section>`).join('')
   }`;
 }
@@ -2647,7 +2654,7 @@ function selectFiche(code) {
 
 function exportAllFichesPDF() {
   const fiches = getReflexFiches();
-  if (!fiches.length || !window.jspdf) { showToast('Aucune fiche Ã  exporter.', 'error'); return; }
+  if (!fiches.length || !window.jspdf) { showToast('Aucune fiche à exporter.', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -2663,9 +2670,9 @@ function exportAllFichesPDF() {
     doc.setTextColor(...textColor);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('Fiche rÃ©flexe', margin + 24, y + 7);
+    doc.text('Fiche réflexe', margin + 24, y + 7);
     doc.setFontSize(14);
-    doc.text(`${fiche.code} Â· ${fiche.title}`, margin, y + 28);
+    doc.text(`${fiche.code} · ${fiche.title}`, margin, y + 28);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(...textColor);
@@ -2696,7 +2703,7 @@ function exportAllFichesPDF() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(10);
       (sec.items || []).forEach(item => {
-        const lines = doc.splitTextToSize(`â€¢ ${String(item || '')}`, pageW - margin * 2 - 4);
+        const lines = doc.splitTextToSize(`• ${String(item || '')}`, pageW - margin * 2 - 4);
         const needed = lines.length * 5 + 1;
         y = ensureSpace(needed, y, fiche);
         doc.text(lines, margin + 2, y);
@@ -2709,9 +2716,9 @@ function exportAllFichesPDF() {
   doc.save('fiches-reflexes.pdf');
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 11. MODULE ANNUAIRE
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function triggerContactImport() {
   const el = document.getElementById('contactImportFile');
@@ -2790,7 +2797,7 @@ function renderDirectory() {
     if (!items.length) return '';
     return `<div class="card directory-group">
       <div class="card-header"><h2 class="card-title">${esc(group)}</h2></div>
-      <div class="card-body"><table class="table"><thead><tr><th>EntitÃ©</th><th>Fonction</th><th>Nom</th><th>TÃ©lÃ©phone 1</th><th>TÃ©lÃ©phone 2</th><th>e-mail 1</th><th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
+      <div class="card-body"><table class="table"><thead><tr><th>Entité</th><th>Fonction</th><th>Nom</th><th>Téléphone 1</th><th>Téléphone 2</th><th>e-mail 1</th><th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
         items.map(c => `<tr>
           <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td><td>${esc(c.phone1||'')}</td><td>${esc(c.phone2||'')}</td>
           <td>${esc(c.email1||'')}</td><td>${esc(c.email2||'')}</td>
@@ -2801,11 +2808,11 @@ function renderDirectory() {
         </tr>`).join('')
       }</tbody></table></div>
     </div>`;
-  }).join('') || '<p class="help">Aucun contact enregistrÃ©.</p>';
+  }).join('') || '<p class="help">Aucun contact enregistré.</p>';
 }
 
 function exportContactsCSV() {
-  const rows = [['Groupe','EntitÃ©','Fonction','Nom','TÃ©lÃ©phone 1','TÃ©lÃ©phone 2','e-mail 1','e-mail 2'],
+  const rows = [['Groupe','Entité','Fonction','Nom','Téléphone 1','Téléphone 2','e-mail 1','e-mail 2'],
     ...getActiveItems(state.contacts).map(c => [c.group,c.entity||'',c.function||'',c.name,c.phone1||'',c.phone2||'',c.email1||'',c.email2||''])];
   downloadCSV('annuaire.csv', rows);
 }
@@ -2834,10 +2841,10 @@ function importContactsCSV(file) {
       });
       imported += 1;
     });
-    if (!imported) { showToast("Aucun contact exploitable n'a Ã©tÃ© trouvÃ© dans ce fichier CSV.", 'error'); return; }
+    if (!imported) { showToast("Aucun contact exploitable n'a été trouvé dans ce fichier CSV.", 'error'); return; }
     persist();
     renderDirectory();
-    showToast(`Import CSV terminÃ© : ${imported} contact(s) ajoutÃ©(s).`);
+    showToast(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
   });
 }
 
@@ -2861,7 +2868,7 @@ function exportContactsPDF() {
     doc.text('ANNUAIRE ORSEC DEPARTEMENTAL', pageW / 2, 16, { align: 'center' });
     if (isFirstPage) {
       doc.setFontSize(12);
-      doc.text('Bouches-du-RhÃ´ne', pageW / 2, 23, { align: 'center' });
+      doc.text('Bouches-du-Rhône', pageW / 2, 23, { align: 'center' });
     }
     doc.setTextColor(...textColor);
     y = isFirstPage ? 34 : 28;
@@ -2876,7 +2883,7 @@ function exportContactsPDF() {
 
   const drawTableHeader = () => {
     const cols = [44, 34, 44, 34, 34, 76];
-    const headers = ['Fonction', 'Nom', 'EntitÃ©', 'TÃ©lÃ©phone 1', 'TÃ©lÃ©phone 2', 'E-mail'];
+    const headers = ['Fonction', 'Nom', 'Entité', 'Téléphone 1', 'Téléphone 2', 'E-mail'];
     let x = margin;
     const totalW = cols.reduce((sum, value) => sum + value, 0);
     doc.setFillColor(...headerFill);
@@ -2913,9 +2920,9 @@ function exportContactsPDF() {
     doc.text(group.toUpperCase(), margin, y);
     y += 6;
 
-    const entities = [...new Set(groupItems.map(c => (c.entity || '').trim() || 'Sans entitÃ©'))];
+    const entities = [...new Set(groupItems.map(c => (c.entity || '').trim() || 'Sans entité'))];
     entities.forEach(entity => {
-      const entityItems = groupItems.filter(c => (((c.entity || '').trim() || 'Sans entitÃ©') === entity));
+      const entityItems = groupItems.filter(c => (((c.entity || '').trim() || 'Sans entité') === entity));
       if (!entityItems.length) return;
 
       ensureSpace(14);
@@ -2957,14 +2964,14 @@ function exportContactsPDF() {
   if (!contacts.length) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Aucun contact enregistrÃ©.', margin, y);
+    doc.text('Aucun contact enregistré.', margin, y);
   }
 
   doc.save('annuaire.pdf');
 }
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 12. MODULE OUTILS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function handleToolLogoFile(file) {
   if (!file) return;
@@ -3045,10 +3052,10 @@ function showToolInfo(id) {
   const deleteBtn = document.getElementById('toolInfoDeleteBtn');
   const accessBtn = document.getElementById('toolInfoAccessBtn');
   if (content) content.innerHTML = `\n    <div><strong>Nom</strong><br>${esc(t.name)}</div>
-    <div><strong>Description</strong><br>${esc(t.description || 'â€”')}</div>
-    <div><strong>Identifiant</strong><br>${esc(t.username || 'â€”')}</div>
-    <div><strong>Mot de passe</strong><br>${esc(t.password || 'â€”')}</div>
-    <div><strong>URL</strong><br>${esc(t.url || 'â€”')}</div>`;
+    <div><strong>Description</strong><br>${esc(t.description || '—')}</div>
+    <div><strong>Identifiant</strong><br>${esc(t.username || '—')}</div>
+    <div><strong>Mot de passe</strong><br>${esc(t.password || '—')}</div>
+    <div><strong>URL</strong><br>${esc(t.url || '—')}</div>`;
   if (editBtn) editBtn.onclick = () => { document.getElementById('toolInfoDialog').close(); openToolForm(id); };
   if (deleteBtn) deleteBtn.onclick = () => deleteTool(id);
   if (accessBtn) accessBtn.onclick = () => openToolAccess(id);
@@ -3074,15 +3081,15 @@ function renderTools() {
         <div class="tool-desc">${esc(t.description || '')}</div>
         <div class="tool-actions">
           <button class="fr-btn secondary small" type="button" onclick="showToolInfo('${t.id}')">Informations</button>
-          <button class="fr-btn small" type="button" onclick="openToolAccess('${t.id}')">AccÃ©der</button>
+          <button class="fr-btn small" type="button" onclick="openToolAccess('${t.id}')">Accéder</button>
         </div>
       </div>`).join('')
-    : '<p class="help">Aucun outil enregistrÃ©.</p>';
+    : '<p class="help">Aucun outil enregistré.</p>';
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 13. MODULE PLANIFICATION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function openPlanForm(id) {
   const p = id ? byId(state.planItems, id) : null;
@@ -3150,18 +3157,18 @@ function renderPlanning() {
     ? allItems.filter(p => [p.type, p.risk, p.item, p.priority, p.status, p.observation].join(' ').toLowerCase().includes(q))
     : allItems;
   planningList.innerHTML = items.length
-    ? `<table class="table"><thead><tr><th>Type</th><th>Risque</th><th>Item</th><th>PrioritÃ©</th><th>Statut</th><th>Date d'approbation</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
+    ? `<table class="table"><thead><tr><th>Type</th><th>Risque</th><th>Item</th><th>Priorité</th><th>Statut</th><th>Date d'approbation</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
         items.map(p => `<tr>
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
           <td>${esc(p.item || '')}</td>
           <td>${esc(p.priority || '')}</td>
-          <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">ExpirÃ©</span>' : ''}</td>
+          <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
           <td>${esc(p.approvalDate || '')}</td>
           <td>${esc(p.observation || '')}</td>
           <td><div class="list-actions plan-actions-single">
             <button class="fr-btn secondary small" type="button" onclick="openPlanForm('${p.id}')">Modifier</button>
-            ${p.url ? `<a class="fr-btn small" href="${esc(p.url)}" target="_blank" rel="noopener">AccÃ©der</a>` : ''}
+            ${p.url ? `<a class="fr-btn small" href="${esc(p.url)}" target="_blank" rel="noopener">Accéder</a>` : ''}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -3178,7 +3185,7 @@ function renderPlanning() {
 }
 
 function exportPlanningCSV() {
-  const rows = [['Type de plan','Risque','Item','PrioritÃ©','Statut',"Date d'approbation",'Observation'],
+  const rows = [['Type de plan','Risque','Item','Priorité','Statut',"Date d'approbation",'Observation'],
     ...getActiveItems(state.planItems).map(p => [p.type||'',p.risk||'',p.item||'',p.priority||'',p.status||'',p.approvalDate||'',p.observation||''])];
   downloadCSV('planification.csv', rows);
 }
@@ -3196,7 +3203,7 @@ function exportPlanningPDF() {
   addLogoPreserved(doc, marginX, y, 30, 16);
   doc.setFont('helvetica', 'bold'); doc.setTextColor(...text); doc.setFontSize(16);
   doc.text(title, pageW / 2, y + 9, { align: 'center' }); y += 20;
-  const headers = ['Type','Risque','Item','PrioritÃ©','Statut','Approbation','Observation'];
+  const headers = ['Type','Risque','Item','Priorité','Statut','Approbation','Observation'];
   const widths = [28,40,60,24,28,26,pageW - (marginX * 2) - 28 - 40 - 60 - 24 - 28 - 26];
   const drawHeader = () => {
     let x = marginX;
@@ -3221,9 +3228,9 @@ function exportPlanningPDF() {
   doc.save('planification.pdf');
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 14. MODULE STATISTIQUES DE PLANIFICATION
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function chartColor(i) {
   const palette = ['#000091','#6a6af4','#b34000','#18753c','#c9191e','#7a5c00','#5b3a99','#0063cb'];
@@ -3232,7 +3239,7 @@ function chartColor(i) {
 
 function buildBarChart(title, rows) {
   const clean = rows.filter(r => r && r.label);
-  if (!clean.length) return `<div class="stats-card"><h3>${esc(title)}</h3><p class="chart-empty">Aucune donnÃ©e.</p></div>`;
+  if (!clean.length) return `<div class="stats-card"><h3>${esc(title)}</h3><p class="chart-empty">Aucune donnée.</p></div>`;
   const max = Math.max(...clean.map(r => r.value), 1);
   const barH = 24, gap = 10, labelW = 160, width = 640, chartW = width - labelW - 40;
   const height = clean.length * (barH + gap) + 10;
@@ -3246,7 +3253,7 @@ function buildBarChart(title, rows) {
 
 function buildDonutChart(title, rows) {
   const clean = rows.filter(r => r.value > 0);
-  if (!clean.length) return `<div class="stats-card"><h3>${esc(title)}</h3><p class="chart-empty">Aucune donnÃ©e.</p></div>`;
+  if (!clean.length) return `<div class="stats-card"><h3>${esc(title)}</h3><p class="chart-empty">Aucune donnée.</p></div>`;
   const total = clean.reduce((a, b) => a + b.value, 0);
   let acc = 0;
   const segs = clean.map((r, i) => { const start = acc / total * 360; acc += r.value; return { r, i, start, end: acc / total * 360 }; });
@@ -3260,7 +3267,7 @@ function buildDonutChart(title, rows) {
 function getPlanningStatsData() {
   const items = getActiveItems(state.planItems);
   const countBy = (key, values) => values.map(v => ({ label: v, value: items.filter(i => (i[key]||'') === v).length }));
-  const risks = {}; items.forEach(i => { const k = (i.risk || 'Non renseignÃ©').trim(); risks[k] = (risks[k] || 0) + 1; });
+  const risks = {}; items.forEach(i => { const k = (i.risk || 'Non renseigné').trim(); risks[k] = (risks[k] || 0) + 1; });
   const riskRows = Object.entries(risks).sort((a,b) => b[1]-a[1]).slice(0,8).map(([label,value]) => ({label,value}));
   const years = {}; items.forEach(i => { const y = (i.approvalDate||'').slice(0,4) || 'Sans date'; years[y] = (years[y] || 0) + 1; });
   const yearRows = Object.entries(years).sort((a,b) => String(a[0]).localeCompare(String(b[0]))).map(([label,value]) => ({label,value}));
@@ -3278,17 +3285,17 @@ function renderPlanningStats() {
   const s = getPlanningStatsData();
   body.innerHTML = `<div class="stats-grid">
     ${buildBarChart('Plans par type', s.types)}
-    ${buildDonutChart('RÃ©partition par statut', s.statuses)}
-    ${buildBarChart('PrioritÃ©s', s.priorities)}
-    ${buildBarChart('Typologies de risque les plus frÃ©quentes', s.risks)}
-    ${buildBarChart("Dates d'approbation par annÃ©e", s.years)}
+    ${buildDonutChart('Répartition par statut', s.statuses)}
+    ${buildBarChart('Priorités', s.priorities)}
+    ${buildBarChart('Typologies de risque les plus fréquentes', s.risks)}
+    ${buildBarChart("Dates d'approbation par année", s.years)}
   </div>`;
 }
 
 function exportPlanningStatsCSV() {
   const s = getPlanningStatsData();
-  const rows = [['Section','LibellÃ©','Valeur']];
-  [['Types',s.types],['Statuts',s.statuses],['PrioritÃ©s',s.priorities],['Risques',s.risks],['AnnÃ©es',s.years]].forEach(([section,data]) => data.forEach(r => rows.push([section,r.label,r.value])));
+  const rows = [['Section','Libellé','Valeur']];
+  [['Types',s.types],['Statuts',s.statuses],['Priorités',s.priorities],['Risques',s.risks],['Années',s.years]].forEach(([section,data]) => data.forEach(r => rows.push([section,r.label,r.value])));
   downloadCSV('planification-statistiques.csv', rows);
 }
 
@@ -3298,7 +3305,7 @@ function exportPlanningStatsPDF() {
   const s = getPlanningStatsData();
   addPdfHeader(doc, 'STATISTIQUES DE PLANIFICATION');
   let y = 34;
-  [['Plans par type',s.types],['RÃ©partition par statut',s.statuses],['PrioritÃ©s',s.priorities],['Typologies de risque',s.risks],["Dates d'approbation par annÃ©e",s.years]].forEach(([title,data]) => { y = addPdfStatTable(doc, y, title, data); });
+  [['Plans par type',s.types],['Répartition par statut',s.statuses],['Priorités',s.priorities],['Typologies de risque',s.risks],["Dates d'approbation par année",s.years]].forEach(([title,data]) => { y = addPdfStatTable(doc, y, title, data); });
   doc.save('planification-statistiques.pdf');
 }
 
@@ -3316,8 +3323,8 @@ function addPdfStatTable(doc, y, title, data) {
   doc.setFont('helvetica', 'bold'); doc.setTextColor(...blue); doc.setFontSize(12);
   doc.text(title, 12, y); y += 4; doc.setFont('helvetica', 'normal'); doc.setTextColor(22,22,22);
   doc.setFillColor(...palette.accent); doc.rect(12, y, 136, 7, 'F'); doc.rect(148, y, 50, 7, 'F'); doc.setDrawColor(180); doc.rect(12, y, 136, 7); doc.rect(148, y, 50, 7);
-  doc.setTextColor(22,22,22); doc.text('LibellÃ©', 16, y + 4.5); doc.text('Valeur', 173, y + 4.5, { align: 'center' }); y += 7;
-  (data.length ? data : [{ label: 'Aucune donnÃ©e', value: 0 }]).forEach(r => {
+  doc.setTextColor(22,22,22); doc.text('Libellé', 16, y + 4.5); doc.text('Valeur', 173, y + 4.5, { align: 'center' }); y += 7;
+  (data.length ? data : [{ label: 'Aucune donnée', value: 0 }]).forEach(r => {
     if (y > pageH - 12) { doc.addPage(); y = 15; }
     doc.setTextColor(22,22,22); doc.setDrawColor(180);
     doc.rect(12, y, 136, 7); doc.rect(148, y, 50, 7);
@@ -3352,9 +3359,9 @@ function showPlanningSection(which) {
   if (which === 'stats') renderPlanningStats();
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 15. MODULE ASTREINTES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function syncDutyPeriodFromMonth() {
   const dutyMonth = document.getElementById('dutyMonth');
@@ -3397,8 +3404,8 @@ function saveDutyAvailability() {
     end: document.getElementById('dutyEnd').value,
     note: document.getElementById('dutyNote').value.trim()
   };
-  if (!data.agent || !data.role) { showToast("SÃ©lectionnez un agent et un rÃ´le d'astreinte.", 'error'); return; }
-  if (!data.start || !data.end || data.end < data.start) { showToast("DÃ©finissez une pÃ©riode de disponibilitÃ© valide.", 'error'); return; }
+  if (!data.agent || !data.role) { showToast("Sélectionnez un agent et un rôle d'astreinte.", 'error'); return; }
+  if (!data.start || !data.end || data.end < data.start) { showToast("Définissez une période de disponibilité valide.", 'error'); return; }
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
@@ -3419,17 +3426,17 @@ function renderDutyAvailabilityList() {
   if (!el) return;
   const items = getActiveItems(state.dutyAvailabilities);
   el.innerHTML = items.length
-    ? `<table class="table"><thead><tr><th>Agent</th><th>RÃ´le</th><th>PÃ©riode</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
+    ? `<table class="table"><thead><tr><th>Agent</th><th>Rôle</th><th>Période</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
         items.map(a => `<tr>
           <td>${esc(a.agent)}</td><td>${esc(a.role)}</td>
-          <td>${esc(a.start)} â†’ ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
+          <td>${esc(a.start)} → ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
           <td><div class="list-actions">
             <button class="fr-btn secondary small" type="button" onclick="openDutyAvailabilityForm('${a.id}')">Modifier</button>
             <button class="fr-btn danger small" type="button" onclick="deleteDutyAvailability('${a.id}')">Supprimer</button>
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : (window.SICODUI?.setEmptyState?.('Aucune disponibilitÃ© saisie. Ajouter une disponibilitÃ©.', 'Ajouter une disponibilitÃ©', 'openDutyAvailabilityForm()') || '<p class="help">Aucune disponibilitÃ© saisie.</p>');
+    : (window.SICODUI?.setEmptyState?.('Aucune disponibilité saisie. Ajouter une disponibilité.', 'Ajouter une disponibilité', 'openDutyAvailabilityForm()') || '<p class="help">Aucune disponibilité saisie.</p>');
 }
 
 function renderDutyCalendar() {
@@ -3462,7 +3469,7 @@ function renderDutyCalendar() {
       const ds = parseDateLocal(a.start), de = parseDateLocal(a.end), cur = parseDateLocal(iso);
       return ds && de && cur && cur >= ds && cur <= de && (!filterRole || a.role === filterRole) && (!filterAgent || a.agent === filterAgent);
     });
-    html += `<div class="calendar-cell" style="opacity:${inMonth ? 1 : .5}"><div class="calendar-daynum">${day.getDate()}</div><div class="calendar-tags">${tags.map(t => `<span class="calendar-tag">${esc(t.agent)} Â· ${esc(t.role)}</span>`).join('')}</div></div>`;
+    html += `<div class="calendar-cell" style="opacity:${inMonth ? 1 : .5}"><div class="calendar-daynum">${day.getDate()}</div><div class="calendar-tags">${tags.map(t => `<span class="calendar-tag">${esc(t.agent)} · ${esc(t.role)}</span>`).join('')}</div></div>`;
   }
   html += '</div>';
   dutyCalendar.innerHTML = html;
@@ -3472,7 +3479,7 @@ function generateDutySchedule() {
   const startVal = document.getElementById('dutyPeriodStart')?.value || todayISO();
   const endVal = document.getElementById('dutyPeriodEnd')?.value || startVal;
   const startInput = parseDateLocal(startVal), endInput = parseDateLocal(endVal);
-  if (!startInput || !endInput || endInput < startInput) { showToast('DÃ©finissez une pÃ©riode de planning valide.', 'error'); return; }
+  if (!startInput || !endInput || endInput < startInput) { showToast('Définissez une période de planning valide.', 'error'); return; }
 
   const roles = getDynamicList('dutyRoles');
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
@@ -3537,7 +3544,7 @@ function renderDutySchedule() {
           <div class="week-assignment"><div class="help">${esc(role2)}</div><select onchange="updateDutyAssignment(${i},'agent2',this.value)">${agents2.map(name => `<option value="${esc(name)}" ${(w.agent2?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
         </div>
       </div>`).join('')}</div>`
-    : '<p class="help">Aucun planning gÃ©nÃ©rÃ©.</p>';
+    : '<p class="help">Aucun planning généré.</p>';
 
   ensureDutyStatsUI();
   renderDutyStats();
@@ -3551,7 +3558,7 @@ function updateDutyAssignment(index, key, value) {
 }
 
 function exportDutyPDF() {
-  if (!(state.dutySchedule || []).length) { showToast("GÃ©nÃ©rez d'abord le planning d'astreinte.", 'error'); return; }
+  if (!(state.dutySchedule || []).length) { showToast("Générez d'abord le planning d'astreinte.", 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -3562,15 +3569,15 @@ function exportDutyPDF() {
   doc.text('CABINET', pageW - m, y + 5, { align: 'right' });
   doc.text('SIRACEDPC', pageW - m, y + 11, { align: 'right' });
   doc.setFontSize(13);
-  doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÃ‰ES Â« COD Â»", pageW / 2, y + 24, { align: 'center' });
+  doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÉES « COD »", pageW / 2, y + 24, { align: 'center' });
   y += 34; doc.setTextColor(...text); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   const startDateStr = state.dutySchedule[0]?.start || '';
   const endDateStr = state.dutySchedule[state.dutySchedule.length - 1]?.end || '';
   const startPeriod = parseDateLocal(document.getElementById('dutyPeriodStart')?.value || startDateStr);
   const endPeriod = parseDateLocal(document.getElementById('dutyPeriodEnd')?.value || endDateStr);
-  const introText = `Les astreintes qualifiÃ©es Â« dÃ©fense et sÃ©curitÃ© civiles Â», pour la pÃ©riode comprise entre le ${startPeriod ? formatDateLocal(startPeriod) : '...'} et le ${endPeriod ? formatDateLocal(endPeriod) : '...'}, doivent Ãªtre prises en compte comme suit :`;
+  const introText = `Les astreintes qualifiées « défense et sécurité civiles », pour la période comprise entre le ${startPeriod ? formatDateLocal(startPeriod) : '...'} et le ${endPeriod ? formatDateLocal(endPeriod) : '...'}, doivent être prises en compte comme suit :`;
   doc.text(doc.splitTextToSize(introText, 186), m, y); y += 14;
-  const headers = ['PÃ©riode', 'Astreinte 1', 'Astreinte 2'];
+  const headers = ['Période', 'Astreinte 1', 'Astreinte 2'];
   const widths = [72, 58, 58];
   const drawHeader = () => {
     let x = m;
@@ -3582,12 +3589,12 @@ function exportDutyPDF() {
     const startDt = parseDateLocal(w.start), endDt = parseDateLocal(w.end);
     const vals = [
       `${startDt ? formatDateLocal(startDt) : w.start} au ${endDt ? formatDateLocal(endDt) : w.end}`,
-      w.agent1?.name || 'â€”',
-      w.agent2?.name || 'â€”'
+      w.agent1?.name || '—',
+      w.agent2?.name || '—'
     ];
     const lines = vals.map((v, i) => doc.splitTextToSize(v, widths[i] - 4));
     const h = Math.max(...lines.map(l => l.length)) * 4 + 4;
-    if (y + h > 250) { doc.addPage(); y = 10; addLogoPreserved(doc, m, y, 28, 18); doc.setTextColor(...text); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('CABINET', pageW - m, y + 5, {align:'right'}); doc.text('SIRACEDPC', pageW - m, y + 11, {align:'right'}); doc.setFontSize(13); doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÃ‰ES Â« COD Â»", pageW / 2, y + 24, { align: 'center' }); y += 34; drawHeader(); }
+    if (y + h > 250) { doc.addPage(); y = 10; addLogoPreserved(doc, m, y, 28, 18); doc.setTextColor(...text); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('CABINET', pageW - m, y + 5, {align:'right'}); doc.text('SIRACEDPC', pageW - m, y + 11, {align:'right'}); doc.setFontSize(13); doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÉES « COD »", pageW / 2, y + 24, { align: 'center' }); y += 34; drawHeader(); }
     let x = m;
     lines.forEach((l, i) => { doc.setDrawColor(180); doc.rect(x, y, widths[i], h); doc.text(l, x + widths[i]/2, y + 5, { align:'center', maxWidth: widths[i]-4 }); x += widths[i]; });
     y += h;
@@ -3602,14 +3609,14 @@ function exportDutyPDF() {
   }
   doc.setFontSize(8); doc.setFont('helvetica','normal');
   y = 276;
-  doc.text('Place FÃ©lix Baret - CS 80001 â€“ 13282 Marseille Cedex 06', m, y); y += 4;
-  doc.text('TÃ©lÃ©phone : 04.84.35.40.00 â€” www.bouches-du-rhone.gouv.fr', m, y);
+  doc.text('Place Félix Baret - CS 80001 – 13282 Marseille Cedex 06', m, y); y += 4;
+  doc.text('Téléphone : 04.84.35.40.00 — www.bouches-du-rhone.gouv.fr', m, y);
   doc.save('planning-astreinte.pdf');
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 16. MODULE STATISTIQUES ASTREINTES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 
 function getDutyStatsData(year) {
   const rows = (state.dutySchedule || []).filter(w => (w.start || '').slice(0, 4) === String(year));
@@ -3629,15 +3636,15 @@ function renderDutyStats() {
   const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
   const s = getDutyStatsData(year);
   body.innerHTML = `<div class="stats-grid">
-    ${buildBarChart(`${s.role1} â€” rÃ©partition annuelle`, s.a1)}
-    ${buildBarChart(`${s.role2} â€” rÃ©partition annuelle`, s.a2)}
+    ${buildBarChart(`${s.role1} — répartition annuelle`, s.a1)}
+    ${buildBarChart(`${s.role2} — répartition annuelle`, s.a2)}
   </div>`;
 }
 
 function exportDutyStatsCSV() {
   const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
   const s = getDutyStatsData(year);
-  const rows = [['AnnÃ©e','RÃ´le','Agent','Semaines']];
+  const rows = [['Année','Rôle','Agent','Semaines']];
   s.a1.forEach(r => rows.push([s.year, s.role1, r.label, r.value]));
   s.a2.forEach(r => rows.push([s.year, s.role2, r.label, r.value]));
   downloadCSV(`astreintes-statistiques-${s.year}.csv`, rows);
@@ -3650,8 +3657,8 @@ function exportDutyStatsPDF() {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   addPdfHeader(doc, `STATISTIQUES D'ASTREINTES ${s.year}`);
   let y = 34;
-  y = addPdfStatTable(doc, y, `${s.role1} â€” rÃ©partition annuelle`, s.a1);
-  y = addPdfStatTable(doc, y, `${s.role2} â€” rÃ©partition annuelle`, s.a2);
+  y = addPdfStatTable(doc, y, `${s.role1} — répartition annuelle`, s.a1);
+  y = addPdfStatTable(doc, y, `${s.role2} — répartition annuelle`, s.a2);
   doc.save(`astreintes-statistiques-${s.year}.pdf`);
 }
 
@@ -3668,7 +3675,7 @@ function ensureDutyStatsUI() {
   const planner = document.createElement('div'); planner.id = 'dutyPlanner'; planner.className = 'page-subpanel active';
   grids.forEach(g => planner.appendChild(g));
   const stats = document.createElement('div'); stats.id = 'dutyStatsPanel'; stats.className = 'page-subpanel';
-  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">AnnÃ©e</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter PDF</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
+  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">Année</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter PDF</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
   inner.appendChild(planner); inner.appendChild(stats);
   const yearEl = document.getElementById('dutyStatsYear');
   if (yearEl && !yearEl.value) yearEl.value = String(new Date().getFullYear());
@@ -3682,15 +3689,15 @@ function showDutySection(which) {
   if (which === 'stats') renderDutyStats();
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 17. MODULE PARAMÃˆTRES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 17. MODULE PARAMÈTRES
+// ────────────────────────────────────────────────────────────────────────────
 
 function showSettingsTab(tab) {
   const restricted = tab !== 'general';
   if (restricted && !isCurrentUserAdmin()) {
     tab = 'general';
-    showToast("AccÃ¨s rÃ©servÃ© aux administrateurs.", 'error');
+    showToast("Accès réservé aux administrateurs.", 'error');
   }
   document.querySelectorAll('.settings-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.settingsTab === tab));
   document.querySelectorAll('[data-settings-panel]').forEach(panel => panel.classList.toggle('active', panel.dataset.settingsPanel === tab));
@@ -3765,7 +3772,7 @@ function ensureSettingsNavigatorUI() {
   if (!wrapper) {
     wrapper = document.createElement('div');
     wrapper.className = 'settings-selector-row';
-    wrapper.innerHTML = `<label for="settingsSectionSelect">Section des paramÃ¨tres</label><select id="settingsSectionSelect"></select>`;
+    wrapper.innerHTML = `<label for="settingsSectionSelect">Section des paramètres</label><select id="settingsSectionSelect"></select>`;
     tabs.parentNode.insertBefore(wrapper, tabs);
   }
   const select = wrapper.querySelector('select');
@@ -3785,7 +3792,7 @@ function ensureSettingsCleanupUI() {
   if (generalPanel) {
     Array.from(generalPanel.querySelectorAll('label')).forEach((label) => {
       const text = (label.textContent || '').trim().toLowerCase();
-      if (text.includes('banniÃ¨re du tableau de bord') || text.includes('joindre une banniÃ¨re')) {
+      if (text.includes('bannière du tableau de bord') || text.includes('joindre une bannière')) {
         const block = label.parentElement;
         if (block) block.hidden = true;
       }
@@ -3813,13 +3820,13 @@ function ensureSettingsFooterActions() {
   const wrap = document.createElement('div');
   wrap.id = 'settingsFooterActions';
   wrap.className = 'settings-footer-actions';
-  wrap.innerHTML = `<button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramÃ¨tres</button>`;
+  wrap.innerHTML = `<button class="fr-btn" type="button" onclick="saveSettings()">Enregistrer les paramètres</button>`;
   pageInner.appendChild(wrap);
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 // 18. STYLES DYNAMIQUES (injected CSS pour les composants Stats/Branding)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
 (function injectDynamicStyles() {
   const style = document.createElement('style');
   style.textContent = `\n  .page-subtabs{display:flex;gap:.5rem;flex-wrap:wrap;margin:-.25rem 0 1rem}
@@ -3848,7 +3855,7 @@ function ensureSettingsFooterActions() {
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
   if (!label) return;
-  label.textContent = 'Base de donnÃ©e';
+  label.textContent = 'Base de donnée';
 }
 
 function ensureTopbarAuthAction() {
@@ -3861,7 +3868,7 @@ function ensureTopbarAuthAction() {
     button.id = 'topbarLogoutBtn';
     button.className = 'fr-btn secondary small';
     button.type = 'button';
-    button.textContent = 'DÃ©connexion';
+    button.textContent = 'Déconnexion';
     button.onclick = () => logoutSupabaseSession();
     if (themeButton) actions.insertBefore(button, themeButton);
     else actions.appendChild(button);
@@ -3952,7 +3959,7 @@ function withTimeout(promise, timeoutMs, message) {
   return Promise.race([
     promise,
     new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(message || 'Operation expirÃ©e.')), timeoutMs);
+      setTimeout(() => reject(new Error(message || 'Operation expirée.')), timeoutMs);
     })
   ]);
 }
@@ -3969,17 +3976,17 @@ async function submitSupabaseLogin(event) {
     await withTimeout(
       window.SICODApi?.auth?.signInWithPassword?.(email, password),
       15000,
-      'La connexion Supabase a expirÃ©. VÃ©rifie le rÃ©seau, le compte utilisateur ou la confirmation de l e-mail.'
+      'La connexion Supabase a expiré. Vérifie le réseau, le compte utilisateur ou la confirmation de l e-mail.'
     );
     refreshAuthGate();
     refreshStorageStatus();
-    updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l Ã©tat distant...`, 'success');
-    updateAuthGateStatus('Connexion rÃ©ussie', 'success');
+    updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
+    updateAuthGateStatus('Connexion réussie', 'success');
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
         15000,
-        'Le chargement de l Ã©tat distant a expirÃ©.'
+        'Le chargement de l état distant a expiré.'
       );
     } catch (error) {
       updateCloudStateStatus(`Connexion ouverte, mais chargement distant incomplet : ${esc(error.message || String(error))}`, 'warning');
@@ -3994,9 +4001,9 @@ async function submitSupabaseLogin(event) {
 async function logoutSupabaseSession() {
   try {
     await window.SICODApi?.auth?.signOut?.();
-    updateCloudStateStatus('Session Supabase fermÃ©e. Le site repasse en mode verrouillÃ© tant quâ€™aucune reconnexion nâ€™est effectuÃ©e.', 'info');
+    updateCloudStateStatus('Session Supabase fermée. Le site repasse en mode verrouillé tant qu’aucune reconnexion n’est effectuée.', 'info');
   } catch (error) {
-    updateCloudStateStatus(`DÃ©connexion Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
+    updateCloudStateStatus(`Déconnexion Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
   }
   clearLocalStateCache();
   resetStateToDefaults();
@@ -4045,11 +4052,11 @@ function exportSelectedHtmlTemplate() {
   const select = document.getElementById('settingHtmlTemplateKey');
   const template = window.SICODPdfTemplates?.getHtmlTemplate(state, select?.value || '');
   if (!template) {
-    showToast('Aucun modÃ¨le HTML sÃ©lectionnÃ©.', 'error');
+    showToast('Aucun modèle HTML sélectionné.', 'error');
     return;
   }
   downloadBlob(new Blob([template.html], { type: 'text/html;charset=utf-8' }), template.fileName || `${slugify(template.id || 'modele')}.html`);
-  showToast('ModÃ¨le HTML exportÃ©.');
+  showToast('Modèle HTML exporté.');
 }
 
 function triggerHtmlTemplateImport() {
@@ -4061,7 +4068,7 @@ async function importSelectedHtmlTemplate(file) {
   const select = document.getElementById('settingHtmlTemplateKey');
   const key = select?.value || '';
   if (!key) {
-    showToast('Aucun modÃ¨le HTML cible n est sÃ©lectionnÃ©.', 'error');
+    showToast('Aucun modèle HTML cible n est sélectionné.', 'error');
     return;
   }
   try {
@@ -4069,7 +4076,7 @@ async function importSelectedHtmlTemplate(file) {
     if (!String(content || '').trim()) throw new Error('Le fichier HTML est vide.');
     window.SICODPdfTemplates?.setHtmlTemplate(state, key, content);
     loadSelectedHtmlTemplate();
-    showToast('ModÃ¨le HTML importÃ©.');
+    showToast('Modèle HTML importé.');
   } catch (error) {
     showToast(`Import HTML impossible : ${error.message || String(error)}`, 'error');
   } finally {
@@ -4084,7 +4091,7 @@ function resetSelectedHtmlTemplate() {
   if (!key) return;
   window.SICODPdfTemplates?.resetHtmlTemplate(state, key);
   loadSelectedHtmlTemplate();
-  showToast('ModÃ¨le HTML rÃ©initialisÃ©.');
+  showToast('Modèle HTML réinitialisé.');
 }
 
 function ensureHtmlTemplateSettingsCard() {
@@ -4094,7 +4101,7 @@ function ensureHtmlTemplateSettingsCard() {
   card.className = 'card';
   card.id = 'htmlTemplateSettingsCard';
   card.innerHTML = `
-    <div class="card-header"><h2 class="card-title">Maquettes HTML d'aperÃ§u et d'export</h2></div>
+    <div class="card-header"><h2 class="card-title">Maquettes HTML d'aperçu et d'export</h2></div>
     <div class="card-body">
       <div class="grid-2">
         <div>
@@ -4104,7 +4111,7 @@ function ensureHtmlTemplateSettingsCard() {
         <div class="list-actions" style="align-self:end">
           <button class="fr-btn secondary small" type="button" onclick="exportSelectedHtmlTemplate()">Exporter HTML</button>
           <button class="fr-btn secondary small" type="button" onclick="triggerHtmlTemplateImport()">Importer HTML</button>
-          <button class="fr-btn secondary small" type="button" onclick="resetSelectedHtmlTemplate()">RÃ©initialiser</button>
+          <button class="fr-btn secondary small" type="button" onclick="resetSelectedHtmlTemplate()">Réinitialiser</button>
         </div>
       </div>
       <input id="settingHtmlTemplateImport" type="file" accept=".html,text/html" style="display:none" onchange="importSelectedHtmlTemplate(this.files[0])">
@@ -4112,7 +4119,7 @@ function ensureHtmlTemplateSettingsCard() {
         <label for="settingHtmlTemplateSource">Code HTML</label>
         <textarea id="settingHtmlTemplateSource" class="code-area" spellcheck="false"></textarea>
       </div>
-      <p class="help">Ces maquettes HTML permettent d'importer, d'exporter et d'harmoniser les aperÃ§us et les rendus PDF finaux Ã  partir d'une source unique.</p>
+      <p class="help">Ces maquettes HTML permettent d'importer, d'exporter et d'harmoniser les aperçus et les rendus PDF finaux à partir d'une source unique.</p>
     </div>
   `;
   stack.insertBefore(card, stack.children[1] || null);
@@ -4151,7 +4158,7 @@ function ensureExportSettingsUI() {
             <div><label for="settingPdfAlertColor">Couleur d alerte</label><input id="settingPdfAlertColor" type="color"></div>
             <div><label for="settingPdfLogoScale">Taille du logo (%)</label><input id="settingPdfLogoScale" type="number" min="40" max="140" step="5"></div>
           </div>
-          <p class="help">Ces rÃ©glages modifient simplement l habillage des exports sans toucher Ã  la matrice du document.</p>
+          <p class="help">Ces réglages modifient simplement l habillage des exports sans toucher à la matrice du document.</p>
         </div>
       </div>
   </div>`;
@@ -4194,15 +4201,15 @@ function exportCurrentStateJson() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  updateCloudStateStatus('Export JSON gÃ©nÃ©rÃ© depuis lâ€™Ã©tat courant de la session.', 'success');
+  updateCloudStateStatus('Export JSON généré depuis l’état courant de la session.', 'success');
 }
 
 async function checkSupabaseState() {
-  updateCloudStateStatus('ContrÃ´le de Supabase en cours...', 'info');
+  updateCloudStateStatus('Contrôle de Supabase en cours...', 'info');
   try {
     const remoteConfig = window.SICODApi.system.getRemoteConfig();
     if (remoteConfig.provider !== 'supabase' || !remoteConfig.enabled || !remoteConfig.supabaseUrl || !remoteConfig.supabaseAnonKey) {
-      updateCloudStateStatus('Supabase nâ€™est pas encore configurÃ© dans les paramÃ¨tres gÃ©nÃ©raux.', 'warning');
+      updateCloudStateStatus('Supabase n’est pas encore configuré dans les paramètres généraux.', 'warning');
       refreshStorageStatus();
       return null;
     }
@@ -4214,31 +4221,31 @@ async function checkSupabaseState() {
     const authState = window.SICODApi.system.getAuthState?.() || {};
     updateCloudStateStatus(`
       <strong>Supabase joignable.</strong><br>
-      Support : Base de donnÃ©e<br>
+      Support : Base de donnée<br>
       Utilisateur : ${esc(authState.email || 'non identifie')}<br>
-      ModÃ¨les PDF : ${remoteTemplates.length}<br>
-      Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
+      Modèles PDF : ${remoteTemplates.length}<br>
+      Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
     refreshStorageStatus();
   
     return remoteStatePayload;
   } catch (error) {
-    updateCloudStateStatus(`ContrÃ´le Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
+    updateCloudStateStatus(`Contrôle Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
     refreshStorageStatus();
     throw error;
   }
 }
 
 async function pushCurrentStateToSupabase() {
-  updateCloudStateStatus('Envoi de lâ€™Ã©tat courant vers Supabase...', 'info');
+  updateCloudStateStatus('Envoi de l’état courant vers Supabase...', 'info');
   try {
     ensureStateIntegrity();
     await pushReferenceCatalogToSupabase();
     await window.SICODApi.system.pushRemoteState(state);
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
-      <strong>Synchronisation terminÃ©e.</strong><br>
-      Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
+      <strong>Synchronisation terminée.</strong><br>
+      Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
     refreshStorageStatus();
   
@@ -4249,11 +4256,11 @@ async function pushCurrentStateToSupabase() {
 }
 
 async function reloadStateFromSupabase() {
-  updateCloudStateStatus('Chargement de lâ€™Ã©tat Supabase en cours...', 'info');
+  updateCloudStateStatus('Chargement de l’état Supabase en cours...', 'info');
   try {
     const payload = await window.SICODApi.system.getRemoteState();
     if (!payload?.state || typeof payload.state !== 'object') {
-      updateCloudStateStatus('Supabase est joignable, mais aucun Ã©tat nâ€™est encore enregistrÃ©.', 'warning');
+      updateCloudStateStatus('Supabase est joignable, mais aucun état n’est encore enregistré.', 'warning');
       refreshStorageStatus();
       return;
     }
@@ -4262,8 +4269,8 @@ async function reloadStateFromSupabase() {
     renderAll();
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
-      <strong>Ã‰tat Supabase rechargÃ©.</strong><br>
-      Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
+      <strong>État Supabase rechargé.</strong><br>
+      Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
     `, 'success');
   } catch (error) {
     updateCloudStateStatus(`Rechargement Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
@@ -4282,7 +4289,7 @@ function bindCloudStateImport() {
     try {
       const raw = await file.text();
       const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') throw new Error('Le fichier JSON ne contient pas un Ã©tat valide.');
+      if (!parsed || typeof parsed !== 'object') throw new Error('Le fichier JSON ne contient pas un état valide.');
       await window.SICODApi.system.pushRemoteState(parsed);
       const fresh = Object.assign(buildDefaultState(), parsed);
       Object.keys(state).forEach((key) => delete state[key]);
@@ -4294,8 +4301,8 @@ function bindCloudStateImport() {
       refreshStorageStatus();
       const counts = countStateRecords(state);
       updateCloudStateStatus(`
-        <strong>Import Supabase terminÃ©.</strong><br>
-        Ã‰vÃ©nements : ${counts.events} Â· PS : ${counts.ps} Â· Messages : ${counts.commandMessages} Â· Contacts : ${counts.contacts}
+        <strong>Import Supabase terminé.</strong><br>
+        Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
       `, 'success');
       input.value = '';
     } catch (error) {
@@ -4319,20 +4326,20 @@ function ensureSystemSettingsUI() {
   const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
   card.innerHTML = `
-    <div class="card-header"><h2 class="card-title">Base de donnÃ©e</h2></div>
+    <div class="card-header"><h2 class="card-title">Base de donnée</h2></div>
     <div class="card-body">
       <div class="grid-2">
         <div><label>Fournisseur</label><input value="Supabase" readonly></div>
-        <div><label>AccÃ¨s</label><input value="${remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante'}" readonly></div>
+        <div><label>Accès</label><input value="${remoteConfig.enabled ? 'Authentification requise' : 'Configuration manquante'}" readonly></div>
         <div><label>URL Supabase</label><input value="${esc(remoteConfig.supabaseUrl || '')}" readonly></div>
         <div><label>Project ref</label><input value="${esc(remoteConfig.projectRef || '')}" readonly></div>
-        <div><label>RÃ´le applicatif courant</label><input value="${esc(authState.role || 'lecture')}" readonly></div>
-        <div><label>Table de rÃ©fÃ©rence des rÃ´les</label><input value="public.app_user_roles" readonly></div>
+        <div><label>Rôle applicatif courant</label><input value="${esc(authState.role || 'lecture')}" readonly></div>
+        <div><label>Table de référence des rôles</label><input value="public.app_user_roles" readonly></div>
         <div><label>Annuaire utilisateurs</label><input value="public.app_user_directory" readonly></div>
       </div>
       <div class="cloud-admin-grid">
-        <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">VÃ©rifier la connexion</button>
-        <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les donnÃ©es</button>
+        <button class="fr-btn secondary" type="button" onclick="checkSupabaseState()">Vérifier la connexion</button>
+        <button class="fr-btn secondary" type="button" onclick="exportCurrentStateJson()">Exporter les données</button>
         <button class="fr-btn secondary" type="button" onclick="pushCurrentStateToSupabase()">Pousser vers Supabase</button>
         <button class="fr-btn secondary" type="button" onclick="reloadStateFromSupabase()">Recharger depuis Supabase</button>
       </div>
@@ -4353,7 +4360,7 @@ function ensureGeneralPasswordSettingsUI() {
   card.className = 'card';
   card.id = 'passwordSettingsCard';
   card.innerHTML = `
-    <div class="card-header"><h2 class="card-title">AccÃ¨s Ã  l'application</h2></div>
+    <div class="card-header"><h2 class="card-title">Accès à l'application</h2></div>
     <div class="card-body">
       <div><label>Compte connecte</label><input value="${esc(authState.email || '')}" readonly></div>
       <div class="grid-2" style="margin-top:1rem">
@@ -4509,7 +4516,7 @@ async function saveManagedUserRole(userId) {
 function ensureExportSettingsCleanupUI() {
   const htmlHelp = document.querySelector('#htmlTemplateSettingsCard .help');
   if (htmlHelp) {
-    htmlHelp.textContent = "Ces maquettes HTML sont les modÃ¨les actifs des aperÃ§us et des exports PDF. Toute importation remplace immÃ©diatement le rendu en vigueur pour le document sÃ©lectionnÃ©.";
+    htmlHelp.textContent = "Ces maquettes HTML sont les modèles actifs des aperçus et des exports PDF. Toute importation remplace immédiatement le rendu en vigueur pour le document sélectionné.";
   }
 }
 
@@ -4534,8 +4541,8 @@ function ensureEventSignatureSettingsUI() {
       <div>
         <label>Signature</label>
         <select id="settingEventSignatureMode">
-          <option value="prefet">Le prÃ©fet</option>
-          <option value="delegation">Pour le prÃ©fet, par dÃ©lÃ©gation</option>
+          <option value="prefet">Le préfet</option>
+          <option value="delegation">Pour le préfet, par délégation</option>
         </select>
       </div>
       <div>
@@ -4562,7 +4569,7 @@ function loadSettingsForm() {
   if (get('settingNewPassword')) get('settingNewPassword').value = '';
   if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
-  if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protÃ©gÃ©';
+  if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
   if (get('settingPsSignatureMode')) get('settingPsSignatureMode').value = state.settings.psSignatureMode || 'prefet';
   if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
@@ -4599,7 +4606,6 @@ function loadSettingsForm() {
   if (get('settingPdfAlertColor')) get('settingPdfAlertColor').value = state.settings.pdfAppearance?.alertColor || DEFAULT_SETTINGS.pdfAppearance.alertColor;
   if (get('settingPdfLogoScale')) get('settingPdfLogoScale').value = String(state.settings.pdfAppearance?.logoScale || DEFAULT_SETTINGS.pdfAppearance.logoScale);
   showSettingsTab(activeTab);
-  if (isCurrentUserAdmin()) loadUserAdminDirectory();
   refreshStorageStatus();
 }
 
@@ -4623,7 +4629,7 @@ async function saveSettings() {
   state.settings.theme = get('settingTheme')?.value || 'light';
   state.settings.dashboardBanner = '';
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
-  state.settings.classification = get('settingClassification')?.value || 'Non protÃ©gÃ©';
+  state.settings.classification = get('settingClassification')?.value || 'Non protégé';
   state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
   state.settings.dutySignerLastName = (get('settingDutySignerLastName')?.value || '').trim();
   state.settings.dutySignerFirstName = (get('settingDutySignerFirstName')?.value || '').trim();
@@ -4702,12 +4708,12 @@ async function saveSettings() {
   renderPlanningStats();
   renderDutyStats();
   loadSettingsForm();
-  showToast('ParamÃ¨tres enregistrÃ©s.');
+  showToast('Paramètres enregistrés.');
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// 19. BOOTSTRAP â€” Initialisation, renderAll, intervalles
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ────────────────────────────────────────────────────────────────────────────
+// 19. BOOTSTRAP — Initialisation, renderAll, intervalles
+// ────────────────────────────────────────────────────────────────────────────
 
 function renderAll() {
   if (isAuthLocked()) {
@@ -4782,7 +4788,7 @@ window.SICODApi?.auth?.restoreSession?.()
   
   });
 
-// Mise Ã  jour horloge chaque seconde (heure locale)
+// Mise à jour horloge chaque seconde (heure locale)
 setInterval(() => {
   const el = document.getElementById('kpiTime');
   if (el) el.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -4790,10 +4796,11 @@ setInterval(() => {
 
 
 function editSelectedPS(){
- if(!state.selectedPSId){showToast('SÃ©lectionnez un point de situation','error');return;}
+ if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
  openPSForm(state.selectedPSId);
 }
 function deleteSelectedPS(){
+ if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
  deletePS(state.selectedPSId);
 }
 

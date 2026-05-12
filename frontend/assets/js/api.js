@@ -686,7 +686,7 @@
         return getSupabaseManagedUsers();
       },
       async saveManagedUserRoles(userId, roles) {
-        if (!isSupabaseConfigured()) throw new Error('Supabase nâ€™est pas configurÃ©.');
+        if (!isSupabaseConfigured()) throw new Error('Supabase n’est pas configuré.');
         const session = await ensureSupabaseSession();
         if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
         return saveSupabaseManagedUserRoles(userId, roles);
