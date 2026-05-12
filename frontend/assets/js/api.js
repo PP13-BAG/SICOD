@@ -257,6 +257,38 @@
     return { authenticated: false };
   }
 
+  async function updateSupabasePassword(password) {
+    const nextPassword = String(password || '');
+    if (!nextPassword) throw new Error('Mot de passe manquant.');
+    const session = await ensureSupabaseSession();
+    if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+    const payload = await fetchJson(`${runtimeConfig.supabaseUrl}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        ...getSupabaseHeaders({
+          'content-type': 'application/json'
+        }, true)
+      },
+      body: JSON.stringify({
+        password: nextPassword
+      })
+    });
+    if (payload?.access_token && payload?.refresh_token) {
+      const mapped = mapSupabaseSession(payload);
+      if (mapped) persistAuthSession(mapped);
+    } else if (payload?.user && authSession) {
+      persistAuthSession({
+        ...authSession,
+        user: payload.user
+      });
+    }
+    setRemoteMode('supabase');
+    return {
+      success: true,
+      user: payload?.user || authSession?.user || null
+    };
+  }
+
   function getAuthState() {
     const configured = isSupabaseConfigured();
     const authenticated = configured && !!authSession?.accessToken && !isSessionExpired(authSession, 0);
@@ -456,6 +488,9 @@
       },
       async signOut() {
         return signOutSupabase();
+      },
+      async updatePassword(password) {
+        return updateSupabasePassword(password);
       }
     },
     system: {

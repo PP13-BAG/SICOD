@@ -32,6 +32,8 @@ jobs:
           rm -rf site
           mkdir -p site
           cp -R frontend/. site/
+          BUILD_TAG="${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          sed -i "s/__BUILD__/${BUILD_TAG}/g" site/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

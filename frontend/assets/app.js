@@ -226,6 +226,15 @@ function getActiveItems(arr) {
   return window.SICODDataModel?.getActiveRecords(arr) || (Array.isArray(arr) ? arr : []);
 }
 
+function getActiveEventIds() {
+  return new Set(getActiveItems(state.events).map((item) => item.id));
+}
+
+function isLinkedToActiveEvent(record) {
+  if (!record?.eventId) return false;
+  return getActiveEventIds().has(record.eventId);
+}
+
 /** Retourne le titre d'un événement depuis son id */
 function getEventTitle(id) {
   return (byId(state.events, id) || {}).title || 'Événement supprimé';
@@ -411,6 +420,7 @@ async function hydrateReferenceCatalogFromSupabase() {
     applyReferenceCatalogToState(referenceCatalog);
     return true;
   } catch (error) {
+    if (error.message === 'Connexion Supabase requise.') return false;
     console.warn('[Settings] Chargement des listes de reference impossible :', error.message);
     return false;
   }
@@ -911,24 +921,52 @@ function renderStoredHtmlTemplate(key, tokens) {
   return fillHtmlTemplate(body, tokens || {});
 }
 
+function buildPrintableHtmlDocument(key, raw, rendered, title, tokens) {
+  const baseHref = document.baseURI || window.location.href;
+  const stylesheetHref = new URL('assets/app.css?v=20260512', baseHref).href;
+  if (/<html[\s>]/i.test(raw)) {
+    return rendered.replace(/<\/head>/i, `<base href="${esc(baseHref)}"><link rel="stylesheet" href="${esc(stylesheetHref)}"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head>`);
+  }
+  const inner = renderStoredHtmlTemplate(key, tokens);
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)}</title><base href="${esc(baseHref)}"><link rel="stylesheet" href="${esc(stylesheetHref)}"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head><body><div class="preview-stage"><div class="document-page">${inner}</div></div></body></html>`;
+}
+
 function openHtmlTemplatePdf(key, tokens, title = 'document') {
   const raw = getStoredHtmlTemplateRaw(key);
   const rendered = fillHtmlTemplate(raw, tokens || {});
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=900');
-  if (!win) {
+  const html = buildPrintableHtmlDocument(key, raw, rendered, title, tokens || {});
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.position = 'fixed';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+  const frameWindow = iframe.contentWindow;
+  const frameDocument = iframe.contentDocument || frameWindow?.document;
+  if (!frameWindow || !frameDocument) {
     showToast("Impossible d'ouvrir la fenêtre d'impression.", 'error');
     return;
   }
-  if (/<html[\s>]/i.test(raw)) {
-    const enriched = rendered.replace(/<\/head>/i, `<base href="${window.location.href}"><link rel="stylesheet" href="assets/app.css"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head>`);
-    win.document.write(enriched);
-  } else {
-    const inner = renderStoredHtmlTemplate(key, tokens);
-    win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)}</title><base href="${window.location.href}"><link rel="stylesheet" href="assets/app.css"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head><body><div class="preview-stage"><div class="document-page">${inner}</div></div></body></html>`);
-  }
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 150);
+  let printed = false;
+  const cleanup = () => setTimeout(() => iframe.remove(), 500);
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try {
+      frameWindow.focus();
+      frameWindow.print();
+    } finally {
+      cleanup();
+    }
+  };
+  iframe.onload = () => setTimeout(triggerPrint, 120);
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
+  setTimeout(triggerPrint, 600);
 }
 
 function buildPSHtmlTokens(ps) {
@@ -1349,6 +1387,7 @@ function exportEventLogPDF() {
   if (!e) return;
   openHtmlTemplatePdf('main_courante', buildEventLogHtmlTokens(eventId), `main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}`);
   return;
+  /*
   if (!window.jspdf) return;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
@@ -1445,6 +1484,7 @@ function exportEventLogPDF() {
 
   applyFixedSignature();
   doc.save(`main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.pdf`);
+  */
 }
 
 function renderEvents() {
@@ -1720,7 +1760,10 @@ function renderPSList() {
   }
 
   const q = (document.getElementById('psListSearch')?.value || '').toLowerCase().trim();
-  const source = getActiveItems(state.ps);
+  const source = getActiveItems(state.ps).filter(isLinkedToActiveEvent);
+  if (state.selectedPSId && !source.some((item) => item.id === state.selectedPSId)) {
+    state.selectedPSId = null;
+  }
   const list = state.currentEventId
     ? source.filter(ps => ps.eventId === state.currentEventId)
     : source;
@@ -1749,6 +1792,8 @@ function renderPSHtml(ps) {
   if (!ps) return '<p class="help">Sélectionnez un point de situation.</p>';
   const templateKey = ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail';
   return renderStoredHtmlTemplate(templateKey, buildPSHtmlTokens(ps));
+}
+  /*
   const event = byId(state.events, ps.eventId);
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
@@ -1804,6 +1849,7 @@ function renderPSHtml(ps) {
   </div>`;
 }
 
+*/
 function renderPSPreview() {
   const psPreview = document.getElementById('psPreview');
   if (!psPreview) return;
@@ -2538,8 +2584,11 @@ function renderCommandList() {
 
   const q = (document.getElementById('commandListSearch')?.value || '').toLowerCase().trim();
   const eventFilter = state.selectedCommandEventFilter || null;
-  let items = [...getActiveItems(state.commandMessages)]
+  let items = [...getActiveItems(state.commandMessages).filter(isLinkedToActiveEvent)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+  if (state.selectedCommandId && !items.some((item) => item.id === state.selectedCommandId)) {
+    state.selectedCommandId = null;
+  }
   if (eventFilter) items = items.filter(i => i.eventId === eventFilter);
   if (q) items = items.filter(i => [i.number, i.typeLabel, i.status, i.event, getEventTitle(i.eventId)].join(' ').toLowerCase().includes(q));
 
@@ -2644,6 +2693,8 @@ function renderCommandPreview(data) {
   }
   commandPreview.innerHTML = `<div class="preview-stage command"><div class="document-page">${renderStoredHtmlTemplate('command_message', buildCommandHtmlTokens(d))}</div></div>`;
   return;
+}
+  /*
   const contactPhone = state.settings.commandPhone || '04 84 35 40 00 (standard)';
   const contactFax = state.settings.commandFax || '04 84 35 41 85';
   const contactEmail = state.settings.commandEmail || 'pref-pccrise-13@bouches-du-rhone.gouv.fr';
@@ -2693,11 +2744,14 @@ function renderCommandPreview(data) {
   </div>`;
 }
 
+*/
 function exportCommandPDF() {
   const d = state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null;
   if (!d) { showToast('Sélectionnez un message de commandement', 'error'); return; }
   openHtmlTemplatePdf('command_message', buildCommandHtmlTokens(d), `message-commandement-${d.number || 'sicod'}`);
   return;
+}
+  /*
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -2834,6 +2888,7 @@ function exportCommandPDF() {
 // 10. MODULE FICHES RÉFLEXES
 // ────────────────────────────────────────────────────────────────────────────
 
+*/
 function getReflexFiches() {
   if (!Array.isArray(state.reflexFiches) || !state.reflexFiches.length) {
     state.reflexFiches = JSON.parse(JSON.stringify(reflexLibrary.fiches || []));
@@ -4617,11 +4672,44 @@ function ensureSystemSettingsUI() {
   `;
 }
 
+function ensureGeneralPasswordSettingsUI() {
+  const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
+  if (!generalGrid || document.getElementById('passwordSettingsCard')) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'passwordSettingsCard';
+  card.innerHTML = `
+    <div class="card-header"><h2 class="card-title">Acces a l'application</h2></div>
+    <div class="card-body">
+      <div><label>Compte connecte</label><input value="${esc(authState.email || '')}" readonly></div>
+      <div class="grid-2" style="margin-top:1rem">
+        <div><label for="settingNewPassword">Nouveau mot de passe</label><input id="settingNewPassword" type="password" autocomplete="new-password"></div>
+        <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
+      </div>
+      <p class="help">Laissez ces champs vides pour conserver le mot de passe actuel.</p>
+    </div>
+  `;
+  generalGrid.appendChild(card);
+}
+
+function ensureExportSettingsCleanupUI() {
+  const templateTextarea = document.getElementById('settingDocumentTemplates');
+  const matrixCard = templateTextarea?.closest('.card');
+  if (matrixCard) matrixCard.remove();
+  const htmlHelp = document.querySelector('#htmlTemplateSettingsCard .help');
+  if (htmlHelp) {
+    htmlHelp.textContent = "Ces maquettes HTML sont les modeles actifs des apercus et des exports PDF. Toute importation remplace immediatement le rendu en vigueur pour le document selectionne.";
+  }
+}
+
 function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
   ensureSystemSettingsUI();
+  ensureGeneralPasswordSettingsUI();
   ensureEventSignatureSettingsUI();
+  ensureExportSettingsCleanupUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
   bindCloudStateImport();
@@ -4655,7 +4743,12 @@ function loadSettingsForm() {
   const get = id => document.getElementById(id);
   const activeTab = document.querySelector('.settings-tab.active')?.dataset.settingsTab || 'general';
   ensureSettingsEnhancements();
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
+  const accountField = document.querySelector('#passwordSettingsCard input[readonly]');
+  if (accountField) accountField.value = authState.email || '';
+  if (get('settingNewPassword')) get('settingNewPassword').value = '';
+  if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
@@ -4687,7 +4780,6 @@ function loadSettingsForm() {
   if (get('settingDutyAgents')) get('settingDutyAgents').value = getDynamicList('dutyAgents').join('\n');
   if (get('settingReflexFamilies')) get('settingReflexFamilies').value = getDynamicList('reflexFamilies').join('\n');
   if (get('settingPlanExpiryRules')) get('settingPlanExpiryRules').value = Object.entries(state.settings.planExpiryYears || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
-  if (get('settingDocumentTemplates')) get('settingDocumentTemplates').value = JSON.stringify(window.SICODPdfTemplates?.listTemplates(state) || [], null, 2);
   populateHtmlTemplateEditor();
   if (get('settingPdfPrimaryColor')) get('settingPdfPrimaryColor').value = state.settings.pdfAppearance?.primaryColor || DEFAULT_SETTINGS.pdfAppearance.primaryColor;
   if (get('settingPdfAccentColor')) get('settingPdfAccentColor').value = state.settings.pdfAppearance?.accentColor || DEFAULT_SETTINGS.pdfAppearance.accentColor;
@@ -4701,7 +4793,21 @@ function loadSettingsForm() {
 async function saveSettings() {
   const get = id => document.getElementById(id);
   syncHtmlTemplateEditorValue();
-  if (get('settingDocumentTemplates')) {
+  const nextPassword = (get('settingNewPassword')?.value || '').trim();
+  const confirmPassword = (get('settingConfirmPassword')?.value || '').trim();
+  if (nextPassword || confirmPassword) {
+    if (nextPassword.length < 8) {
+      showSettingsTab('general');
+      showToast('Le mot de passe doit contenir au moins 8 caracteres.', 'error');
+      return;
+    }
+    if (nextPassword !== confirmPassword) {
+      showSettingsTab('general');
+      showToast('La confirmation du mot de passe ne correspond pas.', 'error');
+      return;
+    }
+  }
+  if (false && get('settingDocumentTemplates')) {
     try {
       const parsedTemplates = JSON.parse(get('settingDocumentTemplates').value || '[]');
       const validation = window.SICODPdf?.validateTemplateList?.(parsedTemplates);
@@ -4770,6 +4876,18 @@ async function saveSettings() {
       }
     });
     state.settings.planExpiryYears = rules;
+  }
+
+  if (nextPassword) {
+    try {
+      await window.SICODApi?.auth?.updatePassword?.(nextPassword);
+      if (get('settingNewPassword')) get('settingNewPassword').value = '';
+      if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
+    } catch (error) {
+      showSettingsTab('general');
+      showToast(`Mot de passe non modifie : ${error.message || String(error)}`, 'error');
+      return;
+    }
   }
 
   await pushReferenceCatalogToSupabase();
