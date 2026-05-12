@@ -261,26 +261,26 @@ function badge(status) {
 }
 
 /** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
-const PS_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
-const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'DiffusÃ©'];
+const PS_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
+const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
 
 function normalizePublishStatus(status, fallback = 'Brouillon') {
   const value = String(status || '').trim();
   if (!value) return fallback;
-  if (value === 'DiffusÃ©' || value === 'ValidÃ©') return 'DiffusÃ©';
+  if (value === 'Diffusé' || value === 'Validé') return 'Diffusé';
   if (value === 'Brouillon' || value === 'Ouvert') return 'Brouillon';
   return fallback;
 }
 
 function isPublishedStatus(status) {
-  return normalizePublishStatus(status) === 'DiffusÃ©';
+  return normalizePublishStatus(status) === 'Diffusé';
 }
 
 function buildFixedSignatureLines(signature) {
   const sig = signature || {};
   const lines = [];
   if (sig.mode === 'delegation') {
-    lines.push('Pour le prÃ©fet, par dÃ©lÃ©gation');
+    lines.push('Pour le préfet, par délégation');
     if (sig.role) lines.push(sig.role);
     if (sig.name) {
       lines.push('');
@@ -288,7 +288,7 @@ function buildFixedSignatureLines(signature) {
     }
     return lines;
   }
-  lines.push('Le prÃ©fet');
+  lines.push('Le préfet');
   if (sig.name) {
     lines.push('');
     lines.push(sig.name);
@@ -573,7 +573,7 @@ function addLogoPreserved(doc, x, y, maxW, maxH) {
     const ratio = Math.min((maxW * logoScale) / iw, (maxH * logoScale) / ih);
     const w = iw * ratio, h = ih * ratio;
     const type = String(props.fileType || 'PNG').toUpperCase();
-    doc.addImage(src, type, x + (maxW - w) / 2, y + (maxH - h) / 2, w, h);
+    doc.addImage(src, type, x, y + (maxH - h) / 2, w, h);
     return true;
   } catch (e) {
     return false;
@@ -642,6 +642,13 @@ function getPSSignatureConfig() {
     mode: state.settings.psSignatureMode || 'delegation',
     name: state.settings.psSignatureName || 'Nicolas HAUPTMANN',
     role: state.settings.psSignatureRole || 'le directeur de cabinet'
+  };
+}
+function getEventSignatureConfig() {
+  return {
+    mode: state.settings.eventSignatureMode || 'delegation',
+    name: state.settings.eventSignatureName || state.settings.psSignatureName || 'Nicolas HAUPTMANN',
+    role: state.settings.eventSignatureRole || state.settings.psSignatureRole || 'le directeur de cabinet'
   };
 }
 function shouldApplyPdfSignature(context) {
@@ -774,17 +781,256 @@ function psSourcesHtml(ps) {
   return parts.join('');
 }
 
+const STABLE_HTML_TEMPLATE_DEFAULTS = {
+  point_situation_detail: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>{{title}}</h2><p>{{subtitle}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{cartouche}}
+      <table class="ps-detail-table">
+        <tr><td style="width:24%"><div class="ps-section-title">Situation générale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Bilan</div></td><td><div class="ps-content">{{bilan}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Moyens engagés</div></td><td><div class="ps-content">{{means}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Mesures prises</div></td><td><div class="ps-content">{{measures}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Points d'attention</div></td><td><div class="ps-content">{{attention}}</div></td></tr>
+        <tr><td><div class="ps-section-title">Communication</div></td><td><div class="ps-content">{{communication}}</div></td></tr>
+        {{image_row}}
+        {{sources_row}}
+      </table>
+      {{signature}}
+    </div>
+  `,
+  point_situation_focus: `
+    <div class="ps-sheet focus-mode" style="max-width:74rem">
+      <div class="ps-header">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>{{title}}</h2><p>{{subtitle}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{cartouche}}
+      <div class="focus-grid">
+        <div class="focus-col">
+          <div class="focus-box"><div class="focus-label">Bilan</div><div class="focus-body">{{bilan}}</div></div>
+          <div class="focus-box"><div class="focus-label">Moyens</div><div class="focus-body">{{means}}</div></div>
+        </div>
+        <div class="focus-center">
+          <div class="focus-box"><div class="focus-label">Situation générale</div><div class="focus-body">{{situation}}</div></div>
+          <div class="focus-box"><div class="focus-label">Cartographie</div><div class="focus-map">{{image}}</div></div>
+          <div class="focus-box"><div class="focus-label">Mesures prises</div><div class="focus-body">{{measures}}</div></div>
+        </div>
+        <div class="focus-col focus-right">
+          <div class="focus-box"><div class="focus-label">Points d'attention</div><div class="focus-body">{{attention}}</div></div>
+          <div class="focus-box"><div class="focus-label">Communication</div><div class="focus-body">{{communication}}</div></div>
+        </div>
+      </div>
+      {{signature}}
+    </div>
+  `,
+  command_message: `
+    <div class="command-sheet {{exerciseClass}}">
+      <div class="exercise-banner" style="{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
+      <div class="cmd-header">
+        <img class="cmd-logo" src="{{logo}}" alt="">
+        <div class="cmd-headtext">
+          <div style="font-size:.875rem;line-height:1.45;text-align:left;margin-bottom:.5rem">
+            <div><strong>SIRACEDPC</strong></div>
+            <div>Téléphone : {{contactPhone}}</div>
+            <div>Télécopie : {{contactFax}}</div>
+            <div>Courriel : {{contactEmail}}</div>
+            <div>Audio-conf. : {{contactAudioConf}}</div>
+          </div>
+          <div class="meta-line"><table class="table"><tbody><tr><th>Date</th><th>Heure</th></tr><tr><td>{{date}}</td><td>{{time}}</td></tr></tbody></table></div>
+          <p class="cmd-redtitle">{{typeLabel}}</p>
+          <h2>{{eventTitle}}</h2>
+          <div class="help">Site / lieu de l'événement : {{site}}</div>
+        </div>
+      </div>
+      <div class="cmd-urgent">MESSAGE URGENT</div>
+      <p class="cmd-autotext">{{autoText}}</p>
+      <div class="meta-line"><table class="table"><thead><tr><th>Dispositif de référence</th><th>Heure d'activation</th><th>Localisation du PCO</th></tr></thead><tbody><tr><td>{{reference}}</td><td>{{activation}}</td><td>{{pcoLocation}}</td></tr></tbody></table></div>
+      <table class="table"><tbody>
+        <tr><th style="width:78%">Mesures</th><th>Valeur</th></tr>
+        {{measuresRows}}
+      </tbody></table>
+      <div style="margin-top:1rem"><table class="table"><thead><tr><th>Services / entités</th><th>COD</th><th>PCO</th></tr></thead><tbody>{{servicesRows}}</tbody></table></div>
+      <div style="margin-top:1.25rem;display:flex;justify-content:flex-end;text-align:right">{{signature}}</div>
+      <div style="margin-top:.75rem;text-align:right"><strong>{{originalSigned}}</strong></div>
+      <div class="exercise-banner" style="margin-top:1rem;{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
+    </div>
+  `,
+  main_courante: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>{{eventTitle}}</h2><p>{{eventMeta}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      <table class="table">
+        <thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead>
+        <tbody>{{entriesRows}}</tbody>
+      </table>
+      {{signature}}
+    </div>
+  `
+};
+
+function ensureOperationalHtmlTemplates() {
+  if (!window.SICODPdfTemplates?.setHtmlTemplate) return;
+  Object.entries(STABLE_HTML_TEMPLATE_DEFAULTS).forEach(([key, html]) => {
+    const existing = window.SICODPdfTemplates.getHtmlTemplate(state, key);
+    const source = String(existing?.html || '');
+    if (!source || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
+      window.SICODPdfTemplates.setHtmlTemplate(state, key, html.trim());
+    }
+  });
+}
+
+function extractTemplateBody(html) {
+  const source = String(html || '').trim();
+  const match = source.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  return (match ? match[1] : source).trim();
+}
+
+function fillHtmlTemplate(html, tokens) {
+  return String(html || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key) ? String(tokens[key] ?? '') : '';
+  });
+}
+
+function getStoredHtmlTemplateRaw(key) {
+  ensureOperationalHtmlTemplates();
+  const template = window.SICODPdfTemplates?.getHtmlTemplate(state, key);
+  return String(template?.html || STABLE_HTML_TEMPLATE_DEFAULTS[key] || '');
+}
+
+function renderStoredHtmlTemplate(key, tokens) {
+  const body = extractTemplateBody(getStoredHtmlTemplateRaw(key));
+  return fillHtmlTemplate(body, tokens || {});
+}
+
+function openHtmlTemplatePdf(key, tokens, title = 'document') {
+  const raw = getStoredHtmlTemplateRaw(key);
+  const rendered = fillHtmlTemplate(raw, tokens || {});
+  const win = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=900');
+  if (!win) {
+    showToast("Impossible d'ouvrir la fenêtre d'impression.", 'error');
+    return;
+  }
+  if (/<html[\s>]/i.test(raw)) {
+    const enriched = rendered.replace(/<\/head>/i, `<base href="${window.location.href}"><link rel="stylesheet" href="assets/app.css"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head>`);
+    win.document.write(enriched);
+  } else {
+    const inner = renderStoredHtmlTemplate(key, tokens);
+    win.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)}</title><base href="${window.location.href}"><link rel="stylesheet" href="assets/app.css"><style>body{margin:0;background:#fff;color:#161616;padding:1rem}.preview-stage{padding:0}.document-page{margin:0 auto;box-shadow:none;background:#fff}@media print{body{padding:0}.document-page{max-width:none}}</style></head><body><div class="preview-stage"><div class="document-page">${inner}</div></div></body></html>`);
+  }
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 150);
+}
+
+function buildPSHtmlTokens(ps) {
+  const event = byId(state.events, ps.eventId);
+  const means = ps.means ?? ps.moyens ?? '';
+  const measures = ps.measures ?? ps.mesures ?? '';
+  const attention = ps.attention ?? ps.points ?? '';
+  const title = `POINT DE SITUATION N° ${ps.number}`;
+  return {
+    logo: currentLogoSrc(),
+    title: esc(title),
+    subtitle: esc(ps.title || getEventTitle(ps.eventId) || ''),
+    cartouche: psCartouche(ps, event),
+    situation: nl2br(ps.situation || ''),
+    bilan: bilanMini(ps),
+    means: nl2br(means),
+    measures: nl2br(measures),
+    attention: nl2br(attention),
+    communication: nl2br(ps.communication || '') + (ps.format === 'focus' ? psSourcesHtml(ps) : ''),
+    image: ps.image ? `<img src="${ps.image}" alt="Visuel">` : '<span class="note">Aucun visuel joint</span>',
+    image_row: ps.image ? `<tr><td><div class="ps-section-title">Visuel associé</div></td><td><div class="ps-content"><img src="${ps.image}" alt="Visuel" style="max-width:100%;max-height:18rem;width:auto;height:auto;display:block;margin:0 auto;object-fit:contain">${ps.imageCaption ? `<div class="source-note">${esc(ps.imageCaption)}</div>` : ''}</div></td></tr>` : '',
+    sources_row: (ps.audioData || ps.transcript) ? `<tr><td><div class="ps-section-title">Sources</div></td><td><div class="ps-content">${psSourcesHtml(ps)}</div></td></tr>` : '',
+    signature: renderPSSignatureHtml()
+  };
+}
+
+function buildCommandHtmlTokens(d) {
+  const contactPhone = state.settings.commandPhone || '04 84 35 40 00 (standard)';
+  const contactFax = state.settings.commandFax || '04 84 35 41 85';
+  const contactEmail = state.settings.commandEmail || 'pref-pccrise-13@bouches-du-rhone.gouv.fr';
+  const contactAudioConf = state.settings.commandAudioConf || '01 43 12 42 30 puis le 13603 suivi de #';
+  const sig = getCommandSignatureConfig();
+  const signature = sig.mode === 'delegation'
+    ? `<div><strong>Pour le préfet, par délégation</strong><div>${esc(sig.role || '')}</div><div>${esc(sig.name || '')}</div></div>`
+    : `<div><strong>Le préfet,</strong><div>${esc(sig.name || '')}</div></div>`;
+  const measuresRows = [
+    ['Activation de la cellule de suivi', mark(d.suivi)],
+    ['Prise de direction des opérations / activation du COD', mark(d.cod)],
+    ['Activation du PCO', mark(d.pco)],
+    ['Activation du plan de référence', mark(d.planActive) + (d.plan ? ` — ${esc(d.plan)}` : '')],
+    ['Mise en oeuvre limitée à certaines mesures', mark(d.limited)],
+    ["Activation d'une alerte sirène", mark(d.siren) + (d.sirenLabel ? ` — ${esc(d.sirenLabel)}` : '')]
+  ].map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`).join('');
+  const servicesRows = (d.services || []).map(s => `<tr><td>${esc(s.name)}</td><td>${mark(s.cod)}</td><td>${mark(s.pco)}</td></tr>`).join('');
+  return {
+    exerciseClass: d.exercise ? 'exercise' : '',
+    exerciseDisplay: d.exercise ? 'display:block' : 'display:none',
+    logo: currentLogoSrc(),
+    contactPhone: esc(contactPhone),
+    contactFax: esc(contactFax),
+    contactEmail: esc(contactEmail),
+    contactAudioConf: esc(contactAudioConf),
+    date: esc(d.date || ''),
+    time: esc(d.time || ''),
+    typeLabel: esc((d.typeLabel || '').toUpperCase()),
+    eventTitle: esc(d.event || 'ÉVÉNEMENT À RENSEIGNER'),
+    site: esc(d.site || ''),
+    autoText: esc(d.autoText || ''),
+    reference: esc(d.reference || ''),
+    activation: esc(d.activation || ''),
+    pcoLocation: esc(d.pcoLocation || ''),
+    measuresRows,
+    servicesRows,
+    signature,
+    originalSigned: d.originalSigned ? 'Original signé' : ''
+  };
+}
+
+function buildEventLogHtmlTokens(eventId) {
+  const e = byId(state.events, eventId || state.currentEventId);
+  const items = getEventTimelineItems(e?.id);
+  const signature = shouldApplyPdfSignature('event')
+    ? (() => {
+        const sig = getEventSignatureConfig();
+        return sig.mode === 'delegation'
+          ? `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le préfet, par délégation</div><div class="sig-line2">${esc(sig.role || '')}</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`
+          : `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Le préfet</div><div class="sig-line2">${esc(sig.name || '')}</div></div></div>`;
+      })()
+    : '';
+  return {
+    logo: currentLogoSrc(),
+    eventTitle: esc(e?.title || ''),
+    eventMeta: esc([e?.type || '—', e?.location || '—', e?.level || '—'].join(' · ')),
+    entriesRows: items.length
+      ? items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')
+      : '<tr><td colspan="3"><p class="help">Aucune entrée de main courante.</p></td></tr>',
+    signature
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // 5. NAVIGATION
 // ────────────────────────────────────────────────────────────────────────────
 
 function goPage(page) {
   if (isAuthLocked()) return;
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page || (page === 'event-archives' && b.dataset.page === 'events')));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
   if (page === 'fiches') renderFiches();
   if (page === 'ps') renderPSList();
   if (page === 'events') renderEvents();
+  if (page === 'event-archives') renderEventArchives();
   populateEventTypeSelect(document.getElementById('eventType')?.value || '');
   populateCommuneDatalist();
   if (page === 'directory') renderDirectory();
@@ -797,6 +1043,61 @@ function goPage(page) {
 document.querySelectorAll('.nav-btn').forEach(btn =>
   btn.addEventListener('click', () => goPage(btn.dataset.page))
 );
+
+function ensureEventArchivesPage() {
+  const main = document.querySelector('main.main');
+  if (!main || document.getElementById('page-event-archives')) return;
+  main.insertAdjacentHTML('beforeend', `
+    <section class="page" id="page-event-archives">
+      <div class="page-inner">
+        <div class="page-header">
+          <div><h1>Archives des événements</h1></div>
+          <div class="event-page-actions">
+            <button class="fr-btn secondary" type="button" onclick="goPage('events')">Retour aux événements</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h2 class="card-title">Événements archivés</h2></div>
+          <div class="card-body">
+            <div class="events-toolbar">
+              <input class="list-search" id="eventArchiveSearch" type="search" placeholder="Rechercher un événement archivé…" oninput="renderEventArchives()">
+            </div>
+            <div class="grid-2" id="eventArchivesList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `);
+}
+
+function ensureEventPageEnhancements() {
+  const pageHeader = document.querySelector('#page-events .page-header');
+  if (pageHeader && !pageHeader.querySelector('.event-page-actions')) {
+    const primaryButton = pageHeader.querySelector('.fr-btn');
+    const wrap = document.createElement('div');
+    wrap.className = 'event-page-actions';
+    wrap.innerHTML = `<button class="fr-btn secondary" type="button" onclick="goPage('event-archives')">Archives</button>`;
+    if (primaryButton) {
+      primaryButton.insertAdjacentElement('beforebegin', wrap);
+      wrap.appendChild(primaryButton);
+    } else {
+      pageHeader.appendChild(wrap);
+    }
+  }
+  const cardBody = document.querySelector('#page-events .card .card-body');
+  if (cardBody && !document.getElementById('eventSearch')) {
+    cardBody.insertAdjacentHTML('afterbegin', `
+      <div class="events-toolbar">
+        <input class="list-search" id="eventSearch" type="search" placeholder="Rechercher par libellé, type, commune, niveau ou ID Synergi…" oninput="renderEvents()">
+      </div>
+    `);
+  }
+  const archivedCard = Array.from(document.querySelectorAll('#page-events .card')).find((card) =>
+    card.querySelector('.card-title')?.textContent?.trim() === 'Événements archivés'
+  );
+  if (archivedCard) archivedCard.remove();
+  ensureEventArchivesPage();
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // 6. MODULE DASHBOARD
@@ -1008,7 +1309,7 @@ function getEventTimelineItems(eventId) {
     detail: item.detail || ''
   }));
   const relatedPS = getActiveItems(state.ps)
-    .filter(ps => ps.eventId === eventId && ['Validé','Diffusé'].includes(ps.status))
+    .filter(ps => ps.eventId === eventId && ps.status === 'Diffusé')
     .map(ps => ({
       date: ps.updatedAt || ps.createdAt || new Date().toISOString(),
       author: ps.author || 'SIRACEDPC',
@@ -1016,7 +1317,7 @@ function getEventTimelineItems(eventId) {
       detail: `Point de situation ${ps.number ? 'n° ' + ps.number : ''}${ps.status ? ' — ' + ps.status : ''}`
     }));
   const commandItems = getActiveItems(state.commandMessages)
-    .filter(cmd => cmd.eventId === eventId && ['Validé','Diffusé'].includes(cmd.status))
+    .filter(cmd => cmd.eventId === eventId && cmd.status === 'Diffusé')
     .map(cmd => ({
       date: cmd.updatedAt || cmd.createdAt || new Date().toISOString(),
       author: 'SIRACEDPC',
@@ -1045,18 +1346,26 @@ function renderEventTimeline(eventId) {
 function exportEventLogPDF() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
-  if (!e || !window.jspdf) return;
+  if (!e) return;
+  openHtmlTemplatePdf('main_courante', buildEventLogHtmlTokens(eventId), `main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}`);
+  return;
+  if (!window.jspdf) return;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const palette = getPdfAppearance();
+  const textColor = palette.text;
+  const m = 10;
+  const pageW = doc.internal.pageSize.getWidth();
+  const signature = shouldApplyPdfSignature('event') ? getEventSignatureConfig() : { mode: 'prefet', name: '', role: '' };
 
-  addLogoPreserved(doc, 10, 8, 40, 18);
+  addLogoPreserved(doc, m, 8, 40, 18);
 
   doc.setTextColor(22,22,22);
   doc.setFont('helvetica','bold');
   doc.setFontSize(12);
-  doc.text('CABINET', 200, 12, { align:'right' });
+  doc.text('CABINET', pageW - m, 12, { align:'right' });
   doc.setFont('helvetica','bold');
-  doc.text('SIRACEDPC', 200, 18, { align:'right' });
+  doc.text('SIRACEDPC', pageW - m, 18, { align:'right' });
 
   doc.setTextColor(0, 0, 145);
   doc.setFont('helvetica','bold');
@@ -1071,12 +1380,13 @@ function exportEventLogPDF() {
   doc.setFontSize(10);
   const exportStamp = new Date().toLocaleString('fr-FR');
   const sub = doc.splitTextToSize(`Type : ${e.type || '—'}\nCommune / localisation : ${e.location || '—'}\nNiveau de mobilisation : ${e.level || '—'}\nExporté le : ${exportStamp}`, 190);
-  doc.text(sub, 10, 52);
+  doc.text(sub, m, 52);
 
   let y = 74;
   const items = getEventTimelineItems(eventId);
+  const pageBottomLimit = signature.name ? 258 : 285;
   const cols = [
-    { x:10, w:38, title:'Date / heure' },
+    { x:m, w:38, title:'Date / heure' },
     { x:48, w:32, title:'Auteur' },
     { x:80, w:120, title:'Entrée' }
   ];
@@ -1087,7 +1397,7 @@ function exportEventLogPDF() {
       doc.setDrawColor(221,221,221);
       doc.setFillColor(245,245,254);
       doc.rect(c.x, y, c.w, 8, 'FD');
-      doc.setTextColor(0,0,145);
+      doc.setTextColor(...textColor);
       doc.text(c.title, c.x + 1.5, y + 5.2);
     });
     y += 8;
@@ -1108,7 +1418,7 @@ function exportEventLogPDF() {
   drawHeader();
 
   if (!items.length) {
-    doc.text('Aucune entrée de main courante.', 10, y + 6);
+    doc.text('Aucune entrée de main courante.', m, y + 6);
   } else {
     items.forEach(item => {
       const entryText = `${item.title || ''}${item.detail ? '\n' + item.detail : ''}`;
@@ -1117,7 +1427,7 @@ function exportEventLogPDF() {
       const lines3 = doc.splitTextToSize(entryText, cols[2].w - 3);
       const rowH = Math.max(8, lines1.length*5+3, lines2.length*5+3, lines3.length*5+3);
 
-      if (y + rowH > 285) {
+      if (y + rowH > pageBottomLimit) {
         doc.addPage();
         y = 15;
         drawHeader();
@@ -1126,23 +1436,27 @@ function exportEventLogPDF() {
       doc.rect(cols[0].x, y, cols[0].w, rowH);
       doc.rect(cols[1].x, y, cols[1].w, rowH);
       doc.rect(cols[2].x, y, cols[2].w, rowH);
-      doc.text(lines1, cols[0].x + 1.5, y + 4.8);
-      doc.text(lines2, cols[1].x + 1.5, y + 4.8);
-      doc.text(lines3, cols[2].x + 1.5, y + 4.8);
+      doc.text(lines1, cols[0].x + 1.5, y + 4.8, { maxWidth: cols[0].w - 3 });
+      doc.text(lines2, cols[1].x + 1.5, y + 4.8, { maxWidth: cols[1].w - 3 });
+      doc.text(lines3, cols[2].x + 1.5, y + 4.8, { maxWidth: cols[2].w - 3 });
       y += rowH;
     });
   }
 
+  applyFixedSignature();
   doc.save(`main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.pdf`);
 }
 
 function renderEvents() {
+  ensureEventPageEnhancements();
   const eventList = document.getElementById('eventList');
-  const archiveList = document.getElementById('archiveList');
-  if (!eventList || !archiveList) return;
+  if (!eventList) return;
 
   const active = getActiveItems(state.events).filter(e => e.status !== 'Archivé');
-  const archived = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'Archivé');
+  const q = (document.getElementById('eventSearch')?.value || '').toLowerCase().trim();
+  const filteredActive = q
+    ? active.filter(e => [e.title, e.type, e.location, e.level, e.synergi].join(' ').toLowerCase().includes(q))
+    : active;
 
   const tmpl = e => {
     const isOpen = state.currentEventId === e.id;
@@ -1168,11 +1482,35 @@ function renderEvents() {
     </div>`;
   };
 
-  eventList.innerHTML = active.length ? active.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
-  archiveList.innerHTML = archived.length ? archived.map(tmpl).join('') : '<p class="help">Aucune archive.</p>';
+  eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   updatePSEventSelect();
   populateCommuneDatalist();
   renderEventTimeline(state.currentEventId);
+}
+
+function renderEventArchives() {
+  ensureEventArchivesPage();
+  const archiveList = document.getElementById('eventArchivesList');
+  if (!archiveList) return;
+  const archived = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'Archivé');
+  const q = (document.getElementById('eventArchiveSearch')?.value || '').toLowerCase().trim();
+  const filtered = q
+    ? archived.filter(e => [e.title, e.type, e.location, e.level, e.synergi].join(' ').toLowerCase().includes(q))
+    : archived;
+  const tmpl = e => `<div class="event-card">
+    <h3>${esc(e.title)}</h3>
+    <div class="event-meta">
+      <span>${esc(e.type || '')}</span>
+      <span>${esc(e.location || '')}</span>
+      <span>${esc(e.level || '')}</span>
+      ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
+    </div>
+    <div class="event-actions">
+      <button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
+      <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>
+    </div>
+  </div>`;
+  archiveList.innerHTML = filtered.length ? filtered.map(tmpl).join('') : '<p class="help">Aucune archive.</p>';
 }
 
 function updatePSEventSelect() {
@@ -1409,6 +1747,8 @@ function renderPSList() {
 
 function renderPSHtml(ps) {
   if (!ps) return '<p class="help">Sélectionnez un point de situation.</p>';
+  const templateKey = ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail';
+  return renderStoredHtmlTemplate(templateKey, buildPSHtmlTokens(ps));
   const event = byId(state.events, ps.eventId);
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
@@ -1769,6 +2109,8 @@ function exportPSFocusPDF(ps) {
 function exportPSPDF() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) { showToast('Sélectionnez un point de situation.', 'error'); return; }
+  openHtmlTemplatePdf(ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail', buildPSHtmlTokens(ps), `PS_${ps.number || 'SICOD'}`);
+  return;
   if (ps.format === 'focus') { exportPSFocusPDF(ps); return; }
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
@@ -2018,7 +2360,7 @@ function syncCommandEventContext(){
   }
 }
 function injectCommandIntoEventLog(cmd){
-  if(!cmd || !cmd.eventId || !['Validé','Diffusé'].includes(cmd.status)) return;
+  if(!cmd || !cmd.eventId || cmd.status !== 'Diffusé') return;
   const e = byId(state.events, cmd.eventId);
   if(!e || e.status === 'Archivé') return;
   e.logEntries = Array.isArray(e.logEntries) ? e.logEntries : [];
@@ -2208,7 +2550,7 @@ function renderCommandList() {
   el.innerHTML = `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
     items.map(item => `<tr class="${item.id === state.selectedCommandId ? 'is-selected' : ''}">
       <td>${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</td>
-      <td><button class="table-title-btn" type="button" onclick="selectCommand('${item.id}')">Message ${esc(item.number || '')}<span class="table-meta">${esc(item.typeLabel || '')}</span></button></td>
+      <td><div class="event-title-block"><span class="event-label">Message ${esc(item.number || '')}</span><span class="table-meta">${esc(item.typeLabel || '')}</span></div></td>
       <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
       <td>${badge(item.status)}</td>
       <td><div class="list-actions">
@@ -2300,6 +2642,8 @@ function renderCommandPreview(data) {
     commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
     return;
   }
+  commandPreview.innerHTML = `<div class="preview-stage command"><div class="document-page">${renderStoredHtmlTemplate('command_message', buildCommandHtmlTokens(d))}</div></div>`;
+  return;
   const contactPhone = state.settings.commandPhone || '04 84 35 40 00 (standard)';
   const contactFax = state.settings.commandFax || '04 84 35 41 85';
   const contactEmail = state.settings.commandEmail || 'pref-pccrise-13@bouches-du-rhone.gouv.fr';
@@ -2352,6 +2696,8 @@ function renderCommandPreview(data) {
 function exportCommandPDF() {
   const d = state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null;
   if (!d) { showToast('Sélectionnez un message de commandement', 'error'); return; }
+  openHtmlTemplatePdf('command_message', buildCommandHtmlTokens(d), `message-commandement-${d.number || 'sicod'}`);
+  return;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -2872,14 +3218,15 @@ function exportContactsPDF() {
     const cols = [44, 34, 44, 34, 34, 76];
     const headers = ['Fonction', 'Nom', 'Entité', 'Téléphone 1', 'Téléphone 2', 'E-mail'];
     let x = margin;
+    const totalW = cols.reduce((sum, value) => sum + value, 0);
     doc.setFillColor(...headerFill);
     doc.setDrawColor(221, 221, 221);
-    doc.setTextColor(...blue);
+    doc.rect(margin, y, totalW, 7, 'FD');
     doc.setTextColor(...textColor);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     headers.forEach((h, i) => {
-      doc.rect(x, y, cols[i], 7, 'FD');
+      doc.rect(x, y, cols[i], 7);
       doc.text(h, x + cols[i] / 2, y + 4.5, { align: 'center' });
       x += cols[i];
     });
@@ -2937,7 +3284,7 @@ function exportContactsPDF() {
         doc.setFontSize(8);
         wrapped.forEach((lines, i) => {
           doc.rect(x, y, cols[i], rowH);
-          doc.text(lines, x + 1.5, y + 4.5);
+          doc.text(lines, x + 1.5, y + 4.5, { maxWidth: cols[i] - 3 });
           x += cols[i];
         });
         y += rowH;
@@ -3896,10 +4243,8 @@ async function submitSupabaseLogin(event) {
     );
     refreshAuthGate();
     refreshStorageStatus();
-    updateAuthGateStatus('Connexion rÃ©ussie', 'success');
     updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
-  
-    updateAuthGateStatus('Connexion r\u00E9ussie', 'success');
+    updateAuthGateStatus('Connexion réussie', 'success');
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
@@ -3968,11 +4313,11 @@ function exportSelectedHtmlTemplate() {
   const select = document.getElementById('settingHtmlTemplateKey');
   const template = window.SICODPdfTemplates?.getHtmlTemplate(state, select?.value || '');
   if (!template) {
-    showToast('Aucun modÃ¨le HTML sÃ©lectionnÃ©.', 'error');
+    showToast('Aucun modèle HTML sélectionné.', 'error');
     return;
   }
   downloadBlob(new Blob([template.html], { type: 'text/html;charset=utf-8' }), template.fileName || `${slugify(template.id || 'modele')}.html`);
-  showToast('ModÃ¨le HTML exportÃ©.');
+  showToast('Modèle HTML exporté.');
 }
 
 function triggerHtmlTemplateImport() {
@@ -3984,7 +4329,7 @@ async function importSelectedHtmlTemplate(file) {
   const select = document.getElementById('settingHtmlTemplateKey');
   const key = select?.value || '';
   if (!key) {
-    showToast('Aucun modÃ¨le HTML cible n est sÃ©lectionnÃ©.', 'error');
+    showToast('Aucun modèle HTML cible n est sélectionné.', 'error');
     return;
   }
   try {
@@ -3992,7 +4337,7 @@ async function importSelectedHtmlTemplate(file) {
     if (!String(content || '').trim()) throw new Error('Le fichier HTML est vide.');
     window.SICODPdfTemplates?.setHtmlTemplate(state, key, content);
     loadSelectedHtmlTemplate();
-    showToast('ModÃ¨le HTML importÃ©.');
+    showToast('Modèle HTML importé.');
   } catch (error) {
     showToast(`Import HTML impossible : ${error.message || String(error)}`, 'error');
   } finally {
@@ -4007,7 +4352,7 @@ function resetSelectedHtmlTemplate() {
   if (!key) return;
   window.SICODPdfTemplates?.resetHtmlTemplate(state, key);
   loadSelectedHtmlTemplate();
-  showToast('ModÃ¨le HTML rÃ©initialisÃ©.');
+  showToast('Modèle HTML réinitialisé.');
 }
 
 function ensureHtmlTemplateSettingsCard() {
@@ -4017,7 +4362,7 @@ function ensureHtmlTemplateSettingsCard() {
   card.className = 'card';
   card.id = 'htmlTemplateSettingsCard';
   card.innerHTML = `
-    <div class="card-header"><h2 class="card-title">Maquettes HTML d aperÃ§u et d export</h2></div>
+    <div class="card-header"><h2 class="card-title">Maquettes HTML d aperçu et d export</h2></div>
     <div class="card-body">
       <div class="grid-2">
         <div>
@@ -4027,7 +4372,7 @@ function ensureHtmlTemplateSettingsCard() {
         <div class="list-actions" style="align-self:end">
           <button class="fr-btn secondary small" type="button" onclick="exportSelectedHtmlTemplate()">Exporter HTML</button>
           <button class="fr-btn secondary small" type="button" onclick="triggerHtmlTemplateImport()">Importer HTML</button>
-          <button class="fr-btn secondary small" type="button" onclick="resetSelectedHtmlTemplate()">RÃ©initialiser</button>
+          <button class="fr-btn secondary small" type="button" onclick="resetSelectedHtmlTemplate()">Réinitialiser</button>
         </div>
       </div>
       <input id="settingHtmlTemplateImport" type="file" accept=".html,text/html" style="display:none" onchange="importSelectedHtmlTemplate(this.files[0])">
@@ -4035,7 +4380,7 @@ function ensureHtmlTemplateSettingsCard() {
         <label for="settingHtmlTemplateSource">Code HTML</label>
         <textarea id="settingHtmlTemplateSource" class="code-area" spellcheck="false"></textarea>
       </div>
-      <p class="help">Ces maquettes HTML permettent d importer, d exporter et d harmoniser les aperÃ§us et futurs rendus documentaires sans toucher Ã  la matrice PDF active.</p>
+      <p class="help">Ces maquettes HTML permettent d importer, d exporter et d harmoniser les aperçus et futurs rendus documentaires sans toucher à la matrice PDF active.</p>
     </div>
   `;
   stack.insertBefore(card, stack.children[1] || null);
@@ -4276,9 +4621,34 @@ function ensureSettingsEnhancements() {
   ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
   ensureSystemSettingsUI();
+  ensureEventSignatureSettingsUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
   bindCloudStateImport();
+}
+
+function ensureEventSignatureSettingsUI() {
+  const panel = document.querySelector('[data-settings-panel="events"] .card-body');
+  if (!panel || panel.querySelector('#settingEventSignatureMode')) return;
+  panel.insertAdjacentHTML('beforeend', `
+    <div class="grid-3" style="margin-top:1rem">
+      <div>
+        <label>Signature</label>
+        <select id="settingEventSignatureMode">
+          <option value="prefet">Le préfet</option>
+          <option value="delegation">Pour le préfet, par délégation</option>
+        </select>
+      </div>
+      <div>
+        <label>Nom du signataire</label>
+        <input id="settingEventSignatureName">
+      </div>
+      <div>
+        <label>Fonction du signataire</label>
+        <input id="settingEventSignatureRole">
+      </div>
+    </div>
+  `);
 }
 
 function loadSettingsForm() {
@@ -4293,6 +4663,9 @@ function loadSettingsForm() {
   if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
   if (get('settingPsSignatureRole')) get('settingPsSignatureRole').value = state.settings.psSignatureRole || '';
   if (get('settingEventTypes')) get('settingEventTypes').value = getDynamicList('eventTypes').join('\n');
+  if (get('settingEventSignatureMode')) get('settingEventSignatureMode').value = state.settings.eventSignatureMode || 'delegation';
+  if (get('settingEventSignatureName')) get('settingEventSignatureName').value = state.settings.eventSignatureName || '';
+  if (get('settingEventSignatureRole')) get('settingEventSignatureRole').value = state.settings.eventSignatureRole || '';
   if (get('settingCommandTypes')) get('settingCommandTypes').value = getDynamicList('commandTypes').join('\n');
   if (get('settingCommandSignatureMode')) get('settingCommandSignatureMode').value = state.settings.commandSignatureMode || 'delegation';
   if (get('settingCommandSignatureName')) get('settingCommandSignatureName').value = state.settings.commandSignatureName || '';
@@ -4360,6 +4733,9 @@ async function saveSettings() {
   state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
   state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
   state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
+  state.settings.eventSignatureMode = get('settingEventSignatureMode')?.value || 'delegation';
+  state.settings.eventSignatureName = (get('settingEventSignatureName')?.value || '').trim();
+  state.settings.eventSignatureRole = (get('settingEventSignatureRole')?.value || '').trim();
   state.settings.pdfAppearance = {
     primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
     accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
@@ -4425,6 +4801,7 @@ function renderAll() {
     return;
   }
   renderEvents();
+  renderEventArchives();
   renderPSList();
   renderDashboard();
   renderFiches();

@@ -650,9 +650,17 @@ dialog .dialog-body,dialog .card-body{
 }
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 
-#page-ps > .page-inner > .grid-2,#page-command > .page-inner > .grid-2{grid-template-columns:minmax(29rem,1.05fr) minmax(35rem,1.45fr)}
-#page-command #commandLayout{grid-template-columns:minmax(23rem,1fr) minmax(36rem,1.45fr)}
+#page-ps > .page-inner > .grid-2,
+#page-command > .page-inner > .grid-2,
+#page-command #commandLayout{grid-template-columns:repeat(2,minmax(0,1fr))}
 #page-ps #psPreview,#page-command #commandPreview{min-height:62vh}
+
+.events-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin-bottom:1rem}
+.events-toolbar .list-search{margin:0;min-width:18rem;flex:1 1 20rem}
+.page-header .event-page-actions{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.event-title-block{display:flex;flex-direction:column;gap:.15rem}
+.event-title-block .event-label{font-weight:400;color:var(--text)}
+.event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
 
 .directory-group{margin-bottom:1rem}
 .compact-list{margin:0;padding-left:1rem}
