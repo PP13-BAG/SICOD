@@ -1180,6 +1180,10 @@ document.querySelectorAll('.nav-btn').forEach(btn =>
   btn.addEventListener('click', () => goPage(btn.dataset.page))
 );
 
+function isPageActive(page) {
+  return document.getElementById(`page-${page}`)?.classList.contains('active');
+}
+
 function ensureEventArchivesPage() {
   const main = document.querySelector('main.main');
   if (!main || document.getElementById('page-event-archives')) return;
@@ -1798,6 +1802,7 @@ function renderPSList() {
 function renderPSPreview() {
   const psPreview = document.getElementById('psPreview');
   if (!psPreview) return;
+  if (!isPageActive('ps')) return;
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
     psPreview.innerHTML = '<p class="help">Sélectionnez un point de situation.</p>';
@@ -1813,7 +1818,6 @@ function renderPSPreview() {
       }
     );
   }
-  persist();
 }
 
 function handlePSImageFile(file) {
@@ -2471,6 +2475,7 @@ function getCommandData() {
 function renderCommandPreview(data) {
   const commandPreview = document.getElementById('commandPreview');
   if (!commandPreview) return;
+  if (!isPageActive('command')) return;
   const d = data || (state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   if (!d) {
     commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
