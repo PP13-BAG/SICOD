@@ -40,6 +40,14 @@ create table if not exists public.app_user_roles (
   primary key (user_id, role_key)
 );
 
+create table if not exists public.app_user_directory (
+  user_id uuid primary key,
+  email text not null,
+  display_name text,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  last_seen_at timestamptz not null default timezone('utc'::text, now())
+);
+
 create table if not exists public.audit_log (
   id uuid primary key default gen_random_uuid(),
   entity_type text not null,
@@ -209,6 +217,7 @@ alter table public.app_config enable row level security;
 alter table public.document_templates enable row level security;
 alter table public.app_runtime_lock enable row level security;
 alter table public.app_user_roles enable row level security;
+alter table public.app_user_directory enable row level security;
 alter table public.audit_log enable row level security;
 alter table public.reference_event_types enable row level security;
 alter table public.reference_command_types enable row level security;
@@ -227,6 +236,7 @@ revoke all on table public.app_config from anon, authenticated;
 revoke all on table public.document_templates from anon, authenticated;
 revoke all on table public.app_runtime_lock from anon, authenticated;
 revoke all on table public.app_user_roles from anon, authenticated;
+revoke all on table public.app_user_directory from anon, authenticated;
 revoke all on table public.audit_log from anon, authenticated;
 revoke all on table public.reference_event_types from anon, authenticated;
 revoke all on table public.reference_command_types from anon, authenticated;
@@ -244,7 +254,8 @@ grant select, insert, update on table public.app_settings to authenticated;
 grant select, insert, update on table public.app_config to authenticated;
 grant select on table public.document_templates to authenticated;
 grant select, insert, update, delete on table public.app_runtime_lock to authenticated;
-grant select on table public.app_user_roles to authenticated;
+grant select, insert, update, delete on table public.app_user_roles to authenticated;
+grant select, insert, update on table public.app_user_directory to authenticated;
 grant select, insert on table public.audit_log to authenticated;
 grant select, insert, update on table public.reference_event_types to authenticated;
 grant select, insert, update on table public.reference_command_types to authenticated;
@@ -296,6 +307,69 @@ for select
 to authenticated
 using (auth.uid() = user_id);
 
+drop policy if exists "app_user_roles_bootstrap_admin" on public.app_user_roles;
+create policy "app_user_roles_bootstrap_admin"
+on public.app_user_roles
+for insert
+to authenticated
+with check (
+  auth.uid() = user_id
+  and role_key = 'admin'
+  and not exists (select 1 from public.app_user_roles)
+);
+
+drop policy if exists "app_user_roles_admin_manage" on public.app_user_roles;
+create policy "app_user_roles_admin_manage"
+on public.app_user_roles
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.app_user_roles as roles
+    where roles.user_id = auth.uid()
+      and roles.role_key = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.app_user_roles as roles
+    where roles.user_id = auth.uid()
+      and roles.role_key = 'admin'
+  )
+);
+
+drop policy if exists "app_user_directory_self_rw" on public.app_user_directory;
+create policy "app_user_directory_self_rw"
+on public.app_user_directory
+for all
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "app_user_directory_admin_manage" on public.app_user_directory;
+create policy "app_user_directory_admin_manage"
+on public.app_user_directory
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.app_user_roles as roles
+    where roles.user_id = auth.uid()
+      and roles.role_key = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.app_user_roles as roles
+    where roles.user_id = auth.uid()
+      and roles.role_key = 'admin'
+  )
+);
+
 drop policy if exists "audit_log_authenticated_insert" on public.audit_log;
 create policy "audit_log_authenticated_insert"
 on public.audit_log
@@ -338,4 +412,5 @@ comment on table public.app_config is 'Configuration applicative globale dissoci
 comment on table public.document_templates is 'Modeles de documents PDF versionnes et modifiables a chaud.';
 comment on table public.app_runtime_lock is 'Reserve pour un verrou exclusif applicatif si necessaire.';
 comment on table public.app_user_roles is 'Roles applicatifs associes aux utilisateurs Supabase Auth.';
+comment on table public.app_user_directory is 'Annuaire minimal des utilisateurs connus de l application, alimente a la connexion.';
 comment on table public.audit_log is 'Journal d audit minimal des operations importantes.';

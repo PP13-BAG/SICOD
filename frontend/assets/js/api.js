@@ -2,6 +2,7 @@
   'use strict';
 
   const AUTH_SESSION_KEY = 'sicodSupabaseSessionV1';
+  const USER_ROLE_VALUES = ['admin', 'redacteur', 'lecture'];
   const REFERENCE_TABLES = {
     eventTypes: 'reference_event_types',
     commandTypes: 'reference_command_types',
@@ -20,6 +21,7 @@
   let saveTimer = null;
   let lastSerializedState = '';
   let authSession = loadInitialAuthSession();
+  let authRoles = [];
 
   function sanitizeRemoteConfig(input) {
     const value = input && typeof input === 'object' ? input : {};
@@ -82,6 +84,28 @@
 
   function clearAuthSession() {
     persistAuthSession(null);
+    authRoles = [];
+  }
+
+  function getResolvedRole() {
+    if (authRoles.includes('admin')) return 'admin';
+    if (authRoles.includes('redacteur')) return 'redacteur';
+    if (authRoles.includes('lecture')) return 'lecture';
+    return '';
+  }
+
+  function normalizeRoleList(input) {
+    return Array.from(new Set((Array.isArray(input) ? input : [])
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter((item) => USER_ROLE_VALUES.includes(item))));
+  }
+
+  function getCurrentUserLabel(user = authSession?.user) {
+    const meta = user && typeof user === 'object' ? (user.user_metadata || {}) : {};
+    const fullName = [meta.first_name, meta.last_name].map((value) => String(value || '').trim()).filter(Boolean).join(' ').trim();
+    const displayName = String(meta.display_name || meta.full_name || fullName || '').trim();
+    if (displayName) return displayName;
+    return String(user?.email || '').trim();
   }
 
   function isSupabaseConfigured(config = runtimeConfig) {
@@ -212,12 +236,20 @@
     }
     if (isSessionExpired()) {
       try {
-        return await refreshSupabaseSession();
+        const session = await refreshSupabaseSession();
+        authRoles = session?.accessToken ? await fetchCurrentUserRoles().catch(() => authRoles) : [];
+        return session;
       } catch {
         return null;
       }
     }
     setRemoteMode('supabase');
+    if (!authRoles.length && authSession?.accessToken) {
+      authRoles = await fetchCurrentUserRoles().catch(() => authRoles);
+    }
+    if (authSession?.accessToken) {
+      await touchCurrentUserDirectoryEntry().catch(() => null);
+    }
     return authSession;
   }
 
@@ -235,6 +267,8 @@
     const nextSession = mapSupabaseSession(payload);
     if (!nextSession) throw new Error('Connexion Supabase invalide.');
     persistAuthSession(nextSession);
+    authRoles = await fetchCurrentUserRoles().catch(() => []);
+    await touchCurrentUserDirectoryEntry().catch(() => null);
     setRemoteMode('supabase');
     return {
       authenticated: true,
@@ -292,6 +326,7 @@
   function getAuthState() {
     const configured = isSupabaseConfigured();
     const authenticated = configured && !!authSession?.accessToken && !isSessionExpired(authSession, 0);
+    const role = getResolvedRole();
     return {
       configured,
       enabled: configured,
@@ -299,7 +334,101 @@
       provider: configured ? 'supabase' : 'none',
       email: authSession?.user?.email || '',
       userId: authSession?.user?.id || '',
-      expiresAt: authSession?.expiresAt || null
+      expiresAt: authSession?.expiresAt || null,
+      roles: authRoles.slice(),
+      role: role || (authenticated ? 'lecture' : ''),
+      isAdmin: role === 'admin'
+    };
+  }
+
+  async function fetchCurrentUserRoles() {
+    const userId = authSession?.user?.id;
+    if (!userId) return [];
+    const payload = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true);
+    let rows = Array.isArray(payload) ? payload : [];
+    if (!rows.length) {
+      try {
+        await supabaseRequest('/rest/v1/app_user_roles', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=representation'
+          },
+          body: JSON.stringify([{ user_id: userId, role_key: 'admin' }])
+        }, true);
+        const retry = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true);
+        rows = Array.isArray(retry) ? retry : [];
+      } catch {}
+    }
+    return rows.map((row) => String(row?.role_key || '')).filter(Boolean);
+  }
+
+  async function touchCurrentUserDirectoryEntry() {
+    const user = authSession?.user;
+    const userId = String(user?.id || '').trim();
+    const email = String(user?.email || '').trim();
+    if (!userId || !email) return null;
+    return supabaseRequest('/rest/v1/app_user_directory?on_conflict=user_id', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify([{
+        user_id: userId,
+        email,
+        display_name: getCurrentUserLabel(user),
+        last_seen_at: new Date().toISOString()
+      }])
+    }, true);
+  }
+
+  async function getSupabaseManagedUsers() {
+    const [directoryRows, roleRows] = await Promise.all([
+      supabaseRequest('/rest/v1/app_user_directory?select=user_id,email,display_name,last_seen_at,created_at&order=email.asc', {}, true),
+      supabaseRequest('/rest/v1/app_user_roles?select=user_id,role_key&order=user_id.asc,role_key.asc', {}, true)
+    ]);
+    const roleMap = new Map();
+    (Array.isArray(roleRows) ? roleRows : []).forEach((row) => {
+      const userId = String(row?.user_id || '');
+      const roleKey = String(row?.role_key || '');
+      if (!userId || !roleKey) return;
+      if (!roleMap.has(userId)) roleMap.set(userId, []);
+      roleMap.get(userId).push(roleKey);
+    });
+    return (Array.isArray(directoryRows) ? directoryRows : []).map((row) => ({
+      userId: row.user_id,
+      email: row.email || '',
+      displayName: row.display_name || '',
+      lastSeenAt: row.last_seen_at || null,
+      createdAt: row.created_at || null,
+      roles: normalizeRoleList(roleMap.get(row.user_id) || [])
+    }));
+  }
+
+  async function saveSupabaseManagedUserRoles(userId, roles) {
+    const targetUserId = String(userId || '').trim();
+    if (!targetUserId) throw new Error('Utilisateur cible manquant.');
+    const nextRoles = normalizeRoleList(roles);
+    if (!nextRoles.length) throw new Error('Au moins un rôle doit être attribué.');
+    await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(targetUserId)}`, {
+      method: 'DELETE'
+    }, true);
+    await supabaseRequest('/rest/v1/app_user_roles', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(nextRoles.map((roleKey) => ({
+        user_id: targetUserId,
+        role_key: roleKey
+      })))
+    }, true);
+    return {
+      success: true,
+      userId: targetUserId,
+      roles: nextRoles
     };
   }
 
@@ -549,6 +678,18 @@
         if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
         await pushSupabaseReferenceCatalog(catalog);
         return true;
+      },
+      async listManagedUsers() {
+        if (!isSupabaseConfigured()) return [];
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return getSupabaseManagedUsers();
+      },
+      async saveManagedUserRoles(userId, roles) {
+        if (!isSupabaseConfigured()) throw new Error('Supabase nâ€™est pas configurÃ©.');
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return saveSupabaseManagedUserRoles(userId, roles);
       },
     }
   };

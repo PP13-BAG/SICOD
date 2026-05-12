@@ -442,6 +442,16 @@ input:focus,select:focus,textarea:focus{
 .preview-stage .ps-sheet,.preview-stage .command-sheet{flex:0 0 auto}
 .preview-stage.command{min-height:calc(100vh - 18rem)}
 .preview-stage.ps{min-height:calc(100vh - 20rem)}
+.template-preview-frame{
+  display:block;
+  width:100%;
+  min-height:297mm;
+  border:0;
+  background:#fff;
+}
+.template-preview-frame.is-command{min-height:calc(100vh - 18rem)}
+.template-preview-frame.is-ps{min-height:calc(100vh - 20rem)}
+.template-preview-frame.is-focus{min-height:210mm}
 
 .media-grid{margin-top:1rem}
 .upload-box{
@@ -663,15 +673,27 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
 
 .directory-group{margin-bottom:1rem}
-.directory-group .table th:nth-child(1){width:13%}
-.directory-group .table th:nth-child(2){width:14%}
-.directory-group .table th:nth-child(3){width:14%}
+.directory-group .card-body{overflow-x:auto}
+.directory-group .table{min-width:100%}
+.directory-group .table th:nth-child(1){width:12%}
+.directory-group .table th:nth-child(2){width:11%}
+.directory-group .table th:nth-child(3){width:13%}
 .directory-group .table th:nth-child(4),
-.directory-group .table th:nth-child(5){width:11%}
+.directory-group .table th:nth-child(5){width:10%}
 .directory-group .table th:nth-child(6),
-.directory-group .table th:nth-child(7){width:15%}
-.directory-group .table th:nth-child(8){width:7%}
+.directory-group .table th:nth-child(7){width:13%}
+.directory-group .table th:nth-child(8){width:18%}
+.directory-group .table td:last-child{padding:.35rem .4rem}
+.directory-group .table td:last-child .list-actions{gap:.25rem}
+.directory-group .table td:last-child .fr-btn{padding:.3rem .45rem;font-size:.78rem}
+#directorySearch{border-radius:.75rem}
+#page-directory .page-inner{max-width:92rem}
 .compact-list{margin:0;padding-left:1rem}
+.user-admin-table th:nth-child(1){width:36%}
+.user-admin-table th:nth-child(2){width:18%}
+.user-admin-table th:nth-child(3){width:24%}
+.user-admin-table th:nth-child(4){width:22%}
+.user-admin-table td select{min-width:100%}
 
 html[data-theme='dark'] .app-topbar,
 html[data-theme='dark'] .card,
