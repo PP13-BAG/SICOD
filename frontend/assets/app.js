@@ -1385,9 +1385,6 @@ function exportEventLogPDF() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
   if (!e) return;
-  openHtmlTemplatePdf('main_courante', buildEventLogHtmlTokens(eventId), `main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}`);
-  return;
-  /*
   if (!window.jspdf) return;
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
@@ -1484,7 +1481,6 @@ function exportEventLogPDF() {
 
   applyFixedSignature();
   doc.save(`main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.pdf`);
-  */
 }
 
 function renderEvents() {
@@ -2155,8 +2151,6 @@ function exportPSFocusPDF(ps) {
 function exportPSPDF() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) { showToast('Sélectionnez un point de situation.', 'error'); return; }
-  openHtmlTemplatePdf(ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail', buildPSHtmlTokens(ps), `PS_${ps.number || 'SICOD'}`);
-  return;
   if (ps.format === 'focus') { exportPSFocusPDF(ps); return; }
   const means = ps.means ?? ps.moyens ?? '';
   const measures = ps.measures ?? ps.mesures ?? '';
@@ -2748,10 +2742,7 @@ function renderCommandPreview(data) {
 function exportCommandPDF() {
   const d = state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null;
   if (!d) { showToast('Sélectionnez un message de commandement', 'error'); return; }
-  openHtmlTemplatePdf('command_message', buildCommandHtmlTokens(d), `message-commandement-${d.number || 'sicod'}`);
-  return;
-}
-  /*
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const palette = getPdfAppearance();
@@ -2888,7 +2879,6 @@ function exportCommandPDF() {
 // 10. MODULE FICHES RÉFLEXES
 // ────────────────────────────────────────────────────────────────────────────
 
-*/
 function getReflexFiches() {
   if (!Array.isArray(state.reflexFiches) || !state.reflexFiches.length) {
     state.reflexFiches = JSON.parse(JSON.stringify(reflexLibrary.fiches || []));
