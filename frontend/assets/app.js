@@ -1184,6 +1184,11 @@ function isPageActive(page) {
   return document.getElementById(`page-${page}`)?.classList.contains('active');
 }
 
+function getActivePageName() {
+  const activeId = document.querySelector('.page.active')?.id || 'page-dashboard';
+  return activeId.replace(/^page-/, '');
+}
+
 function ensureEventArchivesPage() {
   const main = document.querySelector('main.main');
   if (!main || document.getElementById('page-event-archives')) return;
@@ -2162,6 +2167,7 @@ function initCommandForm() {
   ensureCommandState();
   const cmdType = document.getElementById('cmdType');
   if (cmdType) cmdType.innerHTML = commandTypes.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join('');
+  if (!isPageActive('command')) return;
   renderCommandList();
   if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
     renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
@@ -3945,7 +3951,6 @@ function applyRemoteStateSnapshot(snapshot) {
   userAdminState.items = [];
   ensureStateIntegrity();
   applyTheme(state.settings.theme);
-  renderAll();
   refreshStorageStatus();
 
   return true;
@@ -4728,24 +4733,29 @@ function renderAll() {
     refreshStorageStatus();
     return;
   }
-  renderEvents();
-  renderEventArchives();
-  renderPSList();
   renderDashboard();
-  renderFiches();
-  renderCommandList();
-  if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
-    renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
-  } else {
-    renderCommandPreview(null);
+  const activePage = getActivePageName();
+  if (activePage === 'events') renderEvents();
+  if (activePage === 'event-archives') renderEventArchives();
+  if (activePage === 'ps') renderPSList();
+  if (activePage === 'command') {
+    renderCommandList();
+    if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
+      renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
+    } else {
+      renderCommandPreview(null);
+    }
   }
-  renderDirectory();
-  renderTools();
-  renderPlanning();
-  renderDutyCalendar();
-  renderDutyAvailabilityList();
-  renderDutySchedule();
-  loadSettingsForm();
+  if (activePage === 'fiches') renderFiches();
+  if (activePage === 'directory') renderDirectory();
+  if (activePage === 'tools') renderTools();
+  if (activePage === 'planning') renderPlanning();
+  if (activePage === 'duty') {
+    renderDutyCalendar();
+    renderDutyAvailabilityList();
+    renderDutySchedule();
+  }
+  if (activePage === 'settings') loadSettingsForm();
   bindPSMediaInputs();
   applyBrandAssets();
   refreshDashboardBanner();

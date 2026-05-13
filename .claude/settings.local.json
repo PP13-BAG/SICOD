@@ -21,7 +21,9 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(node --check \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js\")"
+      "Bash(node --check \"c:\\\\Users\\\\SIRACEDPC\\\\Desktop\\\\Projet\\\\frontend\\\\assets\\\\app.js\")",
+      "Bash(powershell -c \"\\(Get-Content frontend/assets/app.js\\).Count\")",
+      "Bash(powershell -c \"Select-String -Path 'frontend/assets/app.js' -Pattern 'html2canvas|doc\\\\.html|DOMContentLoaded|renderAll\\\\\\(\\\\\\)|initApp' | Select-Object LineNumber, Line | Format-Table -AutoSize\")"
     ]
   }
 }
