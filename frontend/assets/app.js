@@ -919,6 +919,67 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
       </table>
       {{signature}}
     </div>
+  `,
+  directory: `
+    <div class="ps-sheet" style="max-width:74rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>ANNUAIRE ORSEC DEPARTEMENTAL</h2><p>{{subtitle}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{directory}}
+    </div>
+  `,
+  planning_follow_up: `
+    <div class="ps-sheet" style="max-width:74rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>Tableau de suivi de la planification ORSEC</h2><p>{{summary}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{table}}
+    </div>
+  `,
+  planning_statistics: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>STATISTIQUES DE PLANIFICATION</h2><p>{{summary}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{charts}}
+    </div>
+  `,
+  duty_schedule: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>TABLEAU DES MISES SOUS ASTREINTES QUALIFIEES COD</h2><p>{{period}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{table}}
+      {{signature}}
+    </div>
+  `,
+  duty_statistics: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>STATISTIQUES D'ASTREINTES</h2><p>{{summary}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{charts}}
+    </div>
+  `,
+  reflex_sheet: `
+    <div class="ps-sheet" style="max-width:52rem">
+      <div class="ps-header" style="margin-bottom:.5rem">
+        <img class="logo" src="{{logo}}" alt="">
+        <div class="ps-title"><h2>Fiches reflexes</h2><p>{{header}}</p></div>
+        <div class="spacer"></div>
+      </div>
+      {{sections}}
+    </div>
   `
 };
 
@@ -1018,8 +1079,8 @@ async function waitForFrameAssets(frameDocument) {
 }
 
 async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
-  if (!window.jspdf?.jsPDF || !window.html2canvas) {
-    showToast("Le moteur d'export HTML vers PDF n'est pas disponible.", 'error');
+  if (!window.jspdf?.jsPDF) {
+    showToast("Le moteur d'export PDF n'est pas disponible.", 'error');
     return;
   }
   const isLandscape = options.orientation === 'landscape';
@@ -1056,17 +1117,7 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
       format: 'a4',
       orientation: isLandscape ? 'landscape' : 'portrait'
     });
-    const canvas = await window.html2canvas(target, {
-      scale: Math.min(window.devicePixelRatio || 1, 1.5),
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      logging: false,
-      imageTimeout: 8000,
-      windowWidth: Math.max(pageViewport.width, target.scrollWidth || 0),
-      windowHeight: Math.max(pageViewport.height, target.scrollHeight || 0)
-    });
-    addCanvasPagesToPdf(doc, canvas);
+    renderTemplateDomToPdf(doc, target, { orientation: isLandscape ? 'landscape' : 'portrait' });
     doc.save(fileName || `${slugify(options.title || key || 'document')}.pdf`);
   } catch (error) {
     showToast(`Export PDF impossible : ${error.message || String(error)}`, 'error');
@@ -1075,39 +1126,187 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
   }
 }
 
-function addCanvasPagesToPdf(doc, sourceCanvas) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const pageRatio = pageHeight / pageWidth;
-  const sliceHeight = Math.max(1, Math.floor(sourceCanvas.width * pageRatio));
-  const pageCanvas = document.createElement('canvas');
-  const pageContext = pageCanvas.getContext('2d');
-  pageCanvas.width = sourceCanvas.width;
-  let offsetY = 0;
-  let pageIndex = 0;
-  while (offsetY < sourceCanvas.height) {
-    const currentSliceHeight = Math.min(sliceHeight, sourceCanvas.height - offsetY);
-    pageCanvas.height = currentSliceHeight;
-    pageContext.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-    pageContext.fillStyle = '#ffffff';
-    pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-    pageContext.drawImage(
-      sourceCanvas,
-      0,
-      offsetY,
-      sourceCanvas.width,
-      currentSliceHeight,
-      0,
-      0,
-      sourceCanvas.width,
-      currentSliceHeight
-    );
-    if (pageIndex > 0) doc.addPage();
-    const imageHeight = pageWidth * (currentSliceHeight / sourceCanvas.width);
-    doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, pageWidth, imageHeight);
-    offsetY += currentSliceHeight;
-    pageIndex += 1;
-  }
+function cssColorToRgb(value, fallback = [22, 22, 22]) {
+  const raw = String(value || '').trim();
+  const rgb = raw.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  const hex = raw.match(/^#([0-9a-f]{6})$/i);
+  if (hex) return hexToRgb(hex[1], fallback);
+  return fallback;
+}
+
+function firstMeaningfulText(element) {
+  return String(element?.innerText || element?.textContent || '').replace(/\s+\n/g, '\n').replace(/\n\s+/g, '\n').trim();
+}
+
+function getDirectText(element) {
+  let out = '';
+  element.childNodes.forEach((node) => {
+    if (node.nodeType === Node.TEXT_NODE) out += node.textContent || '';
+  });
+  return out.trim();
+}
+
+function renderTemplateDomToPdf(doc, root, opts = {}) {
+  const palette = getPdfAppearance();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = opts.orientation === 'landscape' ? 10 : 12;
+  const contentW = pageW - margin * 2;
+  let y = margin;
+  const defaultText = palette.text;
+  const border = [180, 180, 180];
+
+  const ensureSpace = (needed) => {
+    if (y + needed > pageH - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  };
+
+  const drawText = (text, options = {}) => {
+    const clean = String(text || '').trim();
+    if (!clean) return;
+    const fontSize = options.fontSize || 9;
+    const lineH = options.lineHeight || fontSize * 0.45 + 1.5;
+    const maxW = options.width || contentW;
+    doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
+    doc.setFontSize(fontSize);
+    doc.setTextColor(...(options.color || defaultText));
+    const lines = doc.splitTextToSize(clean, maxW);
+    ensureSpace(lines.length * lineH + 2);
+    doc.text(lines, options.x || margin, y, { maxWidth: maxW, align: options.align || 'left' });
+    y += lines.length * lineH + (options.after ?? 2);
+  };
+
+  const drawImage = (img) => {
+    const src = img.getAttribute('src') || img.src || '';
+    if (!src) return;
+    const maxW = Math.min(contentW, 34);
+    const maxH = 22;
+    ensureSpace(maxH + 3);
+    try {
+      const props = doc.getImageProperties(src);
+      const ratio = Math.min(maxW / (props.width || maxW), maxH / (props.height || maxH));
+      const w = (props.width || maxW) * ratio;
+      const h = (props.height || maxH) * ratio;
+      const x = margin + (contentW - w) / 2;
+      doc.addImage(src, String(props.fileType || 'PNG').toUpperCase(), x, y, w, h, undefined, 'FAST');
+      y += h + 4;
+    } catch {}
+  };
+
+  const drawImageInBox = (src, x, boxY, w, h) => {
+    if (!src) return false;
+    try {
+      const props = doc.getImageProperties(src);
+      const ratio = Math.min((w - 4) / (props.width || w), (h - 4) / (props.height || h));
+      const imageW = (props.width || w) * ratio;
+      const imageH = (props.height || h) * ratio;
+      doc.addImage(
+        src,
+        String(props.fileType || 'PNG').toUpperCase(),
+        x + (w - imageW) / 2,
+        boxY + (h - imageH) / 2,
+        imageW,
+        imageH,
+        undefined,
+        'FAST'
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const drawTable = (table) => {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) return;
+    const firstCells = Array.from(rows[0].children);
+    const colCount = Math.max(1, firstCells.length);
+    const explicitWidths = firstCells.map((cell) => {
+      const style = cell.getAttribute('style') || '';
+      const pct = style.match(/width\s*:\s*([0-9.]+)%/i);
+      return pct ? Number(pct[1]) / 100 * contentW : 0;
+    });
+    const remaining = contentW - explicitWidths.reduce((sum, value) => sum + value, 0);
+    const autoCount = Math.max(1, explicitWidths.filter((value) => !value).length);
+    const colW = explicitWidths.map((value) => value || remaining / autoCount);
+    rows.forEach((row) => {
+      const cells = Array.from(row.children);
+      const wrapped = cells.map((cell, i) => {
+        const text = firstMeaningfulText(cell);
+        const fontSize = cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 8 : 8;
+        doc.setFont('helvetica', cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 'bold' : 'normal');
+        doc.setFontSize(fontSize);
+        return doc.splitTextToSize(text || ' ', Math.max(8, (colW[i] || colW[0]) - 3));
+      });
+      const containsImage = cells.some((cell) => cell.querySelector('img'));
+      const rowH = Math.max(containsImage ? 42 : 7, ...wrapped.map((lines) => lines.length * 3.7 + 3));
+      ensureSpace(rowH);
+      let x = margin;
+      cells.forEach((cell, i) => {
+        const w = colW[i] || colW[0];
+        const isHead = cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD';
+        if (isHead) {
+          doc.setFillColor(...palette.accent);
+          doc.rect(x, y, w, rowH, 'F');
+        }
+        doc.setDrawColor(...border);
+        doc.rect(x, y, w, rowH);
+        doc.setFont('helvetica', isHead ? 'bold' : 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...defaultText);
+        const img = cell.querySelector('img');
+        if (img && drawImageInBox(img.getAttribute('src') || img.src || '', x + 1.5, y + 1.5, w - 3, rowH - 3)) {
+          const caption = firstMeaningfulText(cell).replace(firstMeaningfulText(img), '').trim();
+          if (caption) doc.text(doc.splitTextToSize(caption, w - 3).slice(0, 2), x + 1.5, y + rowH - 7, { maxWidth: w - 3 });
+        } else {
+          doc.text(wrapped[i], x + 1.5, y + 4.3, { maxWidth: w - 3 });
+        }
+        x += w;
+      });
+      y += rowH;
+    });
+    y += 4;
+  };
+
+  const walk = (node) => {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = node.tagName.toLowerCase();
+    if (node.hidden || node.getAttribute('aria-hidden') === 'true') return;
+    if (tag === 'img') return drawImage(node);
+    if (tag === 'table') return drawTable(node);
+    if (['script', 'style', 'audio', 'button', 'select', 'input', 'textarea'].includes(tag)) return;
+    const cls = node.className || '';
+    const directText = getDirectText(node);
+    const computed = node.ownerDocument.defaultView.getComputedStyle(node);
+    const color = cssColorToRgb(computed.color, defaultText);
+    if (/ps-section-title|focus-label|cmd-urgent|cmd-redtitle|block-title|exercise-banner/.test(cls) || ['h1', 'h2', 'h3'].includes(tag)) {
+      const text = firstMeaningfulText(node);
+      if (text) {
+        drawText(text, {
+          fontSize: tag === 'h1' ? 16 : (tag === 'h2' ? 13 : 10),
+          bold: true,
+          color: /cmd-redtitle|exercise-banner/.test(cls) ? palette.alert : color,
+          align: ['h1', 'h2'].includes(tag) ? 'center' : 'left',
+          after: 3
+        });
+      }
+      return;
+    }
+    if (directText) {
+      drawText(directText, {
+        fontSize: Number.parseFloat(computed.fontSize || '') > 15 ? 10 : 8.8,
+        bold: Number(computed.fontWeight || 400) >= 600,
+        color,
+        align: computed.textAlign === 'center' ? 'center' : (computed.textAlign === 'right' ? 'right' : 'left')
+      });
+    }
+    Array.from(node.children).forEach(walk);
+  };
+
+  Array.from(root.children).forEach(walk);
 }
 
 function openHtmlTemplatePdf(key, tokens, title = 'document', options = {}) {
@@ -1206,6 +1405,131 @@ function buildEventLogHtmlTokens(eventId) {
       ? items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')
       : '<tr><td colspan="3"><p class="help">Aucune entrée de main courante.</p></td></tr>',
     signature
+  };
+}
+
+function buildStatHtmlTables(sections) {
+  return sections.map(([title, rows]) => {
+    const body = (rows && rows.length ? rows : [{ label: 'Aucune donnée', value: 0 }])
+      .map(row => `<tr><td>${esc(row.label || '')}</td><td>${esc(row.value ?? 0)}</td></tr>`)
+      .join('');
+    return `<section class="block"><div class="block-title">${esc(title)}</div><table class="table"><thead><tr><th>Libellé</th><th style="width:10rem">Valeur</th></tr></thead><tbody>${body}</tbody></table></section>`;
+  }).join('');
+}
+
+function buildReflexSheetHtmlTokens() {
+  const fiches = getReflexFiches();
+  return {
+    logo: currentLogoSrc(),
+    header: `${fiches.length} fiche(s) active(s)`,
+    sections: fiches.length
+      ? fiches.map(fiche => `<section class="block">
+          <div class="block-title">${esc(fiche.code || '')} - ${esc(fiche.title || '')}</div>
+          <div class="block-body"><p><strong>Famille :</strong> ${esc(fiche.family || 'Autres')}</p>${
+            (fiche.sections || []).map(sec => `<h3>${esc(sec.heading || 'Contenu')}</h3><ul>${(sec.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>`).join('')
+          }</div>
+        </section>`).join('')
+      : '<p class="help">Aucune fiche réflexe active.</p>'
+  };
+}
+
+function buildDirectoryHtmlTokens() {
+  const groups = getDynamicList('directoryGroups');
+  const contacts = [...getActiveItems(state.contacts)].sort((a, b) =>
+    [a.group || '', a.entity || '', a.name || ''].join('|').localeCompare([b.group || '', b.entity || '', b.name || ''].join('|'), 'fr')
+  );
+  const directory = groups.map(group => {
+    const groupItems = contacts.filter(c => (c.group || '') === group);
+    if (!groupItems.length) return '';
+    const entities = [...new Set(groupItems.map(c => (c.entity || '').trim() || 'Sans entité'))];
+    return `<section class="block"><div class="block-title">${esc(group.toUpperCase())}</div>${
+      entities.map(entity => {
+        const entityItems = groupItems.filter(c => ((c.entity || '').trim() || 'Sans entité') === entity);
+        const rows = entityItems.map(c => `<tr>
+          <td>${esc(c.function || '')}</td><td>${esc(c.name || '')}</td><td>${esc(c.entity || '')}</td>
+          <td>${esc(c.phone1 || '')}</td><td>${esc(c.phone2 || '')}</td><td>${esc([c.email1 || '', c.email2 || ''].filter(Boolean).join(' / '))}</td>
+        </tr>`).join('');
+        return `<h3>${esc(entity)}</h3><table class="table"><thead><tr><th>Fonction</th><th>Nom</th><th>Entité</th><th>Téléphone 1</th><th>Téléphone 2</th><th>E-mail</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }).join('')
+    }</section>`;
+  }).join('');
+  return {
+    logo: currentLogoSrc(),
+    subtitle: 'Bouches-du-Rhône',
+    directory: directory || '<p class="help">Aucun contact enregistré.</p>'
+  };
+}
+
+function buildPlanningFollowUpHtmlTokens() {
+  const items = getActiveItems(state.planItems);
+  const counts = {};
+  getDynamicList('planStatuses').forEach(status => counts[status] = items.filter(i => i.status === status).length);
+  const summary = [`${items.length} item(s)`, ...Object.entries(counts).map(([label, value]) => `${label} : ${value}`)].join(' - ');
+  const rows = items.map(p => `<tr>
+    <td>${esc(p.type || '')}</td><td>${esc(p.risk || '')}</td><td>${esc(p.item || '')}</td><td>${esc(p.priority || '')}</td>
+    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(p.approvalDate || '')}</td><td>${esc(p.observation || '')}</td>
+  </tr>`).join('');
+  return {
+    logo: currentLogoSrc(),
+    summary,
+    table: `<table class="table"><thead><tr><th>Type</th><th>Risque</th><th>Item</th><th>Priorité</th><th>Statut</th><th>Approbation</th><th>Observation</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Aucun item de planification.</td></tr>'}</tbody></table>`
+  };
+}
+
+function buildPlanningStatisticsHtmlTokens() {
+  const s = getPlanningStatsData();
+  return {
+    logo: currentLogoSrc(),
+    summary: `Edition du ${new Date().toLocaleDateString('fr-FR')}`,
+    charts: buildStatHtmlTables([
+      ['Plans par type', s.types],
+      ['Répartition par statut', s.statuses],
+      ['Priorités', s.priorities],
+      ['Typologies de risque', s.risks],
+      ["Dates d'approbation par année", s.years]
+    ])
+  };
+}
+
+function buildDutyScheduleHtmlTokens() {
+  const rows = state.dutySchedule || [];
+  const roles = getDynamicList('dutyRoles');
+  const role1 = roles[0] || 'Astreinte 1';
+  const role2 = roles[1] || 'Astreinte 2';
+  const startDateStr = rows[0]?.start || '';
+  const endDateStr = rows[rows.length - 1]?.end || '';
+  const startPeriod = parseDateLocal(document.getElementById('dutyPeriodStart')?.value || startDateStr);
+  const endPeriod = parseDateLocal(document.getElementById('dutyPeriodEnd')?.value || endDateStr);
+  const period = `Période du ${startPeriod ? formatDateLocal(startPeriod) : '...'} au ${endPeriod ? formatDateLocal(endPeriod) : '...'}`;
+  const tableRows = rows.map(w => {
+    const startDt = parseDateLocal(w.start), endDt = parseDateLocal(w.end);
+    return `<tr><td>${esc(`${startDt ? formatDateLocal(startDt) : w.start} au ${endDt ? formatDateLocal(endDt) : w.end}`)}</td><td>${esc(w.agent1?.name || '-')}</td><td>${esc(w.agent2?.name || '-')}</td></tr>`;
+  }).join('');
+  let signature = '';
+  if (shouldApplyPdfSignature('duty')) {
+    const signLast = state.settings.dutySignerLastName || 'HAUPTMANN';
+    const signFirst = state.settings.dutySignerFirstName || 'Nicolas';
+    const signFunction = state.settings.dutySignerFunction || 'le directeur de cabinet';
+    signature = `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le préfet, par délégation</div><div class="sig-line2">${esc(signFunction)}</div><div class="sig-line2">${esc(`${signFirst} ${signLast}`.trim() || 'SIRACEDPC')}</div></div></div>`;
+  }
+  return {
+    logo: currentLogoSrc(),
+    period,
+    table: `<p>${esc(`Les astreintes qualifiées défense et sécurité civiles, pour la ${period.toLowerCase()}, doivent être prises en compte comme suit :`)}</p><table class="table"><thead><tr><th>Période</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${tableRows || '<tr><td colspan="3">Aucun planning généré.</td></tr>'}</tbody></table>`,
+    signature
+  };
+}
+
+function buildDutyStatisticsHtmlTokens() {
+  const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
+  const s = getDutyStatsData(year);
+  return {
+    logo: currentLogoSrc(),
+    summary: `Année ${s.year}`,
+    charts: buildStatHtmlTables([
+      [`${s.role1} - répartition annuelle`, s.a1],
+      [`${s.role2} - répartition annuelle`, s.a2]
+    ])
   };
 }
 
@@ -2719,66 +3043,8 @@ function selectFiche(code) {
 
 function exportAllFichesPDF() {
   const fiches = getReflexFiches();
-  if (!fiches.length || !window.jspdf) { showToast('Aucune fiche à exporter.', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = 12;
-  const palette = getPdfAppearance();
-  const blue = palette.primary, border = [221,221,221], textColor = palette.text, light = palette.accent;
-  const logo = currentLogoSrc();
-
-  const addHeader = (fiche) => {
-    let y = margin;
-    addLogoPreserved(doc, margin, y, 18, 18);
-    doc.setTextColor(...textColor);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('Fiche réflexe', margin + 24, y + 7);
-    doc.setFontSize(14);
-    doc.text(`${fiche.code} · ${fiche.title}`, margin, y + 28);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...textColor);
-    doc.text(`Famille : ${fiche.family || 'Autres'}`, margin, y + 35);
-    return y + 42;
-  };
-
-  const ensureSpace = (needed, y, fiche) => {
-    if (y + needed <= pageH - margin) return y;
-    doc.addPage();
-    return addHeader(fiche);
-  };
-
-  fiches.forEach((fiche, index) => {
-    if (index > 0) doc.addPage();
-    let y = addHeader(fiche);
-    (fiche.sections || []).forEach(sec => {
-      y = ensureSpace(14, y, fiche);
-      doc.setFillColor(...light);
-      doc.setDrawColor(...border);
-      doc.rect(margin, y, pageW - margin * 2, 8, 'FD');
-      doc.setTextColor(...blue);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.text(sec.heading || 'Contenu', margin + 2, y + 5.5);
-      y += 11;
-      doc.setTextColor(...textColor);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      (sec.items || []).forEach(item => {
-        const lines = doc.splitTextToSize(`• ${String(item || '')}`, pageW - margin * 2 - 4);
-        const needed = lines.length * 5 + 1;
-        y = ensureSpace(needed, y, fiche);
-        doc.text(lines, margin + 2, y);
-        y += lines.length * 5;
-      });
-      y += 3;
-    });
-  });
-
-  doc.save('fiches-reflexes.pdf');
+  if (!fiches.length) { showToast('Aucune fiche à exporter.', 'error'); return; }
+  return openHtmlTemplatePdf('reflex_sheet', buildReflexSheetHtmlTokens(), 'fiches-reflexes', { orientation: 'portrait' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2914,125 +3180,7 @@ function importContactsCSV(file) {
 }
 
 function exportContactsPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-  const palette = getPdfAppearance();
-  const blue = palette.primary;
-  const headerFill = palette.accent;
-  const textColor = palette.text;
-  const margin = 12;
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  let y = 10;
-
-  const drawHeader = (isFirstPage = false) => {
-    addLogoPreserved(doc, margin, 8, 22, 16);
-    doc.setTextColor(...blue);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(isFirstPage ? 16 : 14);
-    doc.text('ANNUAIRE ORSEC DEPARTEMENTAL', pageW / 2, 16, { align: 'center' });
-    if (isFirstPage) {
-      doc.setFontSize(12);
-      doc.text('Bouches-du-Rhône', pageW / 2, 23, { align: 'center' });
-    }
-    doc.setTextColor(...textColor);
-    y = isFirstPage ? 34 : 28;
-  };
-
-  const ensureSpace = needed => {
-    if (y + needed > pageH - 12) {
-      doc.addPage();
-      drawHeader(false);
-    }
-  };
-
-  const drawTableHeader = () => {
-    const cols = [44, 34, 44, 34, 34, 76];
-    const headers = ['Fonction', 'Nom', 'Entité', 'Téléphone 1', 'Téléphone 2', 'E-mail'];
-    let x = margin;
-    const totalW = cols.reduce((sum, value) => sum + value, 0);
-    doc.setFillColor(...headerFill);
-    doc.setDrawColor(221, 221, 221);
-    doc.rect(margin, y, totalW, 7, 'FD');
-    doc.setTextColor(...textColor);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    headers.forEach((h, i) => {
-      doc.rect(x, y, cols[i], 7);
-      doc.text(h, x + cols[i] / 2, y + 4.5, { align: 'center' });
-      x += cols[i];
-    });
-    y += 7;
-    doc.setTextColor(...textColor);
-    return cols;
-  };
-
-  drawHeader(true);
-
-  const groups = getDynamicList('directoryGroups');
-  const contacts = [...getActiveItems(state.contacts)].sort((a, b) => {
-    return [a.group || '', a.entity || '', a.name || ''].join('|').localeCompare([b.group || '', b.entity || '', b.name || ''].join('|'), 'fr');
-  });
-
-  groups.forEach(group => {
-    const groupItems = contacts.filter(c => (c.group || '') === group);
-    if (!groupItems.length) return;
-
-    ensureSpace(18);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...blue);
-    doc.text(group.toUpperCase(), margin, y);
-    y += 6;
-
-    const entities = [...new Set(groupItems.map(c => (c.entity || '').trim() || 'Sans entité'))];
-    entities.forEach(entity => {
-      const entityItems = groupItems.filter(c => (((c.entity || '').trim() || 'Sans entité') === entity));
-      if (!entityItems.length) return;
-
-      ensureSpace(14);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...textColor);
-      doc.text(entity, margin, y);
-      y += 4;
-      const cols = drawTableHeader();
-
-      entityItems.forEach(c => {
-        const values = [
-          c.function || '',
-          c.name || '',
-          c.entity || '',
-          c.phone1 || '',
-          c.phone2 || '',
-          [c.email1 || '', c.email2 || ''].filter(Boolean).join(' / ')
-        ];
-        const wrapped = values.map((v, i) => doc.splitTextToSize(String(v), cols[i] - 3));
-        const lineCount = Math.max(1, ...wrapped.map(lines => lines.length || 1));
-        const rowH = Math.max(8, lineCount * 4 + 2);
-        ensureSpace(rowH + 1);
-        let x = margin;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        wrapped.forEach((lines, i) => {
-          doc.rect(x, y, cols[i], rowH);
-          doc.text(lines, x + 1.5, y + 4.5, { maxWidth: cols[i] - 3 });
-          x += cols[i];
-        });
-        y += rowH;
-      });
-
-      y += 4;
-    });
-  });
-
-  if (!contacts.length) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text('Aucun contact enregistré.', margin, y);
-  }
-
-  doc.save('annuaire.pdf');
+  return openHtmlTemplatePdf('directory', buildDirectoryHtmlTokens(), 'annuaire', { orientation: 'landscape' });
 }
 // ────────────────────────────────────────────────────────────────────────────
 // 12. MODULE OUTILS
@@ -3256,41 +3404,7 @@ function exportPlanningCSV() {
 }
 
 function exportPlanningPDF() {
-  const items = getActiveItems(state.planItems);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-  const palette = getPdfAppearance();
-  const blue = palette.primary, soft = palette.accent, text = palette.text;
-  const marginX = 10;
-  const pageW = doc.internal.pageSize.getWidth();
-  const title = 'Tableau de suivi de la planification ORSEC';
-  let y = 10;
-  addLogoPreserved(doc, marginX, y, 30, 16);
-  doc.setFont('helvetica', 'bold'); doc.setTextColor(...text); doc.setFontSize(16);
-  doc.text(title, pageW / 2, y + 9, { align: 'center' }); y += 20;
-  const headers = ['Type','Risque','Item','Priorité','Statut','Approbation','Observation'];
-  const widths = [28,40,60,24,28,26,pageW - (marginX * 2) - 28 - 40 - 60 - 24 - 28 - 26];
-  const drawHeader = () => {
-    let x = marginX;
-    headers.forEach((h, i) => {
-      doc.setFillColor(...soft); doc.rect(x, y, widths[i], 8, 'F');
-      doc.setDrawColor(180); doc.rect(x, y, widths[i], 8);
-      doc.setTextColor(...text); doc.setFontSize(8); doc.setFont('helvetica','bold');
-      doc.text(h, x + widths[i] / 2, y + 5, { align: 'center' }); x += widths[i];
-    });
-    y += 8;
-  };
-  drawHeader();
-  items.forEach(p => {
-    const vals = [p.type||'',p.risk||'',p.item||'',p.priority||'',p.status||'',p.approvalDate||'',p.observation||''];
-    const lines = vals.map((v, i) => doc.splitTextToSize(String(v), widths[i] - 3));
-    const h = Math.max(...lines.map(l => l.length), 1) * 4 + 4;
-    if (y + h > 200) { doc.addPage(); y = 10; addLogoPreserved(doc, marginX, y, 30, 16); doc.setFont('helvetica','bold'); doc.setTextColor(...text); doc.setFontSize(16); doc.text(title, pageW / 2, y + 9, { align: 'center' }); y += 20; drawHeader(); }
-    let x = marginX;
-    lines.forEach((l, i) => { doc.setDrawColor(180); doc.rect(x, y, widths[i], h); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.text(l, x + widths[i] / 2, y + 4.5, { align: 'center', maxWidth: widths[i]-3 }); x += widths[i]; });
-    y += h;
-  });
-  doc.save('planification.pdf');
+  return openHtmlTemplatePdf('planning_follow_up', buildPlanningFollowUpHtmlTokens(), 'planification', { orientation: 'landscape' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -3365,13 +3479,7 @@ function exportPlanningStatsCSV() {
 }
 
 function exportPlanningStatsPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const s = getPlanningStatsData();
-  addPdfHeader(doc, 'STATISTIQUES DE PLANIFICATION');
-  let y = 34;
-  [['Plans par type',s.types],['Répartition par statut',s.statuses],['Priorités',s.priorities],['Typologies de risque',s.risks],["Dates d'approbation par année",s.years]].forEach(([title,data]) => { y = addPdfStatTable(doc, y, title, data); });
-  doc.save('planification-statistiques.pdf');
+  return openHtmlTemplatePdf('planning_statistics', buildPlanningStatisticsHtmlTokens(), 'planification-statistiques', { orientation: 'portrait' });
 }
 
 function addPdfHeader(doc, title) {
@@ -3624,59 +3732,7 @@ function updateDutyAssignment(index, key, value) {
 
 function exportDutyPDF() {
   if (!(state.dutySchedule || []).length) { showToast("Générez d'abord le planning d'astreinte.", 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const palette = getPdfAppearance();
-  const pageW = 210, m = 12, blue = palette.primary, soft = palette.accent, text = palette.text;
-  let y = 10;
-  addLogoPreserved(doc, m, y, 28, 18);
-  doc.setTextColor(...text); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-  doc.text('CABINET', pageW - m, y + 5, { align: 'right' });
-  doc.text('SIRACEDPC', pageW - m, y + 11, { align: 'right' });
-  doc.setFontSize(13);
-  doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÉES « COD »", pageW / 2, y + 24, { align: 'center' });
-  y += 34; doc.setTextColor(...text); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  const startDateStr = state.dutySchedule[0]?.start || '';
-  const endDateStr = state.dutySchedule[state.dutySchedule.length - 1]?.end || '';
-  const startPeriod = parseDateLocal(document.getElementById('dutyPeriodStart')?.value || startDateStr);
-  const endPeriod = parseDateLocal(document.getElementById('dutyPeriodEnd')?.value || endDateStr);
-  const introText = `Les astreintes qualifiées « défense et sécurité civiles », pour la période comprise entre le ${startPeriod ? formatDateLocal(startPeriod) : '...'} et le ${endPeriod ? formatDateLocal(endPeriod) : '...'}, doivent être prises en compte comme suit :`;
-  doc.text(doc.splitTextToSize(introText, 186), m, y); y += 14;
-  const headers = ['Période', 'Astreinte 1', 'Astreinte 2'];
-  const widths = [72, 58, 58];
-  const drawHeader = () => {
-    let x = m;
-    headers.forEach((h, i) => { doc.setFillColor(...soft); doc.rect(x, y, widths[i], 8, 'F'); doc.setDrawColor(180); doc.rect(x, y, widths[i], 8); doc.setFont('helvetica','bold'); doc.setTextColor(...text); doc.text(h, x + widths[i]/2, y + 5, { align:'center' }); x += widths[i]; });
-    y += 8; doc.setFont('helvetica', 'normal');
-  };
-  drawHeader();
-  state.dutySchedule.forEach(w => {
-    const startDt = parseDateLocal(w.start), endDt = parseDateLocal(w.end);
-    const vals = [
-      `${startDt ? formatDateLocal(startDt) : w.start} au ${endDt ? formatDateLocal(endDt) : w.end}`,
-      w.agent1?.name || '—',
-      w.agent2?.name || '—'
-    ];
-    const lines = vals.map((v, i) => doc.splitTextToSize(v, widths[i] - 4));
-    const h = Math.max(...lines.map(l => l.length)) * 4 + 4;
-    if (y + h > 250) { doc.addPage(); y = 10; addLogoPreserved(doc, m, y, 28, 18); doc.setTextColor(...text); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text('CABINET', pageW - m, y + 5, {align:'right'}); doc.text('SIRACEDPC', pageW - m, y + 11, {align:'right'}); doc.setFontSize(13); doc.text("TABLEAU DES MISES SOUS ASTREINTES QUALIFIÉES « COD »", pageW / 2, y + 24, { align: 'center' }); y += 34; drawHeader(); }
-    let x = m;
-    lines.forEach((l, i) => { doc.setDrawColor(180); doc.rect(x, y, widths[i], h); doc.text(l, x + widths[i]/2, y + 5, { align:'center', maxWidth: widths[i]-4 }); x += widths[i]; });
-    y += h;
-  });
-  y = Math.max(y + 10, 240);
-  if (shouldApplyPdfSignature('duty')) {
-    const signLast = state.settings.dutySignerLastName || 'HAUPTMANN';
-    const signFirst = state.settings.dutySignerFirstName || 'Nicolas';
-    const signFunction = state.settings.dutySignerFunction || 'le directeur de cabinet';
-    const dutySig = { mode:'delegation', role: signFunction, name: `${signFirst} ${signLast}`.trim() || 'SIRACEDPC' };
-    drawPdfSignatureBlock(doc, pageW - 62, y, { signature: dutySig, lineGap: 6, blockWidth: 50 });
-  }
-  doc.setFontSize(8); doc.setFont('helvetica','normal');
-  y = 276;
-  doc.text('Place Félix Baret - CS 80001 – 13282 Marseille Cedex 06', m, y); y += 4;
-  doc.text('Téléphone : 04.84.35.40.00 — www.bouches-du-rhone.gouv.fr', m, y);
-  doc.save('planning-astreinte.pdf');
+  return openHtmlTemplatePdf('duty_schedule', buildDutyScheduleHtmlTokens(), 'planning-astreinte', { orientation: 'portrait' });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -3717,14 +3773,7 @@ function exportDutyStatsCSV() {
 
 function exportDutyStatsPDF() {
   const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
-  const s = getDutyStatsData(year);
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  addPdfHeader(doc, `STATISTIQUES D'ASTREINTES ${s.year}`);
-  let y = 34;
-  y = addPdfStatTable(doc, y, `${s.role1} — répartition annuelle`, s.a1);
-  y = addPdfStatTable(doc, y, `${s.role2} — répartition annuelle`, s.a2);
-  doc.save(`astreintes-statistiques-${s.year}.pdf`);
+  return openHtmlTemplatePdf('duty_statistics', buildDutyStatisticsHtmlTokens(), `astreintes-statistiques-${year}`, { orientation: 'portrait' });
 }
 
 function ensureDutyStatsUI() {
