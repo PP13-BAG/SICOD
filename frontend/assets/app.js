@@ -826,14 +826,27 @@ function psSourcesHtml(ps) {
   return parts.join('');
 }
 
+function buildA4HtmlTemplate(orientation, titleHtml, subtitleHtml, bodyHtml, options = {}) {
+  const className = options.className ? ` ${options.className}` : '';
+  const logo = options.logo === false ? '' : '<img class="sicod-page-logo" src="{{logo}}" alt="">';
+  const header = options.header === false ? '' : `
+      <header class="sicod-page-header">
+        <div class="sicod-page-logo-box">${logo}</div>
+        <div class="sicod-page-title"><h2>${titleHtml}</h2><p>${subtitleHtml || ''}</p></div>
+        <div class="sicod-page-logo-box"></div>
+      </header>`;
+  return `
+    <article class="sicod-page sicod-page--${orientation}${className}">
+      ${header}
+      <main class="sicod-page-body">
+        ${bodyHtml}
+      </main>
+    </article>
+  `;
+}
+
 const STABLE_HTML_TEMPLATE_DEFAULTS = {
-  point_situation_detail: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>{{title}}</h2><p>{{subtitle}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  point_situation_detail: buildA4HtmlTemplate('portrait', '{{title}}', '{{subtitle}}', `
       {{cartouche}}
       <table class="ps-detail-table">
         <tr><td style="width:24%"><div class="ps-section-title">Situation générale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
@@ -846,15 +859,8 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
         {{sources_row}}
       </table>
       {{signature}}
-    </div>
-  `,
-  point_situation_focus: `
-    <div class="ps-sheet focus-mode" style="max-width:74rem">
-      <div class="ps-header">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>{{title}}</h2><p>{{subtitle}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--ps-detail' }),
+  point_situation_focus: buildA4HtmlTemplate('landscape', '{{title}}', '{{subtitle}}', `
       {{cartouche}}
       <div class="focus-grid">
         <div class="focus-col">
@@ -872,27 +878,17 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
         </div>
       </div>
       {{signature}}
-    </div>
-  `,
-  command_message: `
-    <div class="command-sheet {{exerciseClass}}">
+  `, { className: 'sicod-page--ps-focus' }),
+  command_message: buildA4HtmlTemplate('portrait', '{{typeLabel}}', '{{eventTitle}}', `
       <div class="exercise-banner" style="{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
-      <div class="cmd-header">
-        <img class="cmd-logo" src="{{logo}}" alt="">
-        <div class="cmd-headtext">
-          <div style="font-size:.875rem;line-height:1.45;text-align:left;margin-bottom:.5rem">
-            <div><strong>SIRACEDPC</strong></div>
-            <div>Téléphone : {{contactPhone}}</div>
-            <div>Télécopie : {{contactFax}}</div>
-            <div>Courriel : {{contactEmail}}</div>
-            <div>Audio-conf. : {{contactAudioConf}}</div>
-          </div>
-          <div class="meta-line"><table class="table"><tbody><tr><th>Date</th><th>Heure</th></tr><tr><td>{{date}}</td><td>{{time}}</td></tr></tbody></table></div>
-          <p class="cmd-redtitle">{{typeLabel}}</p>
-          <h2>{{eventTitle}}</h2>
-          <div class="help">Site / lieu de l'événement : {{site}}</div>
-        </div>
+      <div class="cmd-contact-block">
+        <div><strong>SIRACEDPC</strong></div>
+        <div>Téléphone : {{contactPhone}}</div>
+        <div>Télécopie : {{contactFax}}</div>
+        <div>Courriel : {{contactEmail}}</div>
+        <div>Audio-conf. : {{contactAudioConf}}</div>
       </div>
+      <div class="meta-line"><table class="table"><tbody><tr><th>Date</th><th>Heure</th><th>Site / lieu</th></tr><tr><td>{{date}}</td><td>{{time}}</td><td>{{site}}</td></tr></tbody></table></div>
       <div class="cmd-urgent">MESSAGE URGENT</div>
       <p class="cmd-autotext">{{autoText}}</p>
       <div class="meta-line"><table class="table"><thead><tr><th>Dispositif de référence</th><th>Heure d'activation</th><th>Localisation du PCO</th></tr></thead><tbody><tr><td>{{reference}}</td><td>{{activation}}</td><td>{{pcoLocation}}</td></tr></tbody></table></div>
@@ -904,83 +900,33 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
       <div style="margin-top:1.25rem;display:flex;justify-content:flex-end;text-align:right">{{signature}}</div>
       <div style="margin-top:.75rem;text-align:right"><strong>{{originalSigned}}</strong></div>
       <div class="exercise-banner" style="margin-top:1rem;{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
-    </div>
-  `,
-  main_courante: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>{{eventTitle}}</h2><p>{{eventMeta}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--command {{exerciseClass}}' }),
+  main_courante: buildA4HtmlTemplate('portrait', '{{eventTitle}}', '{{eventMeta}}', `
       <table class="table">
         <thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead>
         <tbody>{{entriesRows}}</tbody>
       </table>
       {{signature}}
-    </div>
-  `,
-  directory: `
-    <div class="ps-sheet" style="max-width:74rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>ANNUAIRE ORSEC DEPARTEMENTAL</h2><p>{{subtitle}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--main-log' }),
+  directory: buildA4HtmlTemplate('landscape', 'ANNUAIRE ORSEC DEPARTEMENTAL', '{{subtitle}}', `
       {{directory}}
-    </div>
-  `,
-  planning_follow_up: `
-    <div class="ps-sheet" style="max-width:74rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>Tableau de suivi de la planification ORSEC</h2><p>{{summary}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--directory' }),
+  planning_follow_up: buildA4HtmlTemplate('landscape', 'Tableau de suivi de la planification ORSEC', '{{summary}}', `
       {{table}}
-    </div>
-  `,
-  planning_statistics: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>STATISTIQUES DE PLANIFICATION</h2><p>{{summary}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--planning' }),
+  planning_statistics: buildA4HtmlTemplate('portrait', 'STATISTIQUES DE PLANIFICATION', '{{summary}}', `
       {{charts}}
-    </div>
-  `,
-  duty_schedule: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>TABLEAU DES MISES SOUS ASTREINTES QUALIFIEES COD</h2><p>{{period}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--statistics' }),
+  duty_schedule: buildA4HtmlTemplate('portrait', 'TABLEAU DES MISES SOUS ASTREINTES QUALIFIEES COD', '{{period}}', `
       {{table}}
       {{signature}}
-    </div>
-  `,
-  duty_statistics: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>STATISTIQUES D'ASTREINTES</h2><p>{{summary}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--duty' }),
+  duty_statistics: buildA4HtmlTemplate('portrait', "STATISTIQUES D'ASTREINTES", '{{summary}}', `
       {{charts}}
-    </div>
-  `,
-  reflex_sheet: `
-    <div class="ps-sheet" style="max-width:52rem">
-      <div class="ps-header" style="margin-bottom:.5rem">
-        <img class="logo" src="{{logo}}" alt="">
-        <div class="ps-title"><h2>Fiches reflexes</h2><p>{{header}}</p></div>
-        <div class="spacer"></div>
-      </div>
+  `, { className: 'sicod-page--statistics' }),
+  reflex_sheet: buildA4HtmlTemplate('portrait', 'Fiches reflexes', '{{header}}', `
       {{sections}}
-    </div>
-  `
+  `, { className: 'sicod-page--reflex' })
 };
 
 function ensureOperationalHtmlTemplates() {
@@ -988,7 +934,7 @@ function ensureOperationalHtmlTemplates() {
   Object.entries(STABLE_HTML_TEMPLATE_DEFAULTS).forEach(([key, html]) => {
     const existing = window.SICODPdfTemplates.getHtmlTemplate(state, key);
     const source = String(existing?.html || '');
-    if (!source || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
+    if (!source || !source.includes('sicod-page') || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
       window.SICODPdfTemplates.setHtmlTemplate(state, key, html.trim());
     }
   });
@@ -1042,9 +988,43 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
     body{overflow:auto}
     .template-export-stage{padding:1.25rem;min-height:100vh;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-start;background:#f6f6f6}
     .template-export-stage .document-page{width:${pageWidth};min-height:${pageHeight};margin:0 auto;background:#ffffff;box-shadow:none;box-sizing:border-box;overflow:visible}
+    .sicod-page{width:${pageWidth};min-height:${pageHeight};background:#fff;color:#161616;box-sizing:border-box;padding:12mm;font-family:Marianne,Segoe UI,Arial,sans-serif;position:relative;overflow:visible}
+    .sicod-page--portrait{width:210mm;min-height:297mm}
+    .sicod-page--landscape{width:297mm;min-height:210mm}
+    .sicod-page-header{display:grid;grid-template-columns:28mm 1fr 28mm;gap:6mm;align-items:start;margin-bottom:6mm}
+    .sicod-page-logo{width:24mm;max-height:18mm;object-fit:contain}
+    .sicod-page-title{text-align:center}
+    .sicod-page-title h2{margin:0;font-size:18px;line-height:1.2;text-transform:uppercase;color:#161616}
+    .sicod-page-title p{margin:3mm 0 0;font-size:12px;line-height:1.35;color:#3a3a3a}
+    .sicod-page-body{width:100%}
+    .cmd-contact-block{font-size:11px;line-height:1.35;margin:0 0 5mm}
+    .sicod-page .ps-cartouche{width:fit-content;max-width:100%;margin:0 auto 5mm;border:1px solid #ddd}
+    .sicod-page .table{width:100%;border-collapse:collapse}
+    .sicod-page .table th,.sicod-page .table td{border:1px solid #ddd;padding:2mm;font-size:10px;vertical-align:top}
+    .sicod-page .table th{background:#f5f5fe;font-weight:700}
+    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:700;text-transform:uppercase;padding:2mm;font-size:10px}
+    .sicod-page .ps-detail-table{width:100%;border-collapse:collapse;table-layout:fixed}
+    .sicod-page .ps-detail-table td{border:1px solid #ddd;vertical-align:top;padding:0}
+    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3mm;font-size:10.5px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+    .sicod-page .focus-grid{display:grid;grid-template-columns:1.05fr 2.35fr 1.1fr;border:1px solid #ddd;min-height:145mm}
+    .sicod-page .focus-col,.sicod-page .focus-center{display:grid;min-height:145mm}
+    .sicod-page .focus-col{grid-template-rows:1fr 1.25fr;border-right:1px solid #ddd}
+    .sicod-page .focus-right{border-left:1px solid #ddd;border-right:none}
+    .sicod-page .focus-center{grid-template-rows:1fr 1.15fr .85fr}
+    .sicod-page .focus-box{border-bottom:1px solid #ddd;display:flex;flex-direction:column;min-height:0}
+    .sicod-page .focus-box:last-child{border-bottom:0}
+    .sicod-page .focus-map{display:flex;align-items:center;justify-content:center;padding:2mm;min-height:42mm;overflow:hidden}
+    .sicod-page .focus-map img,.sicod-page .ps-content img{max-width:100%;max-height:100%;object-fit:contain}
+    .sicod-page .ps-signature{margin-top:8mm;display:flex;justify-content:flex-end}
+    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:11px}
+    .sicod-page .exercise-banner{display:none;text-align:center;color:#e1000f;font-weight:700;letter-spacing:.08em;margin-bottom:5mm}
+    .sicod-page.exercise .exercise-banner{display:block}
+    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:700;color:#000091;text-transform:uppercase}
+    .sicod-page .cmd-autotext{margin:5mm 0;line-height:1.45;white-space:pre-wrap}
+    .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
+    .sicod-page .block{margin:0 0 5mm}
     .template-export-stage .document-page>.ps-sheet,
     .template-export-stage .document-page>.command-sheet{width:100%;min-height:${pageHeight};max-width:none!important;box-sizing:border-box;border:0}
-    .template-export-stage .document-page>.focus-mode{min-height:${pageHeight}}
     @media print{.template-export-stage{padding:0;background:#ffffff}}
   </style>`;
   if (templateLooksLikeDocument(raw)) {
@@ -1111,13 +1091,13 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
     const frameDocument = iframe.contentDocument || iframe.contentWindow?.document;
     if (!frameDocument) throw new Error("Le document HTML n'a pas pu être initialisé.");
     await waitForFrameAssets(frameDocument);
-    const target = frameDocument.querySelector('.document-page') || frameDocument.body;
+    const target = frameDocument.querySelector('.sicod-page') || frameDocument.querySelector('.document-page') || frameDocument.body;
     const doc = new window.jspdf.jsPDF({
       unit: 'mm',
       format: 'a4',
       orientation: isLandscape ? 'landscape' : 'portrait'
     });
-    renderTemplateDomToPdf(doc, target, { orientation: isLandscape ? 'landscape' : 'portrait' });
+    renderTemplateDomToPdfPositioned(doc, target, { orientation: isLandscape ? 'landscape' : 'portrait' });
     doc.save(fileName || `${slugify(options.title || key || 'document')}.pdf`);
   } catch (error) {
     showToast(`Export PDF impossible : ${error.message || String(error)}`, 'error');
@@ -1307,6 +1287,146 @@ function renderTemplateDomToPdf(doc, root, opts = {}) {
   };
 
   Array.from(root.children).forEach(walk);
+}
+
+function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const rootRect = root.getBoundingClientRect();
+  const scale = pageW / Math.max(1, rootRect.width);
+  const pageHeightPx = pageH / scale;
+  const borderFallback = [221, 221, 221];
+
+  const ensurePage = (pageIndex) => {
+    while (doc.getNumberOfPages() <= pageIndex) {
+      doc.addPage();
+    }
+    doc.setPage(pageIndex + 1);
+  };
+
+  const rectToPdf = (rect) => {
+    const rawX = (rect.left - rootRect.left) * scale;
+    const rawY = (rect.top - rootRect.top) * scale;
+    const pageIndex = Math.max(0, Math.floor(rawY / pageH));
+    return {
+      pageIndex,
+      x: rawX,
+      y: rawY - pageIndex * pageH,
+      w: rect.width * scale,
+      h: rect.height * scale
+    };
+  };
+
+  const hasVisibleText = (node) => String(node?.textContent || '').replace(/\s+/g, '').length > 0;
+  const isTransparent = (value) => !value || value === 'transparent' || /rgba\([^)]*,\s*0\)/i.test(value);
+
+  const drawElementBox = (element, pdfRect, computed) => {
+    const background = computed.backgroundColor;
+    const borderColor = cssColorToRgb(computed.borderTopColor, borderFallback);
+    const hasBackground = !isTransparent(background);
+    const hasBorder = ['Top', 'Right', 'Bottom', 'Left'].some(side => Number.parseFloat(computed[`border${side}Width`] || '0') > 0);
+    if (hasBackground) {
+      doc.setFillColor(...cssColorToRgb(background, [255, 255, 255]));
+      doc.rect(pdfRect.x, pdfRect.y, pdfRect.w, pdfRect.h, 'F');
+    }
+    if (hasBorder) {
+      doc.setDrawColor(...borderColor);
+      doc.rect(pdfRect.x, pdfRect.y, pdfRect.w, pdfRect.h);
+    }
+  };
+
+  const fontStyleFor = (computed) => {
+    const weight = Number.parseInt(computed.fontWeight || '400', 10);
+    const italic = computed.fontStyle === 'italic';
+    if (weight >= 600 && italic) return 'bolditalic';
+    if (weight >= 600) return 'bold';
+    if (italic) return 'italic';
+    return 'normal';
+  };
+
+  const drawTextInRect = (text, rect, computed, options = {}) => {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!clean || rect.w <= 1 || rect.h <= 1) return;
+    ensurePage(rect.pageIndex);
+    const fontSizePx = Number.parseFloat(computed.fontSize || '12') || 12;
+    const fontSizeMm = Math.max(5, Math.min(18, fontSizePx * scale * (options.scaleFont || 0.92)));
+    const lineH = fontSizeMm * 0.42 + 1.7;
+    const padX = Math.min(2.5, Math.max(0.8, rect.w * 0.03));
+    const padY = Math.min(3, Math.max(1.3, rect.h * 0.08));
+    const maxW = Math.max(2, rect.w - padX * 2);
+    doc.setFont('helvetica', options.bold ? 'bold' : fontStyleFor(computed));
+    doc.setFontSize(fontSizeMm);
+    doc.setTextColor(...cssColorToRgb(computed.color, getPdfAppearance().text));
+    const lines = doc.splitTextToSize(clean, maxW);
+    const maxLines = Math.max(1, Math.floor((rect.h - padY) / lineH));
+    const align = computed.textAlign === 'center' ? 'center' : (computed.textAlign === 'right' ? 'right' : 'left');
+    const x = align === 'center' ? rect.x + rect.w / 2 : (align === 'right' ? rect.x + rect.w - padX : rect.x + padX);
+    doc.text(lines.slice(0, maxLines), x, rect.y + padY + fontSizeMm * 0.32, { maxWidth: maxW, align });
+  };
+
+  const drawImageAtRect = (img, rect) => {
+    const src = img.getAttribute('src') || img.src || '';
+    if (!src || rect.w <= 1 || rect.h <= 1) return;
+    ensurePage(rect.pageIndex);
+    try {
+      const props = doc.getImageProperties(src);
+      const ratio = Math.min(rect.w / (props.width || rect.w), rect.h / (props.height || rect.h));
+      const w = (props.width || rect.w) * ratio;
+      const h = (props.height || rect.h) * ratio;
+      doc.addImage(src, String(props.fileType || 'PNG').toUpperCase(), rect.x + (rect.w - w) / 2, rect.y + (rect.h - h) / 2, w, h, undefined, 'FAST');
+    } catch {}
+  };
+
+  const drawTableAtRect = (table) => {
+    Array.from(table.querySelectorAll('tr')).forEach((row) => {
+      Array.from(row.children).forEach((cell) => {
+        const cellRect = rectToPdf(cell.getBoundingClientRect());
+        ensurePage(cellRect.pageIndex);
+        const computed = cell.ownerDocument.defaultView.getComputedStyle(cell);
+        drawElementBox(cell, cellRect, computed);
+        const img = cell.querySelector(':scope > img');
+        if (img) drawImageAtRect(img, cellRect);
+        const text = firstMeaningfulText(cell);
+        drawTextInRect(text, cellRect, computed, { bold: cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD', scaleFont: 0.8 });
+      });
+    });
+  };
+
+  const walk = (element) => {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = element.tagName.toLowerCase();
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true') return;
+    if (['script', 'style', 'audio', 'button', 'select', 'input', 'textarea'].includes(tag)) return;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const pdfRect = rectToPdf(rect);
+    ensurePage(pdfRect.pageIndex);
+    const computed = element.ownerDocument.defaultView.getComputedStyle(element);
+    drawElementBox(element, pdfRect, computed);
+    if (tag === 'img') {
+      drawImageAtRect(element, pdfRect);
+      return;
+    }
+    if (tag === 'table') {
+      drawTableAtRect(element);
+      return;
+    }
+    const directText = getDirectText(element);
+    if (directText) {
+      const titleLike = ['h1', 'h2', 'h3', 'th'].includes(tag) || /sicod-page-title|ps-section-title|focus-label|block-title|cmd-urgent|exercise-banner/.test(element.className || '');
+      drawTextInRect(directText, pdfRect, computed, { bold: titleLike, scaleFont: titleLike ? 0.95 : 0.82 });
+    }
+    Array.from(element.children).forEach(walk);
+  };
+
+  doc.setFillColor(255, 255, 255);
+  const totalPages = Math.max(1, Math.ceil(Math.max(root.scrollHeight, rootRect.height) / pageHeightPx));
+  for (let i = 0; i < totalPages; i += 1) {
+    ensurePage(i);
+    doc.rect(0, 0, pageW, pageH, 'F');
+  }
+  doc.setPage(1);
+  walk(root);
 }
 
 function openHtmlTemplatePdf(key, tokens, title = 'document', options = {}) {
