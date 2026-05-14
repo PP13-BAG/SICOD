@@ -24,6 +24,8 @@
   let authRoles = [];
   let refreshSessionPromise = null;
   let lastDirectoryTouchAt = 0;
+  let authRolesLoaded = false;
+  let lastRolesFetchFailureAt = 0;
 
   function sanitizeRemoteConfig(input) {
     const value = input && typeof input === 'object' ? input : {};
@@ -88,6 +90,8 @@
     persistAuthSession(null);
     authRoles = [];
     lastDirectoryTouchAt = 0;
+    authRolesLoaded = false;
+    lastRolesFetchFailureAt = 0;
   }
 
   function getResolvedRole() {
@@ -164,11 +168,13 @@
     return payload.json ?? null;
   }
 
-  async function supabaseRequest(path, init, requireAuth = true) {
+  async function supabaseRequest(path, init, requireAuth = true, options = {}) {
     if (!isSupabaseConfigured()) throw new Error('Supabase n’est pas configuré.');
-    if (requireAuth) {
+    if (requireAuth && !options.skipSessionCheck) {
       const session = await ensureSupabaseSession();
       if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+    } else if (requireAuth && !authSession?.accessToken) {
+      throw new Error('Connexion Supabase requise.');
     }
     return fetchJson(`${runtimeConfig.supabaseUrl}${path}`, {
       ...init,
@@ -248,15 +254,15 @@
     if (isSessionExpired()) {
       try {
         const session = await refreshSupabaseSession();
-        authRoles = session?.accessToken ? await fetchCurrentUserRoles().catch(() => authRoles) : [];
+        if (session?.accessToken) await loadCurrentUserRoles().catch(() => authRoles);
         return session;
       } catch {
         return null;
       }
     }
     setRemoteMode('supabase');
-    if (!authRoles.length && authSession?.accessToken) {
-      authRoles = await fetchCurrentUserRoles().catch(() => authRoles);
+    if (!authRolesLoaded && authSession?.accessToken) {
+      await loadCurrentUserRoles().catch(() => authRoles);
     }
     if (authSession?.accessToken) {
       await touchCurrentUserDirectoryEntryThrottled().catch(() => null);
@@ -278,7 +284,10 @@
     const nextSession = mapSupabaseSession(payload);
     if (!nextSession) throw new Error('Connexion Supabase invalide.');
     persistAuthSession(nextSession);
-    authRoles = await fetchCurrentUserRoles().catch(() => []);
+    await loadCurrentUserRoles(true).catch(() => {
+      authRoles = [];
+      authRolesLoaded = true;
+    });
     await touchCurrentUserDirectoryEntryThrottled(true).catch(() => null);
     setRemoteMode('supabase');
     return {
@@ -355,7 +364,7 @@
   async function fetchCurrentUserRoles() {
     const userId = authSession?.user?.id;
     if (!userId) return [];
-    const payload = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true);
+    const payload = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true, { skipSessionCheck: true });
     let rows = Array.isArray(payload) ? payload : [];
     if (!rows.length) {
       try {
@@ -366,12 +375,34 @@
             Prefer: 'resolution=merge-duplicates,return=representation'
           },
           body: JSON.stringify([{ user_id: userId, role_key: 'admin' }])
-        }, true);
-        const retry = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true);
+        }, true, { skipSessionCheck: true });
+        const retry = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true, { skipSessionCheck: true });
         rows = Array.isArray(retry) ? retry : [];
       } catch {}
     }
     return rows.map((row) => String(row?.role_key || '')).filter(Boolean);
+  }
+
+  async function loadCurrentUserRoles(force = false) {
+    if (!authSession?.accessToken) {
+      authRoles = [];
+      authRolesLoaded = false;
+      return authRoles;
+    }
+    if (authRolesLoaded && !force) return authRoles;
+    const now = Date.now();
+    if (!force && lastRolesFetchFailureAt && now - lastRolesFetchFailureAt < 60000) {
+      return authRoles;
+    }
+    try {
+      authRoles = normalizeRoleList(await fetchCurrentUserRoles());
+      authRolesLoaded = true;
+      lastRolesFetchFailureAt = 0;
+      return authRoles;
+    } catch (error) {
+      lastRolesFetchFailureAt = now;
+      throw error;
+    }
   }
 
   async function touchCurrentUserDirectoryEntry() {
@@ -391,7 +422,7 @@
         display_name: getCurrentUserLabel(user),
         last_seen_at: new Date().toISOString()
       }])
-    }, true);
+    }, true, { skipSessionCheck: true });
   }
 
   async function touchCurrentUserDirectoryEntryThrottled(force = false) {
