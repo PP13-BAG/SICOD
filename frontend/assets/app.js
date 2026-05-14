@@ -304,6 +304,31 @@ function badge(status) {
   return `<span class="badge info">${esc(status || 'Brouillon')}</span>`;
 }
 
+const ACTION_ICONS = {
+  add: 'assets/icons/Icones/System/add-line.svg',
+  edit: 'assets/icons/Icones/Design/edit-line.svg',
+  delete: 'assets/icons/Icones/System/delete-bin-line.svg',
+  duplicate: 'assets/icons/Icones/Document/file-copy-line.svg',
+  open: 'assets/icons/Icones/System/eye-line.svg',
+  close: 'assets/icons/Icones/System/close-line.svg',
+  save: 'assets/icons/Icones/Device/save-line.svg',
+  archive: 'assets/icons/Icones/Business/archive-line.svg',
+  restore: 'assets/icons/Icones/Business/inbox-unarchive-line.svg',
+  access: 'assets/icons/Icones/Others/door-open-line.svg',
+  refresh: 'assets/icons/Icones/System/refresh-line.svg'
+};
+
+function actionIconButton(icon, label, onclick, options = {}) {
+  const variant = options.variant || 'secondary';
+  const disabled = options.disabled ? ' disabled' : '';
+  const extraClass = options.className ? ` ${options.className}` : '';
+  return `<button class="fr-btn ${variant} small icon-action${extraClass}" type="button" onclick="${onclick}" title="${esc(label)}" aria-label="${esc(label)}"${disabled}><img src="${esc(ACTION_ICONS[icon] || ACTION_ICONS.open)}" alt=""></button>`;
+}
+
+function actionIconLink(icon, label, href) {
+  return `<a class="fr-btn small icon-action" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(label)}" aria-label="${esc(label)}"><img src="${esc(ACTION_ICONS[icon] || ACTION_ICONS.open)}" alt=""></a>`;
+}
+
 /** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
 const PS_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
 const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
@@ -858,10 +883,10 @@ function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
     @page{size:${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};margin:0}
     html,body{margin:0;padding:0;background:#ffffff;color:#161616}
     body{font-family:Marianne,"Segoe UI",Arial,sans-serif}
-    .sicod-page{width:${orientation === 'landscape' ? '297mm' : '210mm'};min-height:${orientation === 'landscape' ? '210mm' : '297mm'};background:#fff;color:#161616;box-sizing:border-box;padding:12mm 13mm 14mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
+    .sicod-page{width:${orientation === 'landscape' ? '297mm' : '210mm'};min-height:${orientation === 'landscape' ? '210mm' : '297mm'};background:#fff;color:#161616;box-sizing:border-box;padding:9mm 11mm 12mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
     .sicod-page--portrait{width:210mm;min-height:297mm}
     .sicod-page--landscape{width:297mm;min-height:210mm}
-    .sicod-page-header{display:grid;grid-template-columns:30mm 1fr 30mm;gap:7mm;align-items:start;margin-bottom:7mm;padding-bottom:4mm;border-bottom:1.2px solid #000091}
+    .sicod-page-header{display:grid;grid-template-columns:30mm 1fr 30mm;gap:7mm;align-items:start;margin-bottom:6mm;padding-bottom:3mm;border-bottom:1.2px solid #000091}
     .sicod-page-logo{width:27mm;max-height:20mm;object-fit:contain}
     .sicod-page-title{text-align:center}
     .sicod-page-title h2{margin:0;font-size:22px;line-height:1.18;text-transform:uppercase;color:#161616;font-weight:800}
@@ -893,6 +918,8 @@ function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
     .sicod-page .cmd-autotext{margin:5mm 0;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
     .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
     .sicod-page .block{margin:0 0 5mm}
+    .sicod-export-page-break{break-before:page;page-break-before:always}
+    .sicod-keep-together{break-inside:avoid;page-break-inside:avoid}
   </style>
 </head>
 <body>
@@ -1063,24 +1090,24 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
     body{overflow:auto}
     .template-export-stage{padding:1.25rem;min-height:100vh;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-start;background:#f6f6f6}
     .template-export-stage .document-page{width:${pageWidth};min-height:${pageHeight};margin:0 auto;background:#ffffff;box-shadow:none;box-sizing:border-box;overflow:visible}
-    .sicod-page{width:${pageWidth};min-height:${pageHeight};background:#fff;color:#161616;box-sizing:border-box;padding:12mm;font-family:Marianne,Segoe UI,Arial,sans-serif;position:relative;overflow:visible}
+    .sicod-page{width:${pageWidth};min-height:${pageHeight};background:#fff;color:#161616;box-sizing:border-box;padding:9mm 11mm 12mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
     .sicod-page--portrait{width:210mm;min-height:297mm}
     .sicod-page--landscape{width:297mm;min-height:210mm}
-    .sicod-page-header{display:grid;grid-template-columns:28mm 1fr 28mm;gap:6mm;align-items:start;margin-bottom:6mm}
-    .sicod-page-logo{width:24mm;max-height:18mm;object-fit:contain}
+    .sicod-page-header{display:grid;grid-template-columns:30mm 1fr 30mm;gap:7mm;align-items:start;margin-bottom:6mm;padding-bottom:3mm;border-bottom:1.2px solid #000091}
+    .sicod-page-logo{width:27mm;max-height:20mm;object-fit:contain}
     .sicod-page-title{text-align:center}
-    .sicod-page-title h2{margin:0;font-size:18px;line-height:1.2;text-transform:uppercase;color:#161616}
-    .sicod-page-title p{margin:3mm 0 0;font-size:12px;line-height:1.35;color:#3a3a3a}
+    .sicod-page-title h2{margin:0;font-size:22px;line-height:1.18;text-transform:uppercase;color:#161616;font-weight:800}
+    .sicod-page-title p{margin:3mm 0 0;font-size:14px;line-height:1.35;color:#3a3a3a}
     .sicod-page-body{width:100%}
-    .cmd-contact-block{font-size:11px;line-height:1.35;margin:0 0 5mm}
+    .cmd-contact-block{font-size:12px;line-height:1.4;margin:0 0 5mm}
     .sicod-page .ps-cartouche{width:fit-content;max-width:100%;margin:0 auto 5mm;border:1px solid #ddd}
     .sicod-page .table{width:100%;border-collapse:collapse}
-    .sicod-page .table th,.sicod-page .table td{border:1px solid #ddd;padding:2mm;font-size:10px;vertical-align:top}
-    .sicod-page .table th{background:#f5f5fe;font-weight:700}
-    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:700;text-transform:uppercase;padding:2mm;font-size:10px}
+    .sicod-page .table th,.sicod-page .table td{border:1px solid #cfcfd8;padding:2.4mm 2.2mm;font-size:11.5px;line-height:1.35;vertical-align:top}
+    .sicod-page .table th{background:#f5f5fe;color:#000091;font-weight:800}
+    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:800;text-transform:uppercase;padding:2.4mm 2.8mm;font-size:12px;letter-spacing:.01em}
     .sicod-page .ps-detail-table{width:100%;border-collapse:collapse;table-layout:fixed}
     .sicod-page .ps-detail-table td{border:1px solid #ddd;vertical-align:top;padding:0}
-    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3mm;font-size:10.5px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3.5mm;font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
     .sicod-page .focus-grid{display:grid;grid-template-columns:1.05fr 2.35fr 1.1fr;border:1px solid #ddd;min-height:145mm}
     .sicod-page .focus-col,.sicod-page .focus-center{display:grid;min-height:145mm}
     .sicod-page .focus-col{grid-template-rows:1fr 1.25fr;border-right:1px solid #ddd}
@@ -1091,13 +1118,15 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
     .sicod-page .focus-map{display:flex;align-items:center;justify-content:center;padding:2mm;min-height:42mm;overflow:hidden}
     .sicod-page .focus-map img,.sicod-page .ps-content img{max-width:100%;max-height:100%;object-fit:contain}
     .sicod-page .ps-signature{margin-top:8mm;display:flex;justify-content:flex-end}
-    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:11px}
+    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:12px;line-height:1.45}
     .sicod-page .exercise-banner{display:none;text-align:center;color:#e1000f;font-weight:700;letter-spacing:.08em;margin-bottom:5mm}
     .sicod-page.exercise .exercise-banner{display:block}
-    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:700;color:#000091;text-transform:uppercase}
-    .sicod-page .cmd-autotext{margin:5mm 0;line-height:1.45;white-space:pre-wrap}
+    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:800;color:#000091;text-transform:uppercase;font-size:13px}
+    .sicod-page .cmd-autotext{margin:5mm 0;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
     .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
     .sicod-page .block{margin:0 0 5mm}
+    .sicod-export-page-break{break-before:page;page-break-before:always}
+    .sicod-keep-together{break-inside:avoid;page-break-inside:avoid}
     .template-export-stage .document-page>.ps-sheet,
     .template-export-stage .document-page>.command-sheet{width:100%;min-height:${pageHeight};max-width:none!important;box-sizing:border-box;border:0}
     @media print{.template-export-stage{padding:0;background:#ffffff}}
@@ -1396,9 +1425,28 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     }
   };
 
+  const rawYForElement = (element) => (element.getBoundingClientRect().top - rootRect.top) * scale;
+  const explicitBreaks = Array.from(root.querySelectorAll('.sicod-export-page-break')).map(rawYForElement);
+  const keepBreaks = [];
+  [...root.querySelectorAll('.sicod-keep-together')].forEach((element) => {
+    const rect = element.getBoundingClientRect();
+    const rawY = (rect.top - rootRect.top) * scale;
+    const rawH = rect.height * scale;
+    if (rawH > 0 && rawH < pageH * 0.92) keepBreaks.push({ rawY, rawH });
+  });
+
+  const computeAdjustedY = (rawY) => {
+    const breaks = [...explicitBreaks];
+    keepBreaks.sort((a, b) => a.rawY - b.rawY).forEach((item) => {
+      const adjustedTop = applyBreaks(item.rawY, breaks);
+      if ((adjustedTop % pageH) + item.rawH > pageH - 5) breaks.push(item.rawY);
+    });
+    return applyBreaks(rawY, breaks);
+  };
+
   const rectToPdf = (rect) => {
     const rawX = (rect.left - rootRect.left) * scale;
-    const rawY = (rect.top - rootRect.top) * scale;
+    const rawY = computeAdjustedY((rect.top - rootRect.top) * scale);
     const pageIndex = Math.max(0, Math.floor(rawY / pageH));
     return {
       pageIndex,
@@ -1409,6 +1457,19 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     };
   };
 
+  function applyBreaks(rawY, breaks) {
+    let offset = 0;
+    let nextPage = 1;
+    [...breaks].sort((a, b) => a - b).forEach((breakRaw) => {
+      if (rawY < breakRaw) return;
+      const adjustedBreak = breakRaw + offset;
+      const targetTop = nextPage * pageH;
+      if (adjustedBreak < targetTop) offset += targetTop - adjustedBreak;
+      nextPage += 1;
+    });
+    return rawY + offset;
+  }
+
   const hasVisibleText = (node) => String(node?.textContent || '').replace(/\s+/g, '').length > 0;
   const isTransparent = (value) => !value || value === 'transparent' || /rgba\([^)]*,\s*0\)/i.test(value);
 
@@ -1417,15 +1478,15 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     const background = computed.backgroundColor;
     const borderColor = cssColorToRgb(computed.borderTopColor, borderFallback);
     const hasBackground = !isTransparent(background);
-    const hasBorder = ['Top', 'Right', 'Bottom', 'Left'].some(side => Number.parseFloat(computed[`border${side}Width`] || '0') > 0);
     if (hasBackground) {
       doc.setFillColor(...cssColorToRgb(background, [255, 255, 255]));
       doc.rect(pdfRect.x, pdfRect.y, pdfRect.w, pdfRect.h, 'F');
     }
-    if (hasBorder) {
-      doc.setDrawColor(...borderColor);
-      doc.rect(pdfRect.x, pdfRect.y, pdfRect.w, pdfRect.h);
-    }
+    doc.setDrawColor(...borderColor);
+    if (Number.parseFloat(computed.borderTopWidth || '0') > 0) doc.line(pdfRect.x, pdfRect.y, pdfRect.x + pdfRect.w, pdfRect.y);
+    if (Number.parseFloat(computed.borderRightWidth || '0') > 0) doc.line(pdfRect.x + pdfRect.w, pdfRect.y, pdfRect.x + pdfRect.w, pdfRect.y + pdfRect.h);
+    if (Number.parseFloat(computed.borderBottomWidth || '0') > 0) doc.line(pdfRect.x, pdfRect.y + pdfRect.h, pdfRect.x + pdfRect.w, pdfRect.y + pdfRect.h);
+    if (Number.parseFloat(computed.borderLeftWidth || '0') > 0) doc.line(pdfRect.x, pdfRect.y, pdfRect.x, pdfRect.y + pdfRect.h);
   };
 
   const fontStyleFor = (computed) => {
@@ -1512,7 +1573,8 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     Array.from(element.children).forEach(walk);
   };
 
-  const totalPages = Math.max(1, Math.ceil(Math.max(root.scrollHeight, rootRect.height) / pageHeightPx));
+  const maxRawY = Math.max(root.scrollHeight, rootRect.height) * scale;
+  const totalPages = Math.max(1, Math.ceil(computeAdjustedY(maxRawY) / pageH));
   for (let i = 0; i < totalPages; i += 1) {
     ensurePage(i);
   }
@@ -1634,7 +1696,7 @@ function buildReflexSheetHtmlTokens() {
     logo: currentLogoSrc(),
     header: `${fiches.length} fiche(s) active(s)`,
     sections: fiches.length
-      ? fiches.map(fiche => `<section class="block">
+      ? fiches.map((fiche, index) => `<section class="block sicod-keep-together ${index > 0 ? 'sicod-export-page-break' : ''}">
           <div class="block-title">${esc(fiche.code || '')} - ${esc(fiche.title || '')}</div>
           <div class="block-body"><p><strong>Famille :</strong> ${esc(fiche.family || 'Autres')}</p>${
             (fiche.sections || []).map(sec => `<h3>${esc(sec.heading || 'Contenu')}</h3><ul>${(sec.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>`).join('')
@@ -1649,18 +1711,20 @@ function buildDirectoryHtmlTokens() {
   const contacts = [...getActiveItems(state.contacts)].sort((a, b) =>
     [a.group || '', a.entity || '', a.name || ''].join('|').localeCompare([b.group || '', b.entity || '', b.name || ''].join('|'), 'fr')
   );
+  let renderedGroups = 0;
   const directory = groups.map(group => {
     const groupItems = contacts.filter(c => (c.group || '') === group);
     if (!groupItems.length) return '';
+    const breakClass = renderedGroups++ > 0 ? ' sicod-export-page-break' : '';
     const entities = [...new Set(groupItems.map(c => (c.entity || '').trim() || 'Sans entité'))];
-    return `<section class="block"><div class="block-title">${esc(group.toUpperCase())}</div>${
+    return `<section class="block${breakClass}"><div class="block-title">${esc(group.toUpperCase())}</div>${
       entities.map(entity => {
         const entityItems = groupItems.filter(c => ((c.entity || '').trim() || 'Sans entité') === entity);
         const rows = entityItems.map(c => `<tr>
           <td>${esc(c.function || '')}</td><td>${esc(c.name || '')}</td><td>${esc(c.entity || '')}</td>
           <td>${esc(c.phone1 || '')}</td><td>${esc(c.phone2 || '')}</td><td>${esc([c.email1 || '', c.email2 || ''].filter(Boolean).join(' / '))}</td>
         </tr>`).join('');
-        return `<h3>${esc(entity)}</h3><table class="table"><thead><tr><th>Fonction</th><th>Nom</th><th>Entité</th><th>Téléphone 1</th><th>Téléphone 2</th><th>E-mail</th></tr></thead><tbody>${rows}</tbody></table>`;
+        return `<section class="sicod-keep-together"><h3>${esc(entity)}</h3><table class="table"><thead><tr><th>Fonction</th><th>Nom</th><th>Entité</th><th>Téléphone 1</th><th>Téléphone 2</th><th>E-mail</th></tr></thead><tbody>${rows}</tbody></table></section>`;
       }).join('')
     }</section>`;
   }).join('');
@@ -2384,8 +2448,8 @@ function renderPSList() {
           <td>${esc(getEventTitle(ps.eventId))}</td>
           <td>${badge(ps.status)}</td>
           <td><div class="list-actions">
-            <button class="fr-btn secondary small ps-toggle-btn" type="button" onclick="selectPS('${ps.id}')">${state.selectedPSId === ps.id ? 'Fermer' : 'Ouvrir'}</button>
-            <button class="fr-btn secondary small" type="button" onclick="duplicatePS('${ps.id}')">Dupliquer</button>
+            ${actionIconButton(state.selectedPSId === ps.id ? 'close' : 'open', state.selectedPSId === ps.id ? 'Fermer' : 'Ouvrir', `selectPS('${ps.id}')`, { className: 'ps-toggle-btn' })}
+            ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -3344,8 +3408,8 @@ function renderDirectory() {
           <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td><td>${esc(c.phone1||'')}</td><td>${esc(c.phone2||'')}</td>
           <td>${esc(c.email1||'')}</td><td>${esc(c.email2||'')}</td>
           <td><div class="list-actions">
-            <button class="fr-btn secondary small" type="button" onclick="openContactForm('${c.id}')">Modifier</button>
-            <button class="fr-btn danger small" type="button" onclick="deleteContact('${c.id}')">Supprimer</button>
+            ${actionIconButton('edit', 'Modifier', `openContactForm('${c.id}')`)}
+            ${actionIconButton('delete', 'Supprimer', `deleteContact('${c.id}')`, { variant: 'danger' })}
           </div></td>
         </tr>`).join('')
       }</tbody></table></div>
@@ -3591,8 +3655,8 @@ function renderPlanning() {
           <td>${esc(p.approvalDate || '')}</td>
           <td>${esc(p.observation || '')}</td>
           <td><div class="list-actions plan-actions-single">
-            <button class="fr-btn secondary small" type="button" onclick="openPlanForm('${p.id}')">Modifier</button>
-            ${p.url ? `<a class="fr-btn small" href="${esc(p.url)}" target="_blank" rel="noopener">Accéder</a>` : ''}
+            ${actionIconButton('edit', 'Modifier', `openPlanForm('${p.id}')`)}
+            ${p.url ? actionIconLink('access', 'Accéder', p.url) : ''}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -3815,8 +3879,8 @@ function renderDutyAvailabilityList() {
           <td>${esc(a.agent)}</td><td>${esc(a.role)}</td>
           <td>${esc(a.start)} → ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
           <td><div class="list-actions">
-            <button class="fr-btn secondary small" type="button" onclick="openDutyAvailabilityForm('${a.id}')">Modifier</button>
-            <button class="fr-btn danger small" type="button" onclick="deleteDutyAvailability('${a.id}')">Supprimer</button>
+            ${actionIconButton('edit', 'Modifier', `openDutyAvailabilityForm('${a.id}')`)}
+            ${actionIconButton('delete', 'Supprimer', `deleteDutyAvailability('${a.id}')`, { variant: 'danger' })}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -4751,6 +4815,17 @@ function ensureUserAdminSettingsUI() {
     </div>
     <div class="card-body">
       <p class="help">Un utilisateur apparaît ici après sa première connexion. Les rôles appliqués pilotent l'accès aux paramètres administrateur.</p>
+      <div class="grid-3" style="margin:1rem 0">
+        <input id="managedUserId" type="hidden">
+        <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
+        <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
+        <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecture</option><option value="redacteur">Rédacteur</option><option value="admin">Administrateur</option></select></div>
+        <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
+        <div class="list-actions" style="align-self:end">
+          ${actionIconButton('save', 'Créer ou mettre à jour', 'saveManagedUserAccount()')}
+          ${actionIconButton('close', 'Réinitialiser le formulaire', 'resetManagedUserForm()')}
+        </div>
+      </div>
       <div id="userAdminStatus" class="help">Chargement en attente.</div>
       <div id="userAdminList"></div>
     </div>
@@ -4809,7 +4884,8 @@ function renderUserAdminDirectory() {
               <td>${esc(item.lastSeenAt ? formatDateTimeValueFR(item.lastSeenAt) : 'Jamais')}</td>
               <td>
                 <div class="list-actions">
-                  <button class="fr-btn secondary small" type="button" onclick="saveManagedUserRole('${esc(item.userId)}')" ${locked ? 'disabled' : ''}>Enregistrer</button>
+                  ${actionIconButton('edit', 'Modifier le compte', `editManagedUserAccount('${esc(item.userId)}')`)}
+                  ${actionIconButton('save', 'Enregistrer le rôle', `saveManagedUserRole('${esc(item.userId)}')`, { disabled: locked })}
                 </div>
               </td>
             </tr>`;
@@ -4863,6 +4939,69 @@ async function saveManagedUserRole(userId) {
   } catch (error) {
     updateUserAdminStatus(`Enregistrement impossible : ${error.message || String(error)}`, 'warning');
     showToast(`Rôle non modifié : ${error.message || String(error)}`, 'error');
+  }
+}
+
+function resetManagedUserForm() {
+  ['managedUserId', 'managedUserEmail', 'managedUserName', 'managedUserPassword'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const role = document.getElementById('managedUserRole');
+  if (role) role.value = 'lecture';
+}
+
+function editManagedUserAccount(userId) {
+  const item = userAdminState.items.find((entry) => entry.userId === userId);
+  if (!item) return;
+  const role = item.roles?.includes('admin') ? 'admin' : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture');
+  const idEl = document.getElementById('managedUserId');
+  const emailEl = document.getElementById('managedUserEmail');
+  const nameEl = document.getElementById('managedUserName');
+  const roleEl = document.getElementById('managedUserRole');
+  const passwordEl = document.getElementById('managedUserPassword');
+  if (idEl) idEl.value = item.userId || '';
+  if (emailEl) emailEl.value = item.email || '';
+  if (nameEl) nameEl.value = item.displayName || '';
+  if (roleEl) roleEl.value = role;
+  if (passwordEl) passwordEl.value = '';
+}
+
+async function saveManagedUserAccount() {
+  const userId = document.getElementById('managedUserId')?.value || '';
+  const email = document.getElementById('managedUserEmail')?.value?.trim() || '';
+  const displayName = document.getElementById('managedUserName')?.value?.trim() || '';
+  const role = document.getElementById('managedUserRole')?.value || 'lecture';
+  const password = document.getElementById('managedUserPassword')?.value || '';
+  if (!email) {
+    showToast('Saisissez un e-mail utilisateur.', 'error');
+    return;
+  }
+  if (!userId && !password) {
+    showToast('Un mot de passe initial est requis pour créer un compte.', 'error');
+    return;
+  }
+  updateUserAdminStatus(userId ? 'Mise à jour du compte...' : 'Création du compte...', 'info');
+  try {
+    const saved = await window.SICODApi?.system?.upsertManagedUser?.({ userId, email, displayName, role, password });
+    const index = userAdminState.items.findIndex((item) => item.userId === saved.userId);
+    const next = {
+      userId: saved.userId,
+      email: saved.email,
+      displayName: saved.displayName,
+      roles: saved.roles,
+      lastSeenAt: null
+    };
+    if (index >= 0) userAdminState.items[index] = { ...userAdminState.items[index], ...next };
+    else userAdminState.items.push(next);
+    userAdminState.items.sort((a, b) => String(a.email || '').localeCompare(String(b.email || ''), 'fr'));
+    resetManagedUserForm();
+    renderUserAdminDirectory();
+    updateUserAdminStatus('Compte utilisateur enregistré.', 'success');
+    showToast('Compte utilisateur enregistré.');
+  } catch (error) {
+    updateUserAdminStatus(`Enregistrement impossible : ${error.message || String(error)}`, 'warning');
+    showToast(`Compte non enregistré : ${error.message || String(error)}`, 'error');
   }
 }
 

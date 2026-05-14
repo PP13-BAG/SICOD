@@ -297,6 +297,26 @@
     };
   }
 
+  async function signUpManagedUser(email, password, displayName) {
+    const cleanEmail = String(email || '').trim();
+    const cleanPassword = String(password || '');
+    if (!cleanEmail || !cleanPassword) throw new Error('E-mail et mot de passe requis.');
+    const payload = await authRequest('/auth/v1/signup', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: cleanPassword,
+        data: {
+          display_name: String(displayName || cleanEmail).trim()
+        }
+      })
+    });
+    return payload?.user || payload;
+  }
+
   async function signOutSupabase() {
     if (isSupabaseConfigured() && authSession?.accessToken) {
       try {
@@ -483,6 +503,41 @@
       success: true,
       userId: targetUserId,
       roles: nextRoles
+    };
+  }
+
+  async function upsertSupabaseManagedUser(user) {
+    const value = user && typeof user === 'object' ? user : {};
+    let userId = String(value.userId || '').trim();
+    const email = String(value.email || '').trim();
+    const displayName = String(value.displayName || email || '').trim();
+    const password = String(value.password || '');
+    const roles = normalizeRoleList([value.role || 'lecture']);
+    if (!email) throw new Error('E-mail utilisateur requis.');
+    if (!userId) {
+      const created = await signUpManagedUser(email, password, displayName);
+      userId = String(created?.id || '').trim();
+      if (!userId) throw new Error("Création Auth impossible : identifiant utilisateur non retourné.");
+    }
+    await supabaseRequest('/rest/v1/app_user_directory?on_conflict=user_id', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify([{
+        user_id: userId,
+        email,
+        display_name: displayName,
+        last_seen_at: value.lastSeenAt || null
+      }])
+    }, true);
+    await saveSupabaseManagedUserRoles(userId, roles);
+    return {
+      userId,
+      email,
+      displayName,
+      roles
     };
   }
 
@@ -747,6 +802,12 @@
         const session = await ensureSupabaseSession();
         if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
         return saveSupabaseManagedUserRoles(userId, roles);
+      },
+      async upsertManagedUser(user) {
+        if (!isSupabaseConfigured()) throw new Error('Supabase non configuré.');
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return upsertSupabaseManagedUser(user);
       },
     }
   };
