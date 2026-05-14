@@ -1817,44 +1817,41 @@ function ensureEventWorkspaceUI() {
   const timelineCard = document.getElementById('eventTimelineCard');
   if (!activeCard || !timelineCard) return;
   activeCard.classList.add('event-selector-card');
-  const shell = document.createElement('section');
-  shell.className = 'event-shell';
-  shell.id = 'eventShell';
-  shell.innerHTML = `
-    <aside class="event-shell-sidebar" id="eventShellSidebar"></aside>
-    <div class="event-shell-main">
-      <div class="card event-context-card" id="eventWorkspaceContext"></div>
-      <div class="card" id="eventWorkspaceCard">
-        <div class="card-header">
-          <h2 class="card-title">Conduite de l'événement</h2>
-          <div class="page-subtabs" id="eventWorkspaceTabs">
-            <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
-            <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
-            <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
-            <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
-          </div>
+  const contextCard = document.createElement('div');
+  contextCard.className = 'card event-context-card';
+  contextCard.id = 'eventWorkspaceContext';
+  const workspace = document.createElement('div');
+  workspace.className = 'card';
+  workspace.id = 'eventWorkspaceCard';
+  workspace.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">Conduite de l'événement</h2>
+      <div class="page-subtabs" id="eventWorkspaceTabs">
+        <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
+        <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
+        <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
+        <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
+      </div>
+    </div>
+    <div class="card-body event-workspace">
+      <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
+      <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
+      <div id="eventWorkspacePs" class="event-workspace-panel">
+        <div class="grid-2">
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
         </div>
-        <div class="card-body event-workspace">
-          <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
-          <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
-          <div id="eventWorkspacePs" class="event-workspace-panel">
-            <div class="grid-2">
-              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
-              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
-            </div>
-          </div>
-          <div id="eventWorkspaceCommand" class="event-workspace-panel">
-            <div class="grid-2">
-              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
-              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
-            </div>
-          </div>
+      </div>
+      <div id="eventWorkspaceCommand" class="event-workspace-panel">
+        <div class="grid-2">
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
         </div>
       </div>
     </div>
   `;
-  activeCard.after(shell);
-  document.getElementById('eventShellSidebar')?.appendChild(activeCard);
+  activeCard.after(contextCard);
+  contextCard.after(workspace);
   document.getElementById('eventWorkspaceTimeline')?.appendChild(timelineCard);
 }
 
@@ -2141,7 +2138,7 @@ function renderEventWorkspaceContext() {
     mount.innerHTML = `
       <div class="card-body event-context-empty">
         <h2 class="card-title">Aucun événement sélectionné</h2>
-        <p class="help">Choisissez un événement dans la colonne de gauche pour accéder à la main courante, aux points de situation et aux messages.</p>
+        <p class="help">Choisissez un événement dans la liste pour accéder à la main courante, aux points de situation et aux messages.</p>
       </div>
     `;
     return;
@@ -2153,7 +2150,7 @@ function renderEventWorkspaceContext() {
   const lastCommand = commandItems[0];
   mount.innerHTML = `
     <div class="card-header">
-      <div>
+      <div class="event-context-heading">
         <h2 class="card-title">${esc(event.title || 'Événement')}</h2>
         <div class="event-meta">
           <span>${esc(event.type || 'Type non renseigné')}</span>
@@ -2169,20 +2166,22 @@ function renderEventWorkspaceContext() {
       </div>
     </div>
     <div class="card-body">
-      <div class="event-context-kpis">
-        <div class="event-context-kpi"><strong>${timelineItems.length}</strong><span>Entrées</span></div>
-        <div class="event-context-kpi"><strong>${psItems.length}</strong><span>Points de situation</span></div>
-        <div class="event-context-kpi"><strong>${commandItems.length}</strong><span>Messages</span></div>
-        <div class="event-context-kpi"><strong>${esc(event.status || 'Actif')}</strong><span>Statut</span></div>
-      </div>
-      <div class="event-context-grid">
-        <div class="event-context-block">
-          <div class="event-context-label">Dernier point de situation</div>
-          <div class="event-context-value">${lastPs ? `PS ${esc(lastPs.number || '')} · ${esc(formatDateTimeValueFR(lastPs.updatedAt || lastPs.createdAt || ''))}` : 'Aucun point de situation'}</div>
+      <div class="event-context-summary">
+        <div class="event-context-facts">
+          <div class="event-context-line"><span class="event-context-label">Statut</span><strong class="event-context-value">${esc(event.status || 'Actif')}</strong></div>
+          <div class="event-context-line"><span class="event-context-label">Entrées de main courante</span><strong class="event-context-value">${timelineItems.length}</strong></div>
+          <div class="event-context-line"><span class="event-context-label">Points de situation</span><strong class="event-context-value">${psItems.length}</strong></div>
+          <div class="event-context-line"><span class="event-context-label">Messages</span><strong class="event-context-value">${commandItems.length}</strong></div>
         </div>
-        <div class="event-context-block">
-          <div class="event-context-label">Dernier message</div>
-          <div class="event-context-value">${lastCommand ? `${esc(lastCommand.typeLabel || 'Message')} · ${esc(formatDateTimeValueFR(lastCommand.updatedAt || lastCommand.createdAt || ''))}` : 'Aucun message de commandement'}</div>
+        <div class="event-context-updates">
+          <div class="event-context-block">
+            <div class="event-context-label">Dernier point de situation</div>
+            <div class="event-context-value">${lastPs ? `PS ${esc(lastPs.number || '')} · ${esc(formatDateTimeValueFR(lastPs.updatedAt || lastPs.createdAt || ''))}` : 'Aucun point de situation'}</div>
+          </div>
+          <div class="event-context-block">
+            <div class="event-context-label">Dernier message</div>
+            <div class="event-context-value">${lastCommand ? `${esc(lastCommand.typeLabel || 'Message')} · ${esc(formatDateTimeValueFR(lastCommand.updatedAt || lastCommand.createdAt || ''))}` : 'Aucun message de commandement'}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2201,9 +2200,9 @@ function renderEventOverviewSummary() {
   const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
   const lastLog = getEventTimelineItems(event.id)[0];
   mount.innerHTML = `
-    <div class="event-overview-grid">
+    <div class="event-overview-grid event-overview-grid-simple">
       <div class="card event-subcard">
-        <div class="card-header"><h2 class="card-title">Situation de l'événement</h2></div>
+        <div class="card-header"><h2 class="card-title">Résumé opérationnel</h2></div>
         <div class="card-body">
           <div class="info-pairs">
             <div><strong>Niveau</strong><br>${esc(event.level || 'Non renseigné')}</div>
@@ -2211,21 +2210,23 @@ function renderEventOverviewSummary() {
             <div><strong>Type</strong><br>${esc(event.type || 'Non renseigné')}</div>
             <div><strong>ID Synergi</strong><br>${esc(event.synergi || 'Non renseigné')}</div>
           </div>
+          <div class="event-overview-note">
+            ${lastLog ? `<strong>Dernière activité</strong><br>${esc(formatDateTimeValueFR(lastLog.date || ''))} · ${esc(lastLog.title || '')}` : 'Aucune activité enregistrée pour le moment.'}
+          </div>
         </div>
       </div>
       <div class="card event-subcard">
-        <div class="card-header"><h2 class="card-title">Dernière activité</h2></div>
-        <div class="card-body">
-          ${lastLog ? `<div class="event-context-label">${esc(formatDateTimeValueFR(lastLog.date || ''))}</div><div class="event-context-value">${esc(lastLog.title || '')}</div><p class="help">${esc(lastLog.detail || '')}</p>` : '<p class="help">Aucune activité enregistrée.</p>'}
-        </div>
-      </div>
-      <div class="card event-subcard">
-        <div class="card-header"><h2 class="card-title">Production documentaire</h2></div>
+        <div class="card-header"><h2 class="card-title">Documents et actions</h2></div>
         <div class="card-body">
           <div class="event-overview-list">
             <div><strong>${psItems.length}</strong><span>Points de situation</span></div>
             <div><strong>${commandItems.length}</strong><span>Messages de commandement</span></div>
             <div><strong>${getEventTimelineItems(event.id).length}</strong><span>Entrées de main courante</span></div>
+          </div>
+          <div class="event-overview-actions">
+            <button class="fr-btn small" type="button" onclick="showEventWorkspaceTab('timeline')">Ouvrir la main courante</button>
+            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('ps')">Voir les points de situation</button>
+            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('command')">Voir les messages</button>
           </div>
         </div>
       </div>
@@ -2266,21 +2267,21 @@ function renderEvents() {
     const timelineCount = getEventTimelineItems(e.id).length;
     return `<div class="event-card">
       <div class="event-card-head">
-        <div>
+        <div class="event-card-main">
           <h3>${esc(e.title)}</h3>
           <div class="event-meta">
             <span>${esc(e.type || '')}</span>
             <span>${esc(e.location || '')}</span>
             <span>${esc(e.level || '')}</span>
+            ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
           </div>
         </div>
-        <span class="badge ${isOpen ? 'success' : 'info'}">${isOpen ? 'Ouvert' : 'Ferme'}</span>
+        <span class="badge ${isOpen ? 'success' : 'info'}">${isOpen ? 'Sélectionné' : 'Disponible'}</span>
       </div>
       <div class="event-card-stats">
-        <span>${timelineCount} entree(s)</span>
+        <span>${timelineCount} entrée(s)</span>
         <span>${psCount} PS</span>
         <span>${cmdCount} message(s)</span>
-        ${e.synergi ? `<span>ID ${esc(e.synergi)}</span>` : ''}
       </div>
       <div class="event-actions">
         ${e.status === 'Archivé'
