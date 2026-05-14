@@ -512,6 +512,7 @@
     const email = String(value.email || '').trim();
     const displayName = String(value.displayName || email || '').trim();
     const password = String(value.password || '');
+    const lastSeenAt = String(value.lastSeenAt || '').trim() || new Date().toISOString();
     const roles = normalizeRoleList([value.role || 'lecture']);
     if (!email) throw new Error('E-mail utilisateur requis.');
     if (!userId) {
@@ -529,7 +530,7 @@
         user_id: userId,
         email,
         display_name: displayName,
-        last_seen_at: value.lastSeenAt || null
+        last_seen_at: lastSeenAt
       }])
     }, true);
     await saveSupabaseManagedUserRoles(userId, roles);

@@ -758,16 +758,16 @@ function isPlanExpired(item) {
 
 function getPSSignatureConfig() {
   return {
-    mode: state.settings.psSignatureMode || 'delegation',
-    name: state.settings.psSignatureName || 'Nicolas HAUPTMANN',
-    role: state.settings.psSignatureRole || 'le directeur de cabinet'
+    mode: state.settings.eventUnifiedSignatureMode || state.settings.eventSignatureMode || state.settings.psSignatureMode || 'delegation',
+    name: state.settings.eventUnifiedSignatureName || state.settings.eventSignatureName || state.settings.psSignatureName || 'Nicolas HAUPTMANN',
+    role: state.settings.eventUnifiedSignatureRole || state.settings.eventSignatureRole || state.settings.psSignatureRole || 'le directeur de cabinet'
   };
 }
 function getEventSignatureConfig() {
   return {
-    mode: state.settings.eventSignatureMode || 'delegation',
-    name: state.settings.eventSignatureName || state.settings.psSignatureName || 'Nicolas HAUPTMANN',
-    role: state.settings.eventSignatureRole || state.settings.psSignatureRole || 'le directeur de cabinet'
+    mode: state.settings.eventUnifiedSignatureMode || state.settings.eventSignatureMode || state.settings.psSignatureMode || 'delegation',
+    name: state.settings.eventUnifiedSignatureName || state.settings.eventSignatureName || state.settings.psSignatureName || 'Nicolas HAUPTMANN',
+    role: state.settings.eventUnifiedSignatureRole || state.settings.eventSignatureRole || state.settings.psSignatureRole || 'le directeur de cabinet'
   };
 }
 function shouldApplyPdfSignature(context) {
@@ -1816,38 +1816,45 @@ function ensureEventWorkspaceUI() {
   const activeCard = pageInner.querySelector('#eventList')?.closest('.card');
   const timelineCard = document.getElementById('eventTimelineCard');
   if (!activeCard || !timelineCard) return;
-  const workspace = document.createElement('div');
-  workspace.className = 'card';
-  workspace.id = 'eventWorkspaceCard';
-  workspace.innerHTML = `
-    <div class="card-header">
-      <h2 class="card-title">Conduite de l'événement</h2>
-      <div class="page-subtabs" id="eventWorkspaceTabs">
-        <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
-        <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
-        <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
-        <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
-      </div>
-    </div>
-    <div class="card-body event-workspace">
-      <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
-      <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
-      <div id="eventWorkspacePs" class="event-workspace-panel">
-        <div class="grid-2">
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
+  activeCard.classList.add('event-selector-card');
+  const shell = document.createElement('section');
+  shell.className = 'event-shell';
+  shell.id = 'eventShell';
+  shell.innerHTML = `
+    <aside class="event-shell-sidebar" id="eventShellSidebar"></aside>
+    <div class="event-shell-main">
+      <div class="card event-context-card" id="eventWorkspaceContext"></div>
+      <div class="card" id="eventWorkspaceCard">
+        <div class="card-header">
+          <h2 class="card-title">Conduite de l'événement</h2>
+          <div class="page-subtabs" id="eventWorkspaceTabs">
+            <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
+            <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
+            <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
+            <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
+          </div>
         </div>
-      </div>
-      <div id="eventWorkspaceCommand" class="event-workspace-panel">
-        <div class="grid-2">
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
+        <div class="card-body event-workspace">
+          <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
+          <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
+          <div id="eventWorkspacePs" class="event-workspace-panel">
+            <div class="grid-2">
+              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
+              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
+            </div>
+          </div>
+          <div id="eventWorkspaceCommand" class="event-workspace-panel">
+            <div class="grid-2">
+              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
+              <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   `;
-  activeCard.after(workspace);
-  document.getElementById('eventWorkspaceOverview')?.appendChild(activeCard);
+  activeCard.after(shell);
+  document.getElementById('eventShellSidebar')?.appendChild(activeCard);
   document.getElementById('eventWorkspaceTimeline')?.appendChild(timelineCard);
 }
 
@@ -1873,6 +1880,7 @@ function showEventWorkspaceTab(tab) {
     renderCommandList();
     renderCommandPreview(state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   }
+  if (state.currentEventWorkspaceTab === 'overview') renderEventOverviewSummary();
   if (state.currentEventWorkspaceTab === 'timeline') renderEventTimeline(state.currentEventId);
 }
 
@@ -2125,6 +2133,106 @@ function renderEventTimeline(eventId) {
   tableWrap.innerHTML = sortedItems.length ? `<table class="table"><thead><tr><th style="width:13rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','date')" onkeydown="handleSortHeaderKey(event,'timeline','date')">Date / heure${getTableSort('timeline','date','desc').key === 'date' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th style="width:10rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','author')" onkeydown="handleSortHeaderKey(event,'timeline','author')">Auteur${getTableSort('timeline','date','desc').key === 'author' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','title')" onkeydown="handleSortHeaderKey(event,'timeline','title')">Entrée${getTableSort('timeline','date','desc').key === 'title' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th></tr></thead><tbody>${sortedItems.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrée de main courante.</p>';
 }
 
+function renderEventWorkspaceContext() {
+  const mount = document.getElementById('eventWorkspaceContext');
+  if (!mount) return;
+  const event = byId(state.events, state.currentEventId);
+  if (!event) {
+    mount.innerHTML = `
+      <div class="card-body event-context-empty">
+        <h2 class="card-title">Aucun événement sélectionné</h2>
+        <p class="help">Choisissez un événement dans la colonne de gauche pour accéder à la main courante, aux points de situation et aux messages.</p>
+      </div>
+    `;
+    return;
+  }
+  const psItems = getActiveItems(state.ps).filter((item) => item.eventId === event.id);
+  const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
+  const timelineItems = getEventTimelineItems(event.id);
+  const lastPs = psItems[0];
+  const lastCommand = commandItems[0];
+  mount.innerHTML = `
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">${esc(event.title || 'Événement')}</h2>
+        <div class="event-meta">
+          <span>${esc(event.type || 'Type non renseigné')}</span>
+          <span>${esc(event.location || 'Localisation non renseignée')}</span>
+          <span>${esc(event.level || 'Niveau non renseigné')}</span>
+          ${event.synergi ? `<span>ID Synergi ${esc(event.synergi)}</span>` : ''}
+        </div>
+      </div>
+      <div class="event-actions">
+        <button class="fr-btn secondary small" type="button" onclick="openEventForm('${event.id}')">Modifier</button>
+        <button class="fr-btn secondary small" type="button" onclick="openEventEntryForm()">Ajouter une entrée</button>
+        <button class="fr-btn secondary small" type="button" onclick="archiveEvent('${event.id}')">Archiver</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="event-context-kpis">
+        <div class="event-context-kpi"><strong>${timelineItems.length}</strong><span>Entrées</span></div>
+        <div class="event-context-kpi"><strong>${psItems.length}</strong><span>Points de situation</span></div>
+        <div class="event-context-kpi"><strong>${commandItems.length}</strong><span>Messages</span></div>
+        <div class="event-context-kpi"><strong>${esc(event.status || 'Actif')}</strong><span>Statut</span></div>
+      </div>
+      <div class="event-context-grid">
+        <div class="event-context-block">
+          <div class="event-context-label">Dernier point de situation</div>
+          <div class="event-context-value">${lastPs ? `PS ${esc(lastPs.number || '')} · ${esc(formatDateTimeValueFR(lastPs.updatedAt || lastPs.createdAt || ''))}` : 'Aucun point de situation'}</div>
+        </div>
+        <div class="event-context-block">
+          <div class="event-context-label">Dernier message</div>
+          <div class="event-context-value">${lastCommand ? `${esc(lastCommand.typeLabel || 'Message')} · ${esc(formatDateTimeValueFR(lastCommand.updatedAt || lastCommand.createdAt || ''))}` : 'Aucun message de commandement'}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderEventOverviewSummary() {
+  const mount = document.getElementById('eventWorkspaceOverview');
+  if (!mount) return;
+  const event = byId(state.events, state.currentEventId);
+  if (!event) {
+    mount.innerHTML = '<p class="help">Sélectionnez un événement dans la colonne de gauche pour afficher sa synthèse.</p>';
+    return;
+  }
+  const psItems = getActiveItems(state.ps).filter((item) => item.eventId === event.id);
+  const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
+  const lastLog = getEventTimelineItems(event.id)[0];
+  mount.innerHTML = `
+    <div class="event-overview-grid">
+      <div class="card event-subcard">
+        <div class="card-header"><h2 class="card-title">Situation de l'événement</h2></div>
+        <div class="card-body">
+          <div class="info-pairs">
+            <div><strong>Niveau</strong><br>${esc(event.level || 'Non renseigné')}</div>
+            <div><strong>Commune / site</strong><br>${esc(event.location || 'Non renseigné')}</div>
+            <div><strong>Type</strong><br>${esc(event.type || 'Non renseigné')}</div>
+            <div><strong>ID Synergi</strong><br>${esc(event.synergi || 'Non renseigné')}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card event-subcard">
+        <div class="card-header"><h2 class="card-title">Dernière activité</h2></div>
+        <div class="card-body">
+          ${lastLog ? `<div class="event-context-label">${esc(formatDateTimeValueFR(lastLog.date || ''))}</div><div class="event-context-value">${esc(lastLog.title || '')}</div><p class="help">${esc(lastLog.detail || '')}</p>` : '<p class="help">Aucune activité enregistrée.</p>'}
+        </div>
+      </div>
+      <div class="card event-subcard">
+        <div class="card-header"><h2 class="card-title">Production documentaire</h2></div>
+        <div class="card-body">
+          <div class="event-overview-list">
+            <div><strong>${psItems.length}</strong><span>Points de situation</span></div>
+            <div><strong>${commandItems.length}</strong><span>Messages de commandement</span></div>
+            <div><strong>${getEventTimelineItems(event.id).length}</strong><span>Entrées de main courante</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function exportEventLogPDF() {
   const eventId = state.currentEventId;
   const e = byId(state.events, eventId);
@@ -2153,23 +2261,33 @@ function renderEvents() {
 
   const tmpl = e => {
     const isOpen = state.currentEventId === e.id;
-    const openLabel = isOpen ? 'Fermer' : 'Ouvrir';
+    const psCount = getActiveItems(state.ps).filter((item) => item.eventId === e.id).length;
+    const cmdCount = getActiveItems(state.commandMessages).filter((item) => item.eventId === e.id).length;
+    const timelineCount = getEventTimelineItems(e.id).length;
     return `<div class="event-card">
-      <h3>${esc(e.title)}</h3>
-      <div class="event-meta">
-        <span>${esc(e.type || '')}</span>
-        <span>${esc(e.location || '')}</span>
-        <span>${esc(e.level || '')}</span>
-        ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
+      <div class="event-card-head">
+        <div>
+          <h3>${esc(e.title)}</h3>
+          <div class="event-meta">
+            <span>${esc(e.type || '')}</span>
+            <span>${esc(e.location || '')}</span>
+            <span>${esc(e.level || '')}</span>
+          </div>
+        </div>
+        <span class="badge ${isOpen ? 'success' : 'info'}">${isOpen ? 'Ouvert' : 'Ferme'}</span>
+      </div>
+      <div class="event-card-stats">
+        <span>${timelineCount} entree(s)</span>
+        <span>${psCount} PS</span>
+        <span>${cmdCount} message(s)</span>
+        ${e.synergi ? `<span>ID ${esc(e.synergi)}</span>` : ''}
       </div>
       <div class="event-actions">
         ${e.status === 'Archivé'
           ? `<button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
              <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
-          : `<button class="fr-btn small" onclick="openEvent('${e.id}')">${openLabel}</button>
-             <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>
-             <button class="fr-btn secondary small" onclick="archiveEvent('${e.id}')">Archiver</button>
-             <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
+          : `<button class="fr-btn small" onclick="openEvent('${e.id}')">${isOpen ? 'Fermer' : 'Ouvrir'}</button>
+             <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>`
         }
       </div>
     </div>`;
@@ -2178,6 +2296,8 @@ function renderEvents() {
   eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   updatePSEventSelect();
   populateCommuneDatalist();
+  renderEventWorkspaceContext();
+  renderEventOverviewSummary();
   renderEventTimeline(state.currentEventId);
   showEventWorkspaceTab(state.currentEventWorkspaceTab || 'overview');
 }
@@ -2583,9 +2703,9 @@ function ensureCommandState() {
 
 function getCommandSignatureConfig() {
   return {
-    mode: state.settings.commandSignatureMode || 'delegation',
-    name: state.settings.commandSignatureName || 'Nicolas HAUPTMANN',
-    role: state.settings.commandSignatureRole || 'le directeur de cabinet'
+    mode: state.settings.eventUnifiedSignatureMode || state.settings.commandSignatureMode || state.settings.psSignatureMode || 'delegation',
+    name: state.settings.eventUnifiedSignatureName || state.settings.commandSignatureName || state.settings.psSignatureName || 'Nicolas HAUPTMANN',
+    role: state.settings.eventUnifiedSignatureRole || state.settings.commandSignatureRole || state.settings.psSignatureRole || 'le directeur de cabinet'
   };
 }
 
@@ -4602,16 +4722,15 @@ function ensureUserAdminSettingsUI() {
       </div>
     </div>
     <div class="card-body">
-      <p class="help">Un utilisateur apparaît ici après sa première connexion. Les rôles appliqués pilotent l'accès aux paramètres administrateur.</p>
       <div class="grid-3" style="margin:1rem 0">
         <input id="managedUserId" type="hidden">
         <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
         <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
         <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
         <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
-        <div class="list-actions" style="align-self:end">
-          ${actionIconButton('save', 'Créer ou mettre à jour', 'saveManagedUserAccount()')}
-          ${actionIconButton('close', 'Réinitialiser le formulaire', 'resetManagedUserForm()')}
+        <div class="list-actions user-admin-form-actions" style="align-self:end">
+          <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
+          <button class="fr-btn secondary" type="button" onclick="resetManagedUserForm()">Réinitialiser</button>
         </div>
       </div>
       <div id="userAdminStatus" class="help">Chargement en attente.</div>
@@ -4765,6 +4884,7 @@ async function saveManagedUserAccount() {
   const displayName = document.getElementById('managedUserName')?.value?.trim() || '';
   const role = document.getElementById('managedUserRole')?.value || 'lecture';
   const password = document.getElementById('managedUserPassword')?.value || '';
+  const existingItem = userAdminState.items.find((item) => item.userId === userId);
   if (!email) {
     showToast('Saisissez un e-mail utilisateur.', 'error');
     return;
@@ -4775,14 +4895,21 @@ async function saveManagedUserAccount() {
   }
   updateUserAdminStatus(userId ? 'Mise à jour du compte...' : 'Création du compte...', 'info');
   try {
-    const saved = await window.SICODApi?.system?.upsertManagedUser?.({ userId, email, displayName, role, password });
+    const saved = await window.SICODApi?.system?.upsertManagedUser?.({
+      userId,
+      email,
+      displayName,
+      role,
+      password,
+      lastSeenAt: existingItem?.lastSeenAt || new Date().toISOString()
+    });
     const index = userAdminState.items.findIndex((item) => item.userId === saved.userId);
     const next = {
       userId: saved.userId,
       email: saved.email,
       displayName: saved.displayName,
       roles: saved.roles,
-      lastSeenAt: null
+      lastSeenAt: existingItem?.lastSeenAt || new Date().toISOString()
     };
     if (index >= 0) userAdminState.items[index] = { ...userAdminState.items[index], ...next };
     else userAdminState.items.push(next);
@@ -4818,27 +4945,41 @@ function ensureSettingsEnhancements() {
 }
 
 function ensureEventSignatureSettingsUI() {
-  const panel = document.querySelector('[data-settings-panel="events"] .card-body');
-  if (!panel || panel.querySelector('#settingEventSignatureMode')) return;
-  panel.insertAdjacentHTML('beforeend', `
-    <div class="grid-3" style="margin-top:1rem">
-      <div>
-        <label>Signature</label>
-        <select id="settingEventSignatureMode">
-          <option value="prefet">Le préfet</option>
-          <option value="delegation">Pour le préfet, par délégation</option>
-        </select>
-      </div>
-      <div>
-        <label>Nom du signataire</label>
-        <input id="settingEventSignatureName">
-      </div>
-      <div>
-        <label>Fonction du signataire</label>
-        <input id="settingEventSignatureRole">
+  const eventPanel = document.querySelector('[data-settings-panel="events"] .card-body');
+  const psPanel = document.querySelector('[data-settings-panel="ps"] .card-body');
+  const commandPanel = document.querySelector('[data-settings-panel="command"] .card-body');
+  if (!eventPanel || document.getElementById('eventUnifiedSignatureMode')) return;
+  eventPanel.insertAdjacentHTML('beforeend', `
+    <div class="card settings-inline-card" style="margin-top:1rem">
+      <div class="card-header"><h3 class="card-title">Signature unique des documents événementiels</h3></div>
+      <div class="card-body">
+        <p class="help">Cette signature s’applique à la main courante, aux points de situation et aux messages de commandement.</p>
+        <div class="grid-3">
+          <div>
+            <label>Signature</label>
+            <select id="eventUnifiedSignatureMode">
+              <option value="prefet">Le préfet</option>
+              <option value="delegation">Pour le préfet, par délégation</option>
+            </select>
+          </div>
+          <div>
+            <label>Nom du signataire</label>
+            <input id="eventUnifiedSignatureName">
+          </div>
+          <div>
+            <label>Fonction du signataire</label>
+            <input id="eventUnifiedSignatureRole">
+          </div>
+        </div>
       </div>
     </div>
   `);
+  const removeLegacySignatureBlock = (panel, ids) => {
+    if (!panel) return;
+    ids.forEach((id) => document.getElementById(id)?.closest('.grid-3')?.remove());
+  };
+  removeLegacySignatureBlock(psPanel, ['settingPsSignatureMode', 'settingPsSignatureName', 'settingPsSignatureRole']);
+  removeLegacySignatureBlock(commandPanel, ['settingCommandSignatureMode', 'settingCommandSignatureName', 'settingCommandSignatureRole']);
 }
 
 function loadSettingsForm() {
@@ -4856,17 +4997,11 @@ function loadSettingsForm() {
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
-  if (get('settingPsSignatureMode')) get('settingPsSignatureMode').value = state.settings.psSignatureMode || 'prefet';
-  if (get('settingPsSignatureName')) get('settingPsSignatureName').value = state.settings.psSignatureName || '';
-  if (get('settingPsSignatureRole')) get('settingPsSignatureRole').value = state.settings.psSignatureRole || '';
   if (get('settingEventTypes')) get('settingEventTypes').value = getDynamicList('eventTypes').join('\n');
-  if (get('settingEventSignatureMode')) get('settingEventSignatureMode').value = state.settings.eventSignatureMode || 'delegation';
-  if (get('settingEventSignatureName')) get('settingEventSignatureName').value = state.settings.eventSignatureName || '';
-  if (get('settingEventSignatureRole')) get('settingEventSignatureRole').value = state.settings.eventSignatureRole || '';
+  if (get('eventUnifiedSignatureMode')) get('eventUnifiedSignatureMode').value = state.settings.eventUnifiedSignatureMode || state.settings.eventSignatureMode || state.settings.psSignatureMode || 'delegation';
+  if (get('eventUnifiedSignatureName')) get('eventUnifiedSignatureName').value = state.settings.eventUnifiedSignatureName || state.settings.eventSignatureName || state.settings.psSignatureName || '';
+  if (get('eventUnifiedSignatureRole')) get('eventUnifiedSignatureRole').value = state.settings.eventUnifiedSignatureRole || state.settings.eventSignatureRole || state.settings.psSignatureRole || '';
   if (get('settingCommandTypes')) get('settingCommandTypes').value = getDynamicList('commandTypes').join('\n');
-  if (get('settingCommandSignatureMode')) get('settingCommandSignatureMode').value = state.settings.commandSignatureMode || 'delegation';
-  if (get('settingCommandSignatureName')) get('settingCommandSignatureName').value = state.settings.commandSignatureName || '';
-  if (get('settingCommandSignatureRole')) get('settingCommandSignatureRole').value = state.settings.commandSignatureRole || '';
   if (get('settingCommandPhone')) get('settingCommandPhone').value = state.settings.commandPhone || '';
   if (get('settingCommandFax')) get('settingCommandFax').value = state.settings.commandFax || '';
   if (get('settingCommandEmail')) get('settingCommandEmail').value = state.settings.commandEmail || '';
@@ -4919,19 +5054,22 @@ async function saveSettings() {
   state.settings.dutySignerLastName = (get('settingDutySignerLastName')?.value || '').trim();
   state.settings.dutySignerFirstName = (get('settingDutySignerFirstName')?.value || '').trim();
   state.settings.dutySignerFunction = (get('settingDutySignerFunction')?.value || '').trim();
-  state.settings.commandSignatureMode = get('settingCommandSignatureMode')?.value || 'delegation';
-  state.settings.commandSignatureName = (get('settingCommandSignatureName')?.value || '').trim();
-  state.settings.commandSignatureRole = (get('settingCommandSignatureRole')?.value || '').trim();
+  state.settings.eventUnifiedSignatureMode = get('eventUnifiedSignatureMode')?.value || state.settings.eventUnifiedSignatureMode || 'delegation';
+  state.settings.eventUnifiedSignatureName = (get('eventUnifiedSignatureName')?.value || '').trim();
+  state.settings.eventUnifiedSignatureRole = (get('eventUnifiedSignatureRole')?.value || '').trim();
+  state.settings.commandSignatureMode = state.settings.eventUnifiedSignatureMode;
+  state.settings.commandSignatureName = state.settings.eventUnifiedSignatureName;
+  state.settings.commandSignatureRole = state.settings.eventUnifiedSignatureRole;
   state.settings.commandPhone = (get('settingCommandPhone')?.value || '').trim();
   state.settings.commandFax = (get('settingCommandFax')?.value || '').trim();
   state.settings.commandEmail = (get('settingCommandEmail')?.value || '').trim();
   state.settings.commandAudioConf = (get('settingCommandAudioConf')?.value || '').trim();
-  state.settings.psSignatureMode = get('settingPsSignatureMode')?.value || 'prefet';
-  state.settings.psSignatureName = (get('settingPsSignatureName')?.value || '').trim();
-  state.settings.psSignatureRole = (get('settingPsSignatureRole')?.value || '').trim();
-  state.settings.eventSignatureMode = get('settingEventSignatureMode')?.value || 'delegation';
-  state.settings.eventSignatureName = (get('settingEventSignatureName')?.value || '').trim();
-  state.settings.eventSignatureRole = (get('settingEventSignatureRole')?.value || '').trim();
+  state.settings.psSignatureMode = state.settings.eventUnifiedSignatureMode;
+  state.settings.psSignatureName = state.settings.eventUnifiedSignatureName;
+  state.settings.psSignatureRole = state.settings.eventUnifiedSignatureRole;
+  state.settings.eventSignatureMode = state.settings.eventUnifiedSignatureMode;
+  state.settings.eventSignatureName = state.settings.eventUnifiedSignatureName;
+  state.settings.eventSignatureRole = state.settings.eventUnifiedSignatureRole;
   state.settings.pdfAppearance = {
     primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
     accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
