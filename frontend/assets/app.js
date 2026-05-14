@@ -835,7 +835,7 @@ function buildA4HtmlTemplate(orientation, titleHtml, subtitleHtml, bodyHtml, opt
         <div class="sicod-page-title"><h2>${titleHtml}</h2><p>${subtitleHtml || ''}</p></div>
         <div class="sicod-page-logo-box"></div>
       </header>`;
-  return `
+  const page = `
     <article class="sicod-page sicod-page--${orientation}${className}">
       ${header}
       <main class="sicod-page-body">
@@ -843,6 +843,62 @@ function buildA4HtmlTemplate(orientation, titleHtml, subtitleHtml, bodyHtml, opt
       </main>
     </article>
   `;
+  return buildCompleteHtmlTemplateDocument(titleHtml, orientation, page);
+}
+
+function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
+  const safeTitle = String(titleHtml || 'Export SICOD').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => key);
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${safeTitle}</title>
+  <style>
+    @page{size:${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};margin:0}
+    html,body{margin:0;padding:0;background:#ffffff;color:#161616}
+    body{font-family:Marianne,"Segoe UI",Arial,sans-serif}
+    .sicod-page{width:${orientation === 'landscape' ? '297mm' : '210mm'};min-height:${orientation === 'landscape' ? '210mm' : '297mm'};background:#fff;color:#161616;box-sizing:border-box;padding:12mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
+    .sicod-page--portrait{width:210mm;min-height:297mm}
+    .sicod-page--landscape{width:297mm;min-height:210mm}
+    .sicod-page-header{display:grid;grid-template-columns:28mm 1fr 28mm;gap:6mm;align-items:start;margin-bottom:6mm}
+    .sicod-page-logo{width:24mm;max-height:18mm;object-fit:contain}
+    .sicod-page-title{text-align:center}
+    .sicod-page-title h2{margin:0;font-size:18px;line-height:1.2;text-transform:uppercase;color:#161616}
+    .sicod-page-title p{margin:3mm 0 0;font-size:12px;line-height:1.35;color:#3a3a3a}
+    .sicod-page-body{width:100%}
+    .cmd-contact-block{font-size:11px;line-height:1.35;margin:0 0 5mm}
+    .sicod-page .table{width:100%;border-collapse:collapse}
+    .sicod-page .table th,.sicod-page .table td{border:1px solid #ddd;padding:2mm;font-size:10px;vertical-align:top}
+    .sicod-page .table th{background:#f5f5fe;font-weight:700}
+    .sicod-page .ps-cartouche{width:fit-content;max-width:100%;margin:0 auto 5mm;border:1px solid #ddd}
+    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:700;text-transform:uppercase;padding:2mm;font-size:10px}
+    .sicod-page .ps-detail-table{width:100%;border-collapse:collapse;table-layout:fixed}
+    .sicod-page .ps-detail-table td{border:1px solid #ddd;vertical-align:top;padding:0}
+    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3mm;font-size:10.5px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+    .sicod-page .focus-grid{display:grid;grid-template-columns:1.05fr 2.35fr 1.1fr;border:1px solid #ddd;min-height:145mm}
+    .sicod-page .focus-col,.sicod-page .focus-center{display:grid;min-height:145mm}
+    .sicod-page .focus-col{grid-template-rows:1fr 1.25fr;border-right:1px solid #ddd}
+    .sicod-page .focus-right{border-left:1px solid #ddd;border-right:none}
+    .sicod-page .focus-center{grid-template-rows:1fr 1.15fr .85fr}
+    .sicod-page .focus-box{border-bottom:1px solid #ddd;display:flex;flex-direction:column;min-height:0}
+    .sicod-page .focus-box:last-child{border-bottom:0}
+    .sicod-page .focus-map{display:flex;align-items:center;justify-content:center;padding:2mm;min-height:42mm;overflow:hidden}
+    .sicod-page .focus-map img,.sicod-page .ps-content img{max-width:100%;max-height:100%;object-fit:contain}
+    .sicod-page .ps-signature{margin-top:8mm;display:flex;justify-content:flex-end}
+    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:11px}
+    .sicod-page .exercise-banner{display:none;text-align:center;color:#e1000f;font-weight:700;letter-spacing:.08em;margin-bottom:5mm}
+    .sicod-page.exercise .exercise-banner{display:block}
+    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:700;color:#000091;text-transform:uppercase}
+    .sicod-page .cmd-autotext{margin:5mm 0;line-height:1.45;white-space:pre-wrap}
+    .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
+    .sicod-page .block{margin:0 0 5mm}
+  </style>
+</head>
+<body>
+${bodyHtml.trim()}
+</body>
+</html>`;
 }
 
 const STABLE_HTML_TEMPLATE_DEFAULTS = {
@@ -929,12 +985,22 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
   `, { className: 'sicod-page--reflex' })
 };
 
+const HTML_TEMPLATE_ORIENTATIONS = {
+  point_situation_focus: 'landscape',
+  directory: 'landscape',
+  planning_follow_up: 'landscape'
+};
+
+function getHtmlTemplateOrientation(key) {
+  return HTML_TEMPLATE_ORIENTATIONS[key] || 'portrait';
+}
+
 function ensureOperationalHtmlTemplates() {
   if (!window.SICODPdfTemplates?.setHtmlTemplate) return;
   Object.entries(STABLE_HTML_TEMPLATE_DEFAULTS).forEach(([key, html]) => {
     const existing = window.SICODPdfTemplates.getHtmlTemplate(state, key);
     const source = String(existing?.html || '');
-    if (!source || !source.includes('sicod-page') || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
+    if (!source || !source.includes('sicod-page') || !templateLooksLikeDocument(source) || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
       window.SICODPdfTemplates.setHtmlTemplate(state, key, html.trim());
     }
   });
@@ -962,10 +1028,19 @@ function fillHtmlTemplate(html, tokens) {
   });
 }
 
+function normalizeHtmlTemplateSourceForStorage(key, html) {
+  const source = String(html || '').trim();
+  if (!source) return STABLE_HTML_TEMPLATE_DEFAULTS[key] || '';
+  if (templateLooksLikeDocument(source)) return source;
+  const title = window.SICODPdfTemplates?.getHtmlTemplate?.(state, key)?.label || key || 'Export SICOD';
+  return buildCompleteHtmlTemplateDocument(title, getHtmlTemplateOrientation(key), source);
+}
+
 function getStoredHtmlTemplateRaw(key) {
   ensureOperationalHtmlTemplates();
   const template = window.SICODPdfTemplates?.getHtmlTemplate(state, key);
-  return String(template?.html || STABLE_HTML_TEMPLATE_DEFAULTS[key] || '');
+  const html = String(template?.html || STABLE_HTML_TEMPLATE_DEFAULTS[key] || '');
+  return normalizeHtmlTemplateSourceForStorage(key, html);
 }
 
 function renderStoredHtmlTemplate(key, tokens) {
@@ -1115,6 +1190,16 @@ function cssColorToRgb(value, fallback = [22, 22, 22]) {
   return fallback;
 }
 
+function setTemplatePdfFont(doc, style = 'normal') {
+  const fontList = doc.getFontList?.() || {};
+  const family = fontList.Marianne ? 'Marianne' : (fontList.marianne ? 'marianne' : 'helvetica');
+  try {
+    doc.setFont(family, style);
+  } catch {
+    doc.setFont('helvetica', style);
+  }
+}
+
 function firstMeaningfulText(element) {
   return String(element?.innerText || element?.textContent || '').replace(/\s+\n/g, '\n').replace(/\n\s+/g, '\n').trim();
 }
@@ -1150,7 +1235,7 @@ function renderTemplateDomToPdf(doc, root, opts = {}) {
     const fontSize = options.fontSize || 9;
     const lineH = options.lineHeight || fontSize * 0.45 + 1.5;
     const maxW = options.width || contentW;
-    doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
+    setTemplatePdfFont(doc, options.bold ? 'bold' : 'normal');
     doc.setFontSize(fontSize);
     doc.setTextColor(...(options.color || defaultText));
     const lines = doc.splitTextToSize(clean, maxW);
@@ -1217,7 +1302,7 @@ function renderTemplateDomToPdf(doc, root, opts = {}) {
       const wrapped = cells.map((cell, i) => {
         const text = firstMeaningfulText(cell);
         const fontSize = cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 8 : 8;
-        doc.setFont('helvetica', cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 'bold' : 'normal');
+        setTemplatePdfFont(doc, cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 'bold' : 'normal');
         doc.setFontSize(fontSize);
         return doc.splitTextToSize(text || ' ', Math.max(8, (colW[i] || colW[0]) - 3));
       });
@@ -1234,7 +1319,7 @@ function renderTemplateDomToPdf(doc, root, opts = {}) {
         }
         doc.setDrawColor(...border);
         doc.rect(x, y, w, rowH);
-        doc.setFont('helvetica', isHead ? 'bold' : 'normal');
+        setTemplatePdfFont(doc, isHead ? 'bold' : 'normal');
         doc.setFontSize(8);
         doc.setTextColor(...defaultText);
         const img = cell.querySelector('img');
@@ -1296,12 +1381,19 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
   const scale = pageW / Math.max(1, rootRect.width);
   const pageHeightPx = pageH / scale;
   const borderFallback = [221, 221, 221];
+  const filledPages = new Set();
 
   const ensurePage = (pageIndex) => {
     while (doc.getNumberOfPages() <= pageIndex) {
       doc.addPage();
     }
     doc.setPage(pageIndex + 1);
+    if (!filledPages.has(pageIndex)) {
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(255, 255, 255);
+      doc.rect(0, 0, pageW, pageH, 'F');
+      filledPages.add(pageIndex);
+    }
   };
 
   const rectToPdf = (rect) => {
@@ -1321,6 +1413,7 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
   const isTransparent = (value) => !value || value === 'transparent' || /rgba\([^)]*,\s*0\)/i.test(value);
 
   const drawElementBox = (element, pdfRect, computed) => {
+    if (element === root || element.classList?.contains('sicod-page-body')) return;
     const background = computed.backgroundColor;
     const borderColor = cssColorToRgb(computed.borderTopColor, borderFallback);
     const hasBackground = !isTransparent(background);
@@ -1354,7 +1447,7 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     const padX = Math.min(2.5, Math.max(0.8, rect.w * 0.03));
     const padY = Math.min(3, Math.max(1.3, rect.h * 0.08));
     const maxW = Math.max(2, rect.w - padX * 2);
-    doc.setFont('helvetica', options.bold ? 'bold' : fontStyleFor(computed));
+    setTemplatePdfFont(doc, options.bold ? 'bold' : fontStyleFor(computed));
     doc.setFontSize(fontSizeMm);
     doc.setTextColor(...cssColorToRgb(computed.color, getPdfAppearance().text));
     const lines = doc.splitTextToSize(clean, maxW);
@@ -1419,11 +1512,9 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     Array.from(element.children).forEach(walk);
   };
 
-  doc.setFillColor(255, 255, 255);
   const totalPages = Math.max(1, Math.ceil(Math.max(root.scrollHeight, rootRect.height) / pageHeightPx));
   for (let i = 0; i < totalPages; i += 1) {
     ensurePage(i);
-    doc.rect(0, 0, pageW, pageH, 'F');
   }
   doc.setPage(1);
   walk(root);
@@ -4269,15 +4360,20 @@ function syncHtmlTemplateEditorValue() {
   const textarea = document.getElementById('settingHtmlTemplateSource');
   const key = textarea?.dataset?.templateKey;
   if (!textarea || !key) return;
-  window.SICODPdfTemplates?.setHtmlTemplate(state, key, textarea.value || '');
+  window.SICODPdfTemplates?.setHtmlTemplate(state, key, normalizeHtmlTemplateSourceForStorage(key, textarea.value || ''));
 }
 
 function loadSelectedHtmlTemplate() {
   const select = document.getElementById('settingHtmlTemplateKey');
   const textarea = document.getElementById('settingHtmlTemplateSource');
   if (!select || !textarea) return;
+  ensureOperationalHtmlTemplates();
   const template = window.SICODPdfTemplates?.getHtmlTemplate(state, select.value);
-  textarea.value = template?.html || '';
+  const normalized = normalizeHtmlTemplateSourceForStorage(template?.id || select.value, template?.html || '');
+  if (template?.id && normalized !== template.html) {
+    window.SICODPdfTemplates?.setHtmlTemplate(state, template.id, normalized);
+  }
+  textarea.value = normalized;
   textarea.dataset.templateKey = template?.id || '';
 }
 
@@ -4324,7 +4420,7 @@ async function importSelectedHtmlTemplate(file) {
   try {
     const content = await file.text();
     if (!String(content || '').trim()) throw new Error('Le fichier HTML est vide.');
-    window.SICODPdfTemplates?.setHtmlTemplate(state, key, content);
+    window.SICODPdfTemplates?.setHtmlTemplate(state, key, normalizeHtmlTemplateSourceForStorage(key, content));
     loadSelectedHtmlTemplate();
     showToast('Modèle HTML importé.');
   } catch (error) {
