@@ -127,7 +127,9 @@ function buildDefaultState() {
     services: JSON.parse(JSON.stringify(defaultServices)),
     commandMessages: [],
     selectedCommandId: null,
+    selectedCommandEventFilter: null,
     currentEventId: null,
+    currentEventWorkspaceTab: 'overview',
     selectedPSId: null,
     selectedFiche: (reflexLibrary.fiches[0] || {}).code || null,
     reflexFiches: JSON.parse(JSON.stringify(reflexLibrary.fiches || [])),
@@ -135,6 +137,7 @@ function buildDefaultState() {
     planItems: [],
     dutyAvailabilities: [],
     dutySchedule: [],
+    tableSorts: {},
     settings: Object.assign({}, DEFAULT_SETTINGS, { dynamicLists: {} })
   };
 }
@@ -327,6 +330,53 @@ function actionIconButton(icon, label, onclick, options = {}) {
 
 function actionIconLink(icon, label, href) {
   return `<a class="fr-btn small icon-action" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(label)}" aria-label="${esc(label)}"><img src="${esc(ACTION_ICONS[icon] || ACTION_ICONS.open)}" alt=""></a>`;
+}
+
+function getTableSort(tableKey, fallbackKey, fallbackDirection = 'asc') {
+  const value = state.tableSorts?.[tableKey];
+  if (value?.key) return value;
+  return { key: fallbackKey, direction: fallbackDirection };
+}
+
+function setTableSort(tableKey, key) {
+  state.tableSorts = state.tableSorts || {};
+  const current = state.tableSorts[tableKey];
+  const direction = current?.key === key && current?.direction === 'asc' ? 'desc' : 'asc';
+  state.tableSorts[tableKey] = { key, direction };
+  persist();
+}
+
+function sortItems(items, tableKey, fallbackKey, fallbackDirection, selectors) {
+  const sort = getTableSort(tableKey, fallbackKey, fallbackDirection);
+  const direction = sort.direction === 'desc' ? -1 : 1;
+  const getter = selectors?.[sort.key] || (() => '');
+  return [...items].sort((a, b) => {
+    const left = getter(a);
+    const right = getter(b);
+    const aVal = left == null ? '' : left;
+    const bVal = right == null ? '' : right;
+    if (typeof aVal === 'number' || typeof bVal === 'number') {
+      return ((Number(aVal) || 0) - (Number(bVal) || 0)) * direction;
+    }
+    return String(aVal).localeCompare(String(bVal), 'fr', { numeric: true, sensitivity: 'base' }) * direction;
+  });
+}
+
+function sortableTh(tableKey, key, label, fallbackKey, fallbackDirection = 'asc') {
+  const sort = getTableSort(tableKey, fallbackKey, fallbackDirection);
+  const indicator = sort.key === key ? (sort.direction === 'asc' ? ' ▲' : ' ▼') : '';
+  return `<th class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('${tableKey}','${key}')" onkeydown="handleSortHeaderKey(event,'${tableKey}','${key}')">${esc(label)}${indicator}</th>`;
+}
+
+function sortTableColumn(tableKey, key) {
+  setTableSort(tableKey, key);
+  renderAll();
+}
+
+function handleSortHeaderKey(event, tableKey, key) {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  sortTableColumn(tableKey, key);
 }
 
 /** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
@@ -723,13 +773,13 @@ function getEventSignatureConfig() {
 }
 function shouldApplyPdfSignature(context) {
   const idMap = {
-    ps: 'psApplySignature',
-    command: 'cmdApplySignature',
-    event: 'eventApplySignature',
-    duty: 'dutyApplySignature'
+    ps: ['eventPsApplySignature', 'psApplySignature'],
+    command: ['eventCmdApplySignature', 'cmdApplySignature'],
+    event: ['eventApplySignature'],
+    duty: ['dutyApplySignature']
   };
-  const id = idMap[context || ''];
-  return !!(id && document.getElementById(id)?.checked);
+  const ids = idMap[context || ''] || [];
+  return ids.some((id) => document.getElementById(id)?.checked);
 }
 function getEligiblePdfSignatureConfig(context) {
   if (!shouldApplyPdfSignature(context)) return { mode:'prefet', name:'', role:'' };
@@ -1814,6 +1864,13 @@ function buildDutyStatisticsHtmlTokens() {
 
 function goPage(page) {
   if (isAuthLocked()) return;
+  if (page === 'ps') {
+    state.currentEventWorkspaceTab = 'ps';
+    page = 'events';
+  } else if (page === 'command') {
+    state.currentEventWorkspaceTab = 'command';
+    page = 'events';
+  }
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page || (page === 'event-archives' && b.dataset.page === 'events')));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
   if (page === 'fiches') renderFiches();
@@ -1894,7 +1951,74 @@ function ensureEventPageEnhancements() {
     card.querySelector('.card-title')?.textContent?.trim() === 'Événements archivés'
   );
   if (archivedCard) archivedCard.remove();
+  ensureEventWorkspaceUI();
   ensureEventArchivesPage();
+}
+
+function ensureEventWorkspaceUI() {
+  const pageInner = document.querySelector('#page-events .page-inner');
+  if (!pageInner || document.getElementById('eventWorkspaceTabs')) return;
+  const activeCard = pageInner.querySelector('#eventList')?.closest('.card');
+  const timelineCard = document.getElementById('eventTimelineCard');
+  if (!activeCard || !timelineCard) return;
+  const workspace = document.createElement('div');
+  workspace.className = 'card';
+  workspace.id = 'eventWorkspaceCard';
+  workspace.innerHTML = `
+    <div class="card-header">
+      <h2 class="card-title">Conduite de l'événement</h2>
+      <div class="page-subtabs" id="eventWorkspaceTabs">
+        <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
+        <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
+        <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
+        <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
+      </div>
+    </div>
+    <div class="card-body event-workspace">
+      <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
+      <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
+      <div id="eventWorkspacePs" class="event-workspace-panel">
+        <div class="grid-2">
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
+        </div>
+      </div>
+      <div id="eventWorkspaceCommand" class="event-workspace-panel">
+        <div class="grid-2">
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
+        </div>
+      </div>
+    </div>
+  `;
+  activeCard.after(workspace);
+  document.getElementById('eventWorkspaceOverview')?.appendChild(activeCard);
+  document.getElementById('eventWorkspaceTimeline')?.appendChild(timelineCard);
+}
+
+function showEventWorkspaceTab(tab) {
+  state.currentEventWorkspaceTab = tab || 'overview';
+  persist();
+  document.querySelectorAll('#eventWorkspaceTabs .page-subtab').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.workspaceTab === state.currentEventWorkspaceTab);
+  });
+  document.querySelectorAll('.event-workspace-panel').forEach((panel) => panel.classList.remove('active'));
+  const target = {
+    overview: 'eventWorkspaceOverview',
+    timeline: 'eventWorkspaceTimeline',
+    ps: 'eventWorkspacePs',
+    command: 'eventWorkspaceCommand'
+  }[state.currentEventWorkspaceTab] || 'eventWorkspaceOverview';
+  document.getElementById(target)?.classList.add('active');
+  if (state.currentEventWorkspaceTab === 'ps') {
+    renderPSList();
+    renderPSPreview();
+  }
+  if (state.currentEventWorkspaceTab === 'command') {
+    renderCommandList();
+    renderCommandPreview(state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
+  }
+  if (state.currentEventWorkspaceTab === 'timeline') renderEventTimeline(state.currentEventId);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -2138,7 +2262,12 @@ function renderEventTimeline(eventId) {
   card.style.display = '';
   header.innerHTML = `<h3>${esc(e.title)}</h3><div class="help">${esc(e.type || '—')} · ${esc(e.location || '—')} · ${esc(e.level || '—')}</div>`;
   const items = getEventTimelineItems(e.id);
-  tableWrap.innerHTML = items.length ? `<table class="table"><thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead><tbody>${items.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrée de main courante.</p>';
+  const sortedItems = sortItems(items, 'timeline', 'date', 'desc', {
+    date: (item) => item.date || '',
+    author: (item) => item.author || '',
+    title: (item) => item.title || ''
+  });
+  tableWrap.innerHTML = sortedItems.length ? `<table class="table"><thead><tr><th style="width:13rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','date')" onkeydown="handleSortHeaderKey(event,'timeline','date')">Date / heure${getTableSort('timeline','date','desc').key === 'date' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th style="width:10rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','author')" onkeydown="handleSortHeaderKey(event,'timeline','author')">Auteur${getTableSort('timeline','date','desc').key === 'author' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','title')" onkeydown="handleSortHeaderKey(event,'timeline','title')">Entrée${getTableSort('timeline','date','desc').key === 'title' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th></tr></thead><tbody>${sortedItems.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrée de main courante.</p>';
 }
 
 function exportEventLogPDF() {
@@ -2195,6 +2324,7 @@ function renderEvents() {
   updatePSEventSelect();
   populateCommuneDatalist();
   renderEventTimeline(state.currentEventId);
+  showEventWorkspaceTab(state.currentEventWorkspaceTab || 'overview');
 }
 
 function renderEventArchives() {
@@ -2417,7 +2547,7 @@ function filterPSByEvent(eventId) {
 }
 
 function renderPSList() {
-  const psList = document.getElementById('psList');
+  const psList = document.getElementById(isPageActive('events') ? 'eventPsList' : 'psList');
   if (!psList) return;
 
   // Populate event filter dropdown
@@ -2428,7 +2558,7 @@ function renderPSList() {
       events.map(e => `<option value="${esc(e.id)}" ${state.currentEventId === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
   }
 
-  const q = (document.getElementById('psListSearch')?.value || '').toLowerCase().trim();
+  const q = (document.getElementById(isPageActive('events') ? 'eventPsListSearch' : 'psListSearch')?.value || '').toLowerCase().trim();
   const source = getActiveItems(state.ps).filter(isLinkedToActiveEvent);
   if (state.selectedPSId && !source.some((item) => item.id === state.selectedPSId)) {
     state.selectedPSId = null;
@@ -2440,9 +2570,15 @@ function renderPSList() {
     ? list.filter(ps => [ps.number, ps.author, ps.status, ps.title, getEventTitle(ps.eventId)].join(' ').toLowerCase().includes(q))
     : list;
   const sorted = [...filtered].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
-  psList.innerHTML = sorted.length
-    ? `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
-        sorted.map(ps => `<tr>
+  const rows = sortItems(sorted, 'ps', 'date', 'desc', {
+    date: (ps) => String(ps.updatedAt || ps.createdAt || ''),
+    number: (ps) => Number(ps.number || 0),
+    event: (ps) => getEventTitle(ps.eventId),
+    status: (ps) => ps.status || ''
+  });
+  psList.innerHTML = rows.length
+    ? `<table class="table"><thead><tr>${sortableTh('ps','date','Horodatage','date','desc')}${sortableTh('ps','number','Numéro','date','desc')}${sortableTh('ps','event','Évènement','date','desc')}${sortableTh('ps','status','Statut','date','desc')}<th>Action</th></tr></thead><tbody>${
+        rows.map(ps => `<tr>
           <td>${esc(formatDateTimeValueFR(ps.updatedAt || ps.createdAt || ''))}</td>
           <td>PS ${esc(ps.number || '')}</td>
           <td>${esc(getEventTitle(ps.eventId))}</td>
@@ -2458,9 +2594,9 @@ function renderPSList() {
 }
 
 function renderPSPreview() {
-  const psPreview = document.getElementById('psPreview');
+  const psPreview = document.getElementById(isPageActive('events') ? 'eventPsPreview' : 'psPreview');
   if (!psPreview) return;
-  if (!isPageActive('ps')) return;
+  if (!isPageActive('ps') && !(isPageActive('events') && state.currentEventWorkspaceTab === 'ps')) return;
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
     psPreview.innerHTML = '<p class="help">Sélectionnez un point de situation.</p>';
@@ -3018,7 +3154,7 @@ function filterCommandByEvent(eventId) {
 }
 
 function renderCommandList() {
-  const el = document.getElementById('commandList');
+  const el = document.getElementById(isPageActive('events') ? 'eventCommandList' : 'commandList');
   if (!el) return;
 
   // Populate event filter dropdown
@@ -3030,7 +3166,7 @@ function renderCommandList() {
       events.map(e => `<option value="${esc(e.id)}" ${cur === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
   }
 
-  const q = (document.getElementById('commandListSearch')?.value || '').toLowerCase().trim();
+  const q = (document.getElementById(isPageActive('events') ? 'eventCommandListSearch' : 'commandListSearch')?.value || '').toLowerCase().trim();
   const eventFilter = state.selectedCommandEventFilter || null;
   let items = [...getActiveItems(state.commandMessages).filter(isLinkedToActiveEvent)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
@@ -3044,15 +3180,21 @@ function renderCommandList() {
     el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. Créer un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistré.</p>';
     return;
   }
-  el.innerHTML = `<table class="table"><thead><tr><th>Horodatage</th><th>Numéro</th><th>Évènement</th><th>Statut</th><th>Action</th></tr></thead><tbody>${
-    items.map(item => `<tr class="${item.id === state.selectedCommandId ? 'is-selected' : ''}">
+  const orderedItems = sortItems(items, 'command', 'date', 'desc', {
+    date: (item) => String(item.updatedAt || item.createdAt || ''),
+    number: (item) => Number(item.number || 0),
+    event: (item) => item.event || getEventTitle(item.eventId),
+    status: (item) => item.status || ''
+  });
+  el.innerHTML = `<table class="table"><thead><tr>${sortableTh('command','date','Horodatage','date','desc')}${sortableTh('command','number','Numéro','date','desc')}${sortableTh('command','event','Évènement','date','desc')}${sortableTh('command','status','Statut','date','desc')}<th>Action</th></tr></thead><tbody>${
+    orderedItems.map(item => `<tr class="${item.id === state.selectedCommandId ? 'is-selected' : ''}">
       <td>${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</td>
       <td><div class="event-title-block"><span class="event-label">Message ${esc(item.number || '')}</span><span class="table-meta">${esc(item.typeLabel || '')}</span></div></td>
       <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
       <td>${badge(item.status)}</td>
       <td><div class="list-actions">
-        <button class="fr-btn secondary small" type="button" onclick="toggleCommandPreview('${item.id}')">${item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir'}</button>
-        <button class="fr-btn secondary small" type="button" onclick="duplicateCommand('${item.id}')">Dupliquer</button>
+        ${actionIconButton(item.id === state.selectedCommandId ? 'close' : 'open', item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir', `toggleCommandPreview('${item.id}')`)}
+        ${actionIconButton('duplicate', 'Dupliquer', `duplicateCommand('${item.id}')`)}
       </div></td>
     </tr>`).join('')
   }</tbody></table>`;
@@ -3132,9 +3274,9 @@ function getCommandData() {
 }
 
 function renderCommandPreview(data) {
-  const commandPreview = document.getElementById('commandPreview');
+  const commandPreview = document.getElementById(isPageActive('events') ? 'eventCommandPreview' : 'commandPreview');
   if (!commandPreview) return;
-  if (!isPageActive('command')) return;
+  if (!isPageActive('command') && !(isPageActive('events') && state.currentEventWorkspaceTab === 'command')) return;
   const d = data || (state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   if (!d) {
     commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
@@ -3401,10 +3543,17 @@ function renderDirectory() {
   directoryList.innerHTML = groups.map(group => {
     const items = contacts.filter(c => (c.group || '') === group);
     if (!items.length) return '';
+    const sortedItems = sortItems(items, 'directory', 'entity', 'asc', {
+      entity: (c) => c.entity || '',
+      function: (c) => c.function || '',
+      name: (c) => c.name || '',
+      phone1: (c) => c.phone1 || '',
+      email1: (c) => c.email1 || ''
+    });
     return `<div class="card directory-group">
       <div class="card-header"><h2 class="card-title">${esc(group)}</h2></div>
-      <div class="card-body"><table class="table"><thead><tr><th>Entité</th><th>Fonction</th><th>Nom</th><th>Téléphone 1</th><th>Téléphone 2</th><th>e-mail 1</th><th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
-        items.map(c => `<tr>
+      <div class="card-body"><table class="table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphone 1','entity','asc')}<th>Téléphone 2</th>${sortableTh('directory','email1','e-mail 1','entity','asc')}<th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
+        sortedItems.map(c => `<tr>
           <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td><td>${esc(c.phone1||'')}</td><td>${esc(c.phone2||'')}</td>
           <td>${esc(c.email1||'')}</td><td>${esc(c.email2||'')}</td>
           <td><div class="list-actions">
@@ -3644,9 +3793,18 @@ function renderPlanning() {
   const items = q
     ? allItems.filter(p => [p.type, p.risk, p.item, p.priority, p.status, p.observation].join(' ').toLowerCase().includes(q))
     : allItems;
-  planningList.innerHTML = items.length
-    ? `<table class="table"><thead><tr><th>Type</th><th>Risque</th><th>Item</th><th>Priorité</th><th>Statut</th><th>Date d'approbation</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
-        items.map(p => `<tr>
+  const ordered = sortItems(items, 'planning', 'approvalDate', 'desc', {
+    type: (p) => p.type || '',
+    risk: (p) => p.risk || '',
+    item: (p) => p.item || '',
+    priority: (p) => p.priority || '',
+    status: (p) => p.status || '',
+    approvalDate: (p) => p.approvalDate || '',
+    observation: (p) => p.observation || ''
+  });
+  planningList.innerHTML = ordered.length
+    ? `<table class="table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}<th>Actions</th></tr></thead><tbody>${
+        ordered.map(p => `<tr>
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
           <td>${esc(p.item || '')}</td>
@@ -3873,9 +4031,15 @@ function renderDutyAvailabilityList() {
   const el = document.getElementById('dutyAvailabilityList');
   if (!el) return;
   const items = getActiveItems(state.dutyAvailabilities);
-  el.innerHTML = items.length
-    ? `<table class="table"><thead><tr><th>Agent</th><th>Rôle</th><th>Période</th><th>Observation</th><th>Actions</th></tr></thead><tbody>${
-        items.map(a => `<tr>
+  const ordered = sortItems(items, 'dutyAvailability', 'start', 'asc', {
+    agent: (a) => a.agent || '',
+    role: (a) => a.role || '',
+    start: (a) => a.start || '',
+    note: (a) => a.note || ''
+  });
+  el.innerHTML = ordered.length
+    ? `<table class="table"><thead><tr>${sortableTh('dutyAvailability','agent','Agent','start','asc')}${sortableTh('dutyAvailability','role','Rôle','start','asc')}<th>Période</th>${sortableTh('dutyAvailability','note','Observation','start','asc')}<th>Actions</th></tr></thead><tbody>${
+        ordered.map(a => `<tr>
           <td>${esc(a.agent)}</td><td>${esc(a.role)}</td>
           <td>${esc(a.start)} → ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
           <td><div class="list-actions">
@@ -4792,13 +4956,14 @@ function ensureGeneralPasswordSettingsUI() {
 
 function formatUserAdminRoleLabel(role) {
   if (role === 'admin') return 'Administrateur';
-  if (role === 'redacteur') return 'Rédacteur';
-  return 'Lecture';
+  if (role === 'redacteur') return 'Contributeur';
+  return 'Lecteur';
 }
 
 function ensureUserAdminSettingsUI() {
   const targetGrid = document.getElementById('userAdminSettingsGrid') || document.querySelector('[data-settings-panel="users"] .settings-grid');
   if (!targetGrid) return;
+  targetGrid.classList.add('user-admin-grid-full');
   let card = document.getElementById('userAdminCard');
   if (!card) {
     card = document.createElement('div');
@@ -4819,7 +4984,7 @@ function ensureUserAdminSettingsUI() {
         <input id="managedUserId" type="hidden">
         <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
         <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
-        <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecture</option><option value="redacteur">Rédacteur</option><option value="admin">Administrateur</option></select></div>
+        <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
         <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
         <div class="list-actions" style="align-self:end">
           ${actionIconButton('save', 'Créer ou mettre à jour', 'saveManagedUserAccount()')}
@@ -4854,14 +5019,18 @@ function renderUserAdminDirectory() {
       <table class="table user-admin-table">
         <thead>
           <tr>
-            <th>Utilisateur</th>
-            <th>Rôle</th>
-            <th>Dernière activité</th>
+            ${sortableTh('users','user','Utilisateur','user','asc')}
+            ${sortableTh('users','role','Rôle','user','asc')}
+            ${sortableTh('users','lastSeen','Dernière activité','user','asc')}
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          ${items.map((item) => {
+          ${sortItems(items, 'users', 'user', 'asc', {
+            user: (item) => item.displayName || item.email || '',
+            role: (item) => formatUserAdminRoleLabel(item.roles?.includes('admin') ? 'admin' : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture')),
+            lastSeen: (item) => item.lastSeenAt || ''
+          }).map((item) => {
             const role = item.roles?.includes('admin')
               ? 'admin'
               : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture');
@@ -5218,17 +5387,18 @@ function renderAll() {
   }
   renderDashboard();
   const activePage = getActivePageName();
+  if (activePage === 'ps') {
+    state.currentEventWorkspaceTab = 'ps';
+    goPage('events');
+    return;
+  }
+  if (activePage === 'command') {
+    state.currentEventWorkspaceTab = 'command';
+    goPage('events');
+    return;
+  }
   if (activePage === 'events') renderEvents();
   if (activePage === 'event-archives') renderEventArchives();
-  if (activePage === 'ps') renderPSList();
-  if (activePage === 'command') {
-    renderCommandList();
-    if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
-      renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
-    } else {
-      renderCommandPreview(null);
-    }
-  }
   if (activePage === 'fiches') renderFiches();
   if (activePage === 'directory') renderDirectory();
   if (activePage === 'tools') renderTools();

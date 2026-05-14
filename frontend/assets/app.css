@@ -381,14 +381,25 @@ input:focus,select:focus,textarea:focus{
   width:100%;
 }
 .icon-action{
-  width:2.25rem;
-  min-width:2.25rem;
-  height:2.25rem;
-  min-height:2.25rem;
-  padding:.45rem;
+  width:2rem;
+  min-width:2rem;
+  height:2rem;
+  min-height:2rem;
+  padding:.25rem;
 }
-.icon-action img{width:1rem;height:1rem}
+.icon-action img{width:1.15rem;height:1.15rem}
 .fr-btn.secondary.icon-action img{filter:none}
+.sortable-th{
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+}
+.sortable-th:hover,
+.sortable-th:focus-visible{
+  background:var(--blue-soft);
+  color:var(--blue-france);
+  outline:none;
+}
 .table .fr-btn,
 .table button,
 .card-header .fr-btn.small{
@@ -677,6 +688,14 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .events-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin-bottom:1rem}
 .events-toolbar .list-search{margin:0;min-width:18rem;flex:1 1 20rem}
 .page-header .event-page-actions{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.event-workspace{display:grid;gap:1rem}
+.event-workspace-panel{display:none}
+.event-workspace-panel.active{display:block}
+.event-workspace .grid-2{align-items:start}
+.event-subcard{height:100%}
+.event-subcard .card-body{display:grid;gap:.75rem}
+.event-subcard .preview-stage,
+.event-subcard .template-preview-frame{min-height:58vh}
 .event-title-block{display:flex;flex-direction:column;gap:.15rem}
 .event-title-block .event-label{font-weight:400;color:var(--text)}
 .event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
@@ -698,6 +717,14 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 #directorySearch{border-radius:.75rem}
 #page-directory .page-inner{max-width:92rem}
 .compact-list{margin:0;padding-left:1rem}
+.user-admin-grid-full{grid-template-columns:minmax(0,1fr)!important}
+.user-admin-grid-full > *{grid-column:1 / -1}
+.user-admin-grid-full .settings-card,
+#userAdminCard{width:100%}
+#userAdminCard .grid-3{grid-template-columns:repeat(4,minmax(0,1fr));align-items:end}
+#userAdminCard .list-actions{justify-content:flex-end}
+#userAdminCard .table-wrap{overflow-x:auto}
+#userAdminCard .user-admin-table{min-width:52rem}
 .user-admin-table th:nth-child(1){width:36%}
 .user-admin-table th:nth-child(2){width:18%}
 .user-admin-table th:nth-child(3){width:24%}
@@ -725,6 +752,7 @@ html[data-theme='dark'] .fr-btn.secondary,
 html[data-theme='dark'] .settings-tab,
 html[data-theme='dark'] .page-subtab{background:transparent;color:var(--blue-france);border-color:var(--blue-france)}
 html[data-theme='dark'] .nav-btn img{filter:brightness(0) invert(1)}
+html[data-theme='dark'] .icon-action img{filter:brightness(0) invert(1)}
 html[data-theme='dark'] input,
 html[data-theme='dark'] select,
 html[data-theme='dark'] textarea{background:#20203a;color:#f5f5fe;border-color:#4a4a78}
@@ -741,6 +769,7 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
 
 @media (max-width:1100px){
   .planning-grid,.settings-grid,.stats-grid{grid-template-columns:1fr}
+  #userAdminCard .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 @media (max-width:992px){
@@ -756,6 +785,7 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
   .sidebar{width:4.5rem;flex-basis:4.5rem}
   .nav-btn span,.side-head p,.side-head h2{display:none}
   .page{padding:1rem}
+  #userAdminCard .grid-3{grid-template-columns:1fr}
 }
 
 /* ── Toasts ─────────────────────────────────────────────── */
