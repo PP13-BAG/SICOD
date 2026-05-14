@@ -858,25 +858,25 @@ function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
     @page{size:${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};margin:0}
     html,body{margin:0;padding:0;background:#ffffff;color:#161616}
     body{font-family:Marianne,"Segoe UI",Arial,sans-serif}
-    .sicod-page{width:${orientation === 'landscape' ? '297mm' : '210mm'};min-height:${orientation === 'landscape' ? '210mm' : '297mm'};background:#fff;color:#161616;box-sizing:border-box;padding:12mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
+    .sicod-page{width:${orientation === 'landscape' ? '297mm' : '210mm'};min-height:${orientation === 'landscape' ? '210mm' : '297mm'};background:#fff;color:#161616;box-sizing:border-box;padding:12mm 13mm 14mm;font-family:Marianne,"Segoe UI",Arial,sans-serif;position:relative;overflow:visible}
     .sicod-page--portrait{width:210mm;min-height:297mm}
     .sicod-page--landscape{width:297mm;min-height:210mm}
-    .sicod-page-header{display:grid;grid-template-columns:28mm 1fr 28mm;gap:6mm;align-items:start;margin-bottom:6mm}
-    .sicod-page-logo{width:24mm;max-height:18mm;object-fit:contain}
+    .sicod-page-header{display:grid;grid-template-columns:30mm 1fr 30mm;gap:7mm;align-items:start;margin-bottom:7mm;padding-bottom:4mm;border-bottom:1.2px solid #000091}
+    .sicod-page-logo{width:27mm;max-height:20mm;object-fit:contain}
     .sicod-page-title{text-align:center}
-    .sicod-page-title h2{margin:0;font-size:18px;line-height:1.2;text-transform:uppercase;color:#161616}
-    .sicod-page-title p{margin:3mm 0 0;font-size:12px;line-height:1.35;color:#3a3a3a}
+    .sicod-page-title h2{margin:0;font-size:22px;line-height:1.18;text-transform:uppercase;color:#161616;font-weight:800}
+    .sicod-page-title p{margin:3mm 0 0;font-size:14px;line-height:1.35;color:#3a3a3a}
     .sicod-page-body{width:100%}
-    .cmd-contact-block{font-size:11px;line-height:1.35;margin:0 0 5mm}
+    .cmd-contact-block{font-size:12px;line-height:1.4;margin:0 0 5mm}
     .sicod-page .table{width:100%;border-collapse:collapse}
-    .sicod-page .table th,.sicod-page .table td{border:1px solid #ddd;padding:2mm;font-size:10px;vertical-align:top}
-    .sicod-page .table th{background:#f5f5fe;font-weight:700}
+    .sicod-page .table th,.sicod-page .table td{border:1px solid #cfcfd8;padding:2.4mm 2.2mm;font-size:11.5px;line-height:1.35;vertical-align:top}
+    .sicod-page .table th{background:#f5f5fe;color:#000091;font-weight:800}
     .sicod-page .ps-cartouche{width:fit-content;max-width:100%;margin:0 auto 5mm;border:1px solid #ddd}
-    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:700;text-transform:uppercase;padding:2mm;font-size:10px}
+    .sicod-page .ps-section-title,.sicod-page .focus-label,.sicod-page .block-title{background:#000091;color:#fff;font-weight:800;text-transform:uppercase;padding:2.4mm 2.8mm;font-size:12px;letter-spacing:.01em}
     .sicod-page .ps-detail-table{width:100%;border-collapse:collapse;table-layout:fixed}
     .sicod-page .ps-detail-table td{border:1px solid #ddd;vertical-align:top;padding:0}
-    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3mm;font-size:10.5px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
-    .sicod-page .focus-grid{display:grid;grid-template-columns:1.05fr 2.35fr 1.1fr;border:1px solid #ddd;min-height:145mm}
+    .sicod-page .ps-content,.sicod-page .focus-body,.sicod-page .block-body{padding:3.5mm;font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+    .sicod-page .focus-grid{display:grid;grid-template-columns:1.05fr 2.35fr 1.1fr;border:1px solid #cfcfd8;min-height:145mm}
     .sicod-page .focus-col,.sicod-page .focus-center{display:grid;min-height:145mm}
     .sicod-page .focus-col{grid-template-rows:1fr 1.25fr;border-right:1px solid #ddd}
     .sicod-page .focus-right{border-left:1px solid #ddd;border-right:none}
@@ -886,11 +886,11 @@ function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
     .sicod-page .focus-map{display:flex;align-items:center;justify-content:center;padding:2mm;min-height:42mm;overflow:hidden}
     .sicod-page .focus-map img,.sicod-page .ps-content img{max-width:100%;max-height:100%;object-fit:contain}
     .sicod-page .ps-signature{margin-top:8mm;display:flex;justify-content:flex-end}
-    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:11px}
+    .sicod-page .ps-signature-box{min-width:55mm;max-width:78mm;text-align:left;font-size:12px;line-height:1.45}
     .sicod-page .exercise-banner{display:none;text-align:center;color:#e1000f;font-weight:700;letter-spacing:.08em;margin-bottom:5mm}
     .sicod-page.exercise .exercise-banner{display:block}
-    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:700;color:#000091;text-transform:uppercase}
-    .sicod-page .cmd-autotext{margin:5mm 0;line-height:1.45;white-space:pre-wrap}
+    .sicod-page .cmd-urgent{margin:5mm 0 0;padding:3mm;background:#f5f5fe;font-weight:800;color:#000091;text-transform:uppercase;font-size:13px}
+    .sicod-page .cmd-autotext{margin:5mm 0;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
     .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
     .sicod-page .block{margin:0 0 5mm}
   </style>
@@ -1000,7 +1000,7 @@ function ensureOperationalHtmlTemplates() {
   Object.entries(STABLE_HTML_TEMPLATE_DEFAULTS).forEach(([key, html]) => {
     const existing = window.SICODPdfTemplates.getHtmlTemplate(state, key);
     const source = String(existing?.html || '');
-    if (!source || !source.includes('sicod-page') || !templateLooksLikeDocument(source) || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
+    if (!source || !source.includes('sicod-page') || !source.includes('font-size:22px') || !templateLooksLikeDocument(source) || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
       window.SICODPdfTemplates.setHtmlTemplate(state, key, html.trim());
     }
   });
@@ -1442,19 +1442,19 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     if (!clean || rect.w <= 1 || rect.h <= 1) return;
     ensurePage(rect.pageIndex);
     const fontSizePx = Number.parseFloat(computed.fontSize || '12') || 12;
-    const fontSizeMm = Math.max(5, Math.min(18, fontSizePx * scale * (options.scaleFont || 0.92)));
-    const lineH = fontSizeMm * 0.42 + 1.7;
+    const fontSizePt = Math.max(7.5, Math.min(18, fontSizePx * 0.78 * (options.scaleFont || 0.96)));
+    const lineH = fontSizePt * 0.3528 * 1.22;
     const padX = Math.min(2.5, Math.max(0.8, rect.w * 0.03));
     const padY = Math.min(3, Math.max(1.3, rect.h * 0.08));
     const maxW = Math.max(2, rect.w - padX * 2);
     setTemplatePdfFont(doc, options.bold ? 'bold' : fontStyleFor(computed));
-    doc.setFontSize(fontSizeMm);
+    doc.setFontSize(fontSizePt);
     doc.setTextColor(...cssColorToRgb(computed.color, getPdfAppearance().text));
     const lines = doc.splitTextToSize(clean, maxW);
     const maxLines = Math.max(1, Math.floor((rect.h - padY) / lineH));
     const align = computed.textAlign === 'center' ? 'center' : (computed.textAlign === 'right' ? 'right' : 'left');
     const x = align === 'center' ? rect.x + rect.w / 2 : (align === 'right' ? rect.x + rect.w - padX : rect.x + padX);
-    doc.text(lines.slice(0, maxLines), x, rect.y + padY + fontSizeMm * 0.32, { maxWidth: maxW, align });
+    doc.text(lines.slice(0, maxLines), x, rect.y + padY + fontSizePt * 0.3528 * 0.72, { maxWidth: maxW, align });
   };
 
   const drawImageAtRect = (img, rect) => {
