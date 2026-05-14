@@ -22,6 +22,8 @@
   let lastSerializedState = '';
   let authSession = loadInitialAuthSession();
   let authRoles = [];
+  let refreshSessionPromise = null;
+  let lastDirectoryTouchAt = 0;
 
   function sanitizeRemoteConfig(input) {
     const value = input && typeof input === 'object' ? input : {};
@@ -85,6 +87,7 @@
   function clearAuthSession() {
     persistAuthSession(null);
     authRoles = [];
+    lastDirectoryTouchAt = 0;
   }
 
   function getResolvedRole() {
@@ -197,6 +200,14 @@
   }
 
   async function refreshSupabaseSession() {
+    if (refreshSessionPromise) return refreshSessionPromise;
+    refreshSessionPromise = refreshSupabaseSessionInternal().finally(() => {
+      refreshSessionPromise = null;
+    });
+    return refreshSessionPromise;
+  }
+
+  async function refreshSupabaseSessionInternal() {
     if (!isSupabaseConfigured() || !authSession?.refreshToken) {
       clearAuthSession();
       setRemoteMode('auth-required');
@@ -248,7 +259,7 @@
       authRoles = await fetchCurrentUserRoles().catch(() => authRoles);
     }
     if (authSession?.accessToken) {
-      await touchCurrentUserDirectoryEntry().catch(() => null);
+      await touchCurrentUserDirectoryEntryThrottled().catch(() => null);
     }
     return authSession;
   }
@@ -268,7 +279,7 @@
     if (!nextSession) throw new Error('Connexion Supabase invalide.');
     persistAuthSession(nextSession);
     authRoles = await fetchCurrentUserRoles().catch(() => []);
-    await touchCurrentUserDirectoryEntry().catch(() => null);
+    await touchCurrentUserDirectoryEntryThrottled(true).catch(() => null);
     setRemoteMode('supabase');
     return {
       authenticated: true,
@@ -381,6 +392,18 @@
         last_seen_at: new Date().toISOString()
       }])
     }, true);
+  }
+
+  async function touchCurrentUserDirectoryEntryThrottled(force = false) {
+    const now = Date.now();
+    if (!force && now - lastDirectoryTouchAt < 60000) return null;
+    lastDirectoryTouchAt = now;
+    try {
+      return await touchCurrentUserDirectoryEntry();
+    } catch (error) {
+      lastDirectoryTouchAt = 0;
+      throw error;
+    }
   }
 
   async function getSupabaseManagedUsers() {

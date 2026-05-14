@@ -203,6 +203,36 @@ function resetStateToDefaults() {
   ensureStateIntegrity();
 }
 
+function normalizeRemoteStateSnapshot(snapshot) {
+  const source = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {};
+  const defaults = buildDefaultState();
+  const normalized = Object.assign({}, defaults, source);
+  const arrayKeys = [
+    'events',
+    'ps',
+    'contacts',
+    'tools',
+    'services',
+    'commandMessages',
+    'reflexFiches',
+    'reflexGlossary',
+    'planItems',
+    'dutyAvailabilities',
+    'dutySchedule'
+  ];
+  arrayKeys.forEach((key) => {
+    if (!Array.isArray(normalized[key])) normalized[key] = defaults[key];
+  });
+  normalized.settings = Object.assign({}, DEFAULT_SETTINGS, source.settings && typeof source.settings === 'object' ? source.settings : {});
+  normalized.settings.dynamicLists = Object.assign({}, source.settings?.dynamicLists && typeof source.settings.dynamicLists === 'object' ? source.settings.dynamicLists : {});
+  normalized.settings.remoteSync = Object.assign({}, DEFAULT_SETTINGS.remoteSync, normalized.settings.remoteSync || {});
+  normalized.settings.pdfAppearance = Object.assign({}, DEFAULT_SETTINGS.pdfAppearance, normalized.settings.pdfAppearance || {});
+  normalized.settings.planExpiryYears = normalized.settings.planExpiryYears && typeof normalized.settings.planExpiryYears === 'object'
+    ? normalized.settings.planExpiryYears
+    : {};
+  return normalized;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // 4. UTILITAIRES GLOBAUX
 // ────────────────────────────────────────────────────────────────────────────
@@ -3944,7 +3974,7 @@ function updateAuthGateStatus(message, tone = 'info') {
 
 function applyRemoteStateSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') return false;
-  const fresh = Object.assign(buildDefaultState(), snapshot);
+  const fresh = normalizeRemoteStateSnapshot(snapshot);
   Object.keys(state).forEach((key) => delete state[key]);
   Object.assign(state, fresh);
   userAdminState.loaded = false;
@@ -4001,6 +4031,9 @@ async function submitSupabaseLogin(event) {
     } catch (error) {
       updateCloudStateStatus(`Connexion ouverte, mais chargement distant incomplet : ${esc(error.message || String(error))}`, 'warning');
     }
+    renderAll();
+    refreshAuthGate();
+    refreshStorageStatus();
   } catch (error) {
     updateAuthGateStatus('E-mail ou mot de passe incorrect', 'warning');
     refreshAuthGate();
@@ -4818,5 +4851,3 @@ function deleteSelectedPS(){
  if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
  deletePS(state.selectedPSId);
 }
-
-
