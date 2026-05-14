@@ -144,10 +144,9 @@ code{
 .layout.sidebar-collapsed .side-head{padding:1rem .75rem;display:flex;justify-content:center}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-.page{display:none;flex:1;overflow:auto;padding:2rem 1.5rem 3rem}
+.page{display:none;flex:1;overflow:auto;padding:1.75rem 1.25rem 2.5rem}
 .page.active{display:block}
-.page-inner{max-width:75rem;margin:0 auto}
-#page-ps .page-inner,#page-command .page-inner{max-width:92rem}
+.page-inner{max-width:96rem;margin:0 auto;min-width:0}
 .page-header{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-5)}
 .page-header h1{margin:0;font-size:2rem;line-height:1.25;color:var(--blue-france)}
 .page-header p{margin:.5rem 0 0;color:var(--text-light)}
@@ -340,8 +339,9 @@ input:focus,select:focus,textarea:focus{
 .list-actions,.tool-actions,.event-actions,.directory-actions,.branding-preview,.rec-line,.stats-toolbar{
   display:flex;
   gap:var(--space-2);
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   align-items:center;
+  min-width:0;
 }
 .page-header .list-actions,
 .page-header .tool-actions,
@@ -349,6 +349,10 @@ input:focus,select:focus,textarea:focus{
 .page-header .directory-actions{
   justify-content:flex-end;
   align-items:stretch;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-bottom:.15rem;
+  scrollbar-width:thin;
 }
 .card-header .list-actions,
 .card-header .tool-actions,
@@ -356,6 +360,10 @@ input:focus,select:focus,textarea:focus{
   justify-content:flex-end;
   align-items:stretch;
   flex:1 1 auto;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-bottom:.15rem;
 }
 .list-actions > .fr-btn,
 .tool-actions > .fr-btn,
@@ -379,6 +387,7 @@ input:focus,select:focus,textarea:focus{
   justify-content:flex-end;
   gap:.35rem;
   width:100%;
+  flex-wrap:nowrap;
 }
 .icon-action{
   width:2rem;
@@ -680,14 +689,9 @@ dialog .dialog-body,dialog .card-body{
 }
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 
-#page-ps > .page-inner > .grid-2,
-#page-command > .page-inner > .grid-2,
-#page-command #commandLayout{grid-template-columns:repeat(2,minmax(0,1fr))}
-#page-ps #psPreview,#page-command #commandPreview{min-height:62vh}
-
 .events-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin-bottom:1rem}
 .events-toolbar .list-search{margin:0;min-width:18rem;flex:1 1 20rem}
-.page-header .event-page-actions{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.page-header .event-page-actions{display:flex;flex-wrap:nowrap;gap:.75rem;align-items:center;overflow-x:auto}
 .event-workspace{display:grid;gap:1rem}
 .event-workspace-panel{display:none}
 .event-workspace-panel.active{display:block}
@@ -762,13 +766,14 @@ html[data-theme='dark'] .vis-thumb,
 html[data-theme='dark'] .branding-preview img{background:#0f1020}
 
 @media (max-width:1200px){
-  #page-ps > .page-inner > .grid-2,
-  #page-command > .page-inner > .grid-2,
-  #page-command #commandLayout{grid-template-columns:1fr}
+  .app-topbar{flex-wrap:wrap;align-items:flex-start}
+  .top-actions{margin-left:0;flex-wrap:wrap;justify-content:flex-start}
+  .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 
 @media (max-width:1100px){
   .planning-grid,.settings-grid,.stats-grid{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   #userAdminCard .grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
@@ -784,7 +789,13 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
   .fiche-layout{grid-template-columns:1fr}
   .sidebar{width:4.5rem;flex-basis:4.5rem}
   .nav-btn span,.side-head p,.side-head h2{display:none}
-  .page{padding:1rem}
+  .page{padding:1rem .85rem 1.5rem}
+  .page-header{flex-direction:column;align-items:stretch}
+  .page-header .list-actions,
+  .page-header .tool-actions,
+  .page-header .event-actions,
+  .page-header .directory-actions,
+  .page-header .event-page-actions{justify-content:flex-start}
   #userAdminCard .grid-3{grid-template-columns:1fr}
 }
 

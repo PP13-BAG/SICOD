@@ -127,7 +127,6 @@ function buildDefaultState() {
     services: JSON.parse(JSON.stringify(defaultServices)),
     commandMessages: [],
     selectedCommandId: null,
-    selectedCommandEventFilter: null,
     currentEventId: null,
     currentEventWorkspaceTab: 'overview',
     selectedPSId: null,
@@ -1291,168 +1290,6 @@ function getDirectText(element) {
   return out.trim();
 }
 
-function renderTemplateDomToPdf(doc, root, opts = {}) {
-  const palette = getPdfAppearance();
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const margin = opts.orientation === 'landscape' ? 10 : 12;
-  const contentW = pageW - margin * 2;
-  let y = margin;
-  const defaultText = palette.text;
-  const border = [180, 180, 180];
-
-  const ensureSpace = (needed) => {
-    if (y + needed > pageH - margin) {
-      doc.addPage();
-      y = margin;
-    }
-  };
-
-  const drawText = (text, options = {}) => {
-    const clean = String(text || '').trim();
-    if (!clean) return;
-    const fontSize = options.fontSize || 9;
-    const lineH = options.lineHeight || fontSize * 0.45 + 1.5;
-    const maxW = options.width || contentW;
-    setTemplatePdfFont(doc, options.bold ? 'bold' : 'normal');
-    doc.setFontSize(fontSize);
-    doc.setTextColor(...(options.color || defaultText));
-    const lines = doc.splitTextToSize(clean, maxW);
-    ensureSpace(lines.length * lineH + 2);
-    doc.text(lines, options.x || margin, y, { maxWidth: maxW, align: options.align || 'left' });
-    y += lines.length * lineH + (options.after ?? 2);
-  };
-
-  const drawImage = (img) => {
-    const src = img.getAttribute('src') || img.src || '';
-    if (!src) return;
-    const maxW = Math.min(contentW, 34);
-    const maxH = 22;
-    ensureSpace(maxH + 3);
-    try {
-      const props = doc.getImageProperties(src);
-      const ratio = Math.min(maxW / (props.width || maxW), maxH / (props.height || maxH));
-      const w = (props.width || maxW) * ratio;
-      const h = (props.height || maxH) * ratio;
-      const x = margin + (contentW - w) / 2;
-      doc.addImage(src, String(props.fileType || 'PNG').toUpperCase(), x, y, w, h, undefined, 'FAST');
-      y += h + 4;
-    } catch {}
-  };
-
-  const drawImageInBox = (src, x, boxY, w, h) => {
-    if (!src) return false;
-    try {
-      const props = doc.getImageProperties(src);
-      const ratio = Math.min((w - 4) / (props.width || w), (h - 4) / (props.height || h));
-      const imageW = (props.width || w) * ratio;
-      const imageH = (props.height || h) * ratio;
-      doc.addImage(
-        src,
-        String(props.fileType || 'PNG').toUpperCase(),
-        x + (w - imageW) / 2,
-        boxY + (h - imageH) / 2,
-        imageW,
-        imageH,
-        undefined,
-        'FAST'
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const drawTable = (table) => {
-    const rows = Array.from(table.querySelectorAll('tr'));
-    if (!rows.length) return;
-    const firstCells = Array.from(rows[0].children);
-    const colCount = Math.max(1, firstCells.length);
-    const explicitWidths = firstCells.map((cell) => {
-      const style = cell.getAttribute('style') || '';
-      const pct = style.match(/width\s*:\s*([0-9.]+)%/i);
-      return pct ? Number(pct[1]) / 100 * contentW : 0;
-    });
-    const remaining = contentW - explicitWidths.reduce((sum, value) => sum + value, 0);
-    const autoCount = Math.max(1, explicitWidths.filter((value) => !value).length);
-    const colW = explicitWidths.map((value) => value || remaining / autoCount);
-    rows.forEach((row) => {
-      const cells = Array.from(row.children);
-      const wrapped = cells.map((cell, i) => {
-        const text = firstMeaningfulText(cell);
-        const fontSize = cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 8 : 8;
-        setTemplatePdfFont(doc, cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD' ? 'bold' : 'normal');
-        doc.setFontSize(fontSize);
-        return doc.splitTextToSize(text || ' ', Math.max(8, (colW[i] || colW[0]) - 3));
-      });
-      const containsImage = cells.some((cell) => cell.querySelector('img'));
-      const rowH = Math.max(containsImage ? 42 : 7, ...wrapped.map((lines) => lines.length * 3.7 + 3));
-      ensureSpace(rowH);
-      let x = margin;
-      cells.forEach((cell, i) => {
-        const w = colW[i] || colW[0];
-        const isHead = cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD';
-        if (isHead) {
-          doc.setFillColor(...palette.accent);
-          doc.rect(x, y, w, rowH, 'F');
-        }
-        doc.setDrawColor(...border);
-        doc.rect(x, y, w, rowH);
-        setTemplatePdfFont(doc, isHead ? 'bold' : 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...defaultText);
-        const img = cell.querySelector('img');
-        if (img && drawImageInBox(img.getAttribute('src') || img.src || '', x + 1.5, y + 1.5, w - 3, rowH - 3)) {
-          const caption = firstMeaningfulText(cell).replace(firstMeaningfulText(img), '').trim();
-          if (caption) doc.text(doc.splitTextToSize(caption, w - 3).slice(0, 2), x + 1.5, y + rowH - 7, { maxWidth: w - 3 });
-        } else {
-          doc.text(wrapped[i], x + 1.5, y + 4.3, { maxWidth: w - 3 });
-        }
-        x += w;
-      });
-      y += rowH;
-    });
-    y += 4;
-  };
-
-  const walk = (node) => {
-    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-    const tag = node.tagName.toLowerCase();
-    if (node.hidden || node.getAttribute('aria-hidden') === 'true') return;
-    if (tag === 'img') return drawImage(node);
-    if (tag === 'table') return drawTable(node);
-    if (['script', 'style', 'audio', 'button', 'select', 'input', 'textarea'].includes(tag)) return;
-    const cls = node.className || '';
-    const directText = getDirectText(node);
-    const computed = node.ownerDocument.defaultView.getComputedStyle(node);
-    const color = cssColorToRgb(computed.color, defaultText);
-    if (/ps-section-title|focus-label|cmd-urgent|cmd-redtitle|block-title|exercise-banner/.test(cls) || ['h1', 'h2', 'h3'].includes(tag)) {
-      const text = firstMeaningfulText(node);
-      if (text) {
-        drawText(text, {
-          fontSize: tag === 'h1' ? 16 : (tag === 'h2' ? 13 : 10),
-          bold: true,
-          color: /cmd-redtitle|exercise-banner/.test(cls) ? palette.alert : color,
-          align: ['h1', 'h2'].includes(tag) ? 'center' : 'left',
-          after: 3
-        });
-      }
-      return;
-    }
-    if (directText) {
-      drawText(directText, {
-        fontSize: Number.parseFloat(computed.fontSize || '') > 15 ? 10 : 8.8,
-        bold: Number(computed.fontWeight || 400) >= 600,
-        color,
-        align: computed.textAlign === 'center' ? 'center' : (computed.textAlign === 'right' ? 'right' : 'left')
-      });
-    }
-    Array.from(node.children).forEach(walk);
-  };
-
-  Array.from(root.children).forEach(walk);
-}
-
 function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -1553,19 +1390,26 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     if (!clean || rect.w <= 1 || rect.h <= 1) return;
     ensurePage(rect.pageIndex);
     const fontSizePx = Number.parseFloat(computed.fontSize || '12') || 12;
-    const fontSizePt = Math.max(7.5, Math.min(18, fontSizePx * 0.78 * (options.scaleFont || 0.96)));
-    const lineH = fontSizePt * 0.3528 * 1.22;
+    const fontSizePt = Math.max(8.2, Math.min(20, fontSizePx * 0.76 * (options.scaleFont || 1)));
+    const lineH = fontSizePt * 0.3528 * (options.compact ? 1.18 : 1.26);
     const padX = Math.min(2.5, Math.max(0.8, rect.w * 0.03));
-    const padY = Math.min(3, Math.max(1.3, rect.h * 0.08));
+    const padY = Math.min(3, Math.max(1.1, rect.h * 0.07));
     const maxW = Math.max(2, rect.w - padX * 2);
     setTemplatePdfFont(doc, options.bold ? 'bold' : fontStyleFor(computed));
     doc.setFontSize(fontSizePt);
     doc.setTextColor(...cssColorToRgb(computed.color, getPdfAppearance().text));
     const lines = doc.splitTextToSize(clean, maxW);
-    const maxLines = Math.max(1, Math.floor((rect.h - padY) / lineH));
+    const maxLines = Math.max(1, Math.floor((rect.h - padY * 2) / lineH));
+    const fittedLines = lines.length > maxLines
+      ? lines.slice(0, maxLines).map((line, index, arr) => (
+        index === arr.length - 1
+          ? `${String(line).replace(/[.\s]+$/g, '')}…`
+          : line
+      ))
+      : lines;
     const align = computed.textAlign === 'center' ? 'center' : (computed.textAlign === 'right' ? 'right' : 'left');
     const x = align === 'center' ? rect.x + rect.w / 2 : (align === 'right' ? rect.x + rect.w - padX : rect.x + padX);
-    doc.text(lines.slice(0, maxLines), x, rect.y + padY + fontSizePt * 0.3528 * 0.72, { maxWidth: maxW, align });
+    doc.text(fittedLines, x, rect.y + padY + fontSizePt * 0.3528 * 0.74, { maxWidth: maxW, align });
   };
 
   const drawImageAtRect = (img, rect) => {
@@ -1591,7 +1435,11 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
         const img = cell.querySelector(':scope > img');
         if (img) drawImageAtRect(img, cellRect);
         const text = firstMeaningfulText(cell);
-        drawTextInRect(text, cellRect, computed, { bold: cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD', scaleFont: 0.8 });
+        drawTextInRect(text, cellRect, computed, {
+          bold: cell.tagName === 'TH' || row.parentElement?.tagName === 'THEAD',
+          scaleFont: cell.tagName === 'TH' ? 0.9 : 0.86,
+          compact: true
+        });
       });
     });
   };
@@ -1618,7 +1466,11 @@ function renderTemplateDomToPdfPositioned(doc, root, opts = {}) {
     const directText = getDirectText(element);
     if (directText) {
       const titleLike = ['h1', 'h2', 'h3', 'th'].includes(tag) || /sicod-page-title|ps-section-title|focus-label|block-title|cmd-urgent|exercise-banner/.test(element.className || '');
-      drawTextInRect(directText, pdfRect, computed, { bold: titleLike, scaleFont: titleLike ? 0.95 : 0.82 });
+      drawTextInRect(directText, pdfRect, computed, {
+        bold: titleLike,
+        scaleFont: titleLike ? 1.02 : 0.9,
+        compact: !titleLike
+      });
     }
     Array.from(element.children).forEach(walk);
   };
@@ -1639,6 +1491,10 @@ function openHtmlTemplatePdf(key, tokens, title = 'document', options = {}) {
     `${slugify(title || key || 'document')}.pdf`,
     Object.assign({ title }, options)
   );
+}
+
+function isEventWorkspaceActive(tab = '') {
+  return isPageActive('events') && (!tab || state.currentEventWorkspaceTab === tab);
 }
 
 function buildPSHtmlTokens(ps) {
@@ -1874,7 +1730,6 @@ function goPage(page) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page || (page === 'event-archives' && b.dataset.page === 'events')));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
   if (page === 'fiches') renderFiches();
-  if (page === 'ps') renderPSList();
   if (page === 'events') renderEvents();
   if (page === 'event-archives') renderEventArchives();
   populateEventTypeSelect(document.getElementById('eventType')?.value || '');
@@ -2540,25 +2395,11 @@ function duplicatePS(id) {
   showToast('Point de situation dupliqué.');
 }
 
-function filterPSByEvent(eventId) {
-  state.currentEventId = eventId || null;
-  persist();
-  renderPSList();
-}
-
 function renderPSList() {
-  const psList = document.getElementById(isPageActive('events') ? 'eventPsList' : 'psList');
+  const psList = document.getElementById('eventPsList');
   if (!psList) return;
 
-  // Populate event filter dropdown
-  const psEventFilter = document.getElementById('psEventFilter');
-  if (psEventFilter) {
-    const events = getActiveItems(state.events);
-    psEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
-      events.map(e => `<option value="${esc(e.id)}" ${state.currentEventId === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
-  }
-
-  const q = (document.getElementById(isPageActive('events') ? 'eventPsListSearch' : 'psListSearch')?.value || '').toLowerCase().trim();
+  const q = (document.getElementById('eventPsListSearch')?.value || '').toLowerCase().trim();
   const source = getActiveItems(state.ps).filter(isLinkedToActiveEvent);
   if (state.selectedPSId && !source.some((item) => item.id === state.selectedPSId)) {
     state.selectedPSId = null;
@@ -2594,9 +2435,9 @@ function renderPSList() {
 }
 
 function renderPSPreview() {
-  const psPreview = document.getElementById(isPageActive('events') ? 'eventPsPreview' : 'psPreview');
+  const psPreview = document.getElementById('eventPsPreview');
   if (!psPreview) return;
-  if (!isPageActive('ps') && !(isPageActive('events') && state.currentEventWorkspaceTab === 'ps')) return;
+  if (!isEventWorkspaceActive('ps')) return;
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
     psPreview.innerHTML = '<p class="help">Sélectionnez un point de situation.</p>';
@@ -2703,210 +2544,6 @@ function bindPSMediaInputs() {
 
 // Export PS PDF
 
-function exportPSFocusPDF(ps) {
-  if (!ps || !window.jspdf) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const m = 10;
-  const palette = getPdfAppearance();
-  const blue = palette.primary, light = palette.accent, textColor = palette.text, border=[221,221,221];
-  const event = byId(state.events, ps.eventId);
-  const means = ps.means ?? ps.moyens ?? '';
-  const measures = ps.measures ?? ps.mesures ?? '';
-  const attention = ps.attention ?? ps.points ?? '';
-  const signature = shouldApplyPdfSignature('ps') ? getPSSignatureConfig() : { mode: 'prefet', name: '', role: '' };
-  const title = `POINT DE SITUATION N° ${ps.number}`;
-  const contentTop = 46;
-  const contentBottomReserve = signature.name ? 22 : 8;
-  const gridTop = contentTop;
-  const gridBottom = pageH - m - contentBottomReserve;
-  const gridH = Math.max(110, gridBottom - gridTop);
-  const gridW = pageW - m * 2;
-  const col1W = gridW * 1.05 / 4.5;
-  const col2W = gridW * 2.35 / 4.5;
-  const col3W = gridW - col1W - col2W;
-  const box1TopH = gridH * (1 / 2.25);
-  const box1BottomH = gridH - box1TopH;
-  const centerTopH = gridH * (1 / 3);
-  const centerMidH = gridH * (1.15 / 3);
-  const centerBottomH = gridH - centerTopH - centerMidH;
-  const box3TopH = gridH * (1 / 2.25);
-  const box3BottomH = gridH - box3TopH;
-
-  const wrap = (txt, w) => doc.splitTextToSize(String(txt || '—'), w);
-
-  const drawImageContain = (src, x, yPos, w, h, emptyLabel='') => {
-    doc.setDrawColor(...border);
-    doc.rect(x, yPos, w, h);
-    if (!src) {
-      if (emptyLabel) {
-        doc.setTextColor(120,120,120);
-        doc.setFont('helvetica','normal');
-        doc.setFontSize(9);
-        doc.text(emptyLabel, x + w/2, yPos + h/2, {align:'center'});
-        doc.setTextColor(...textColor);
-      }
-      return;
-    }
-    try {
-      const props = doc.getImageProperties(src);
-      const iw = props.width || w, ih = props.height || h;
-      const ratio = Math.min((w - 4) / iw, (h - 4) / ih);
-      const rw = iw * ratio, rh = ih * ratio;
-      const rx = x + (w - rw) / 2, ry = yPos + (h - rh) / 2;
-      const fmt = (props.fileType || 'PNG').toUpperCase();
-      doc.addImage(src, fmt, rx, ry, rw, rh, undefined, 'FAST');
-    } catch (e) {
-      try { doc.addImage(src, 'PNG', x + 2, yPos + 2, w - 4, h - 4, undefined, 'FAST'); } catch(_) {}
-    }
-  };
-
-  const drawLogo = () => addLogoPreserved(doc, m, m, 22, 16);
-
-  const drawHeader = () => {
-    drawLogo();
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...textColor);
-    doc.setFontSize(15);
-    doc.text(title, pageW / 2, m + 7, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...textColor);
-    doc.setFontSize(11);
-    doc.text(ps.title || getEventTitle(ps.eventId) || '', pageW / 2, m + 13, { align: 'center' });
-
-    const headers = ['Date / heure', 'Statut', 'Classification', 'Auteur', 'ID Synergi'];
-    const values = [new Date(ps.updatedAt).toLocaleString('fr-FR', {dateStyle:'short',timeStyle:'short'}), ps.status, ps.classification, ps.author, event?.synergi || ''];
-    const widths = [54,38,52,70,pageW-m*2-54-38-52-70];
-    let x = m;
-    const y = m + 18;
-    headers.forEach((h, i) => {
-      doc.setFillColor(...light); doc.setDrawColor(...border); doc.rect(x, y, widths[i], 7, 'FD');
-      doc.setTextColor(...blue); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-      doc.text(h, x + widths[i] / 2, y + 4.6, { align: 'center' });
-      x += widths[i];
-    });
-    x = m;
-    values.forEach((v, i) => {
-      doc.setDrawColor(...border); doc.rect(x, y + 7, widths[i], 8);
-      doc.setTextColor(...textColor); doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
-      doc.text(String(v || '—'), x + widths[i] / 2, y + 12.2, { align: 'center', maxWidth: widths[i] - 2 });
-      x += widths[i];
-    });
-  };
-
-  const drawTextBox = (x, y, w, h, label, body, options = {}) => {
-    const labelH = 7;
-    doc.setDrawColor(...border);
-    doc.rect(x, y, w, h);
-    doc.setFillColor(...blue);
-    doc.rect(x, y, w, labelH, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(label, x + w / 2, y + 4.6, { align: 'center' });
-
-    const innerX = x + 2.5;
-    const innerY = y + labelH + 4;
-    const innerW = w - 5;
-    const innerH = h - labelH - 5;
-    doc.setTextColor(...textColor);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(options.fontSize || 8.7);
-
-    if (options.image) {
-      drawImageContain(body, x + 1.5, y + labelH + 1.5, w - 3, h - labelH - 3, 'Aucun visuel joint');
-      return;
-    }
-
-    const lines = wrap(body || '', innerW);
-    const lineHeight = options.lineHeight || 4.1;
-    const maxLines = Math.max(1, Math.floor(innerH / lineHeight));
-    const clipped = lines.slice(0, maxLines);
-    doc.text(clipped, innerX, innerY, { maxWidth: innerW });
-  };
-
-  const drawBilanBox = (x, y, w, h) => {
-    const labelH = 7;
-    doc.setDrawColor(...border);
-    doc.rect(x, y, w, h);
-    doc.setFillColor(...blue);
-    doc.rect(x, y, w, labelH, 'F');
-    doc.setTextColor(255,255,255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('Bilan', x + w / 2, y + 4.6, { align: 'center' });
-
-    const tableX = x + 2.5;
-    const tableY = y + labelH + 3;
-    const tableW = w - 5;
-    const colW = tableW / 4;
-    const headers = ['DCD', 'UA', 'UR', 'IMP'];
-    const vals = [ps.bilan?.dcd || '0', ps.bilan?.ua || '0', ps.bilan?.ur || '0', ps.bilan?.impliques || '0'];
-    let cx = tableX;
-    headers.forEach((header, i) => {
-      doc.setFillColor(...light); doc.setDrawColor(...border); doc.rect(cx, tableY, colW, 6.5, 'FD');
-      doc.setTextColor(...blue); doc.setFont('helvetica','bold'); doc.setFontSize(7.8);
-      doc.text(header, cx + colW / 2, tableY + 4.2, { align: 'center' });
-      doc.setDrawColor(...border); doc.rect(cx, tableY + 6.5, colW, 7);
-      doc.setTextColor(...textColor); doc.setFont('helvetica','normal'); doc.setFontSize(8.4);
-      doc.text(String(vals[i]), cx + colW / 2, tableY + 11, { align: 'center' });
-      cx += colW;
-    });
-
-    const notesY = tableY + 15.5;
-    const notesH = Math.max(10, h - labelH - 19);
-    if (notesH > 8) {
-      doc.setDrawColor(...border);
-      doc.rect(tableX, notesY, tableW, notesH);
-      const notes = wrap(ps.bilan?.notes || '', tableW - 4).slice(0, Math.floor((notesH - 3) / 4));
-      if (notes.length) {
-        doc.setTextColor(...textColor);
-        doc.setFont('helvetica','normal');
-        doc.setFontSize(8.2);
-        doc.text(notes, tableX + 2, notesY + 4);
-      }
-    }
-  };
-
-  const drawSignature = () => {
-    if (!signature.name && !signature.role) return;
-    const lines = signature.mode === 'delegation'
-      ? ['Pour le préfet, par délégation', signature.role || '', signature.name || ''].filter(Boolean)
-      : ['Le préfet', signature.name || ''].filter(Boolean);
-    const x = pageW - m - 68;
-    const y = pageH - m - (lines.length * 4.5 + 2);
-    doc.setTextColor(...textColor);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(10);
-    lines.forEach((line, idx) => doc.text(line, x, y + idx * 4.8));
-  };
-
-  const applyFixedSignature = () => {
-    drawFixedBottomRightSignature(doc, signature, {
-      margin: m,
-      blockWidth: 54,
-      lineGap: 4.8,
-      spacerGap: 4.5,
-      fontSize: 10,
-      textColor
-    });
-  };
-
-  drawHeader();
-  drawBilanBox(m, gridTop, col1W, box1TopH);
-  drawTextBox(m, gridTop + box1TopH, col1W, box1BottomH, 'Moyens', means);
-  drawTextBox(m + col1W, gridTop, col2W, centerTopH, 'Situation générale', ps.situation || '');
-  drawTextBox(m + col1W, gridTop + centerTopH, col2W, centerMidH, 'Cartographie', ps.image || '', { image: true });
-  drawTextBox(m + col1W, gridTop + centerTopH + centerMidH, col2W, centerBottomH, 'Mesures prises', measures);
-  drawTextBox(m + col1W + col2W, gridTop, col3W, box3TopH, "Points d'attention", attention);
-  drawTextBox(m + col1W + col2W, gridTop + box3TopH, col3W, box3BottomH, 'Communication', [ps.communication || '', ps.transcript ? `Transcription : ${ps.transcript}` : '', ps.audioData ? 'Source audio jointe.' : ''].filter(Boolean).join('\n\n'));
-  applyFixedSignature();
-  doc.save(`PS_${ps.number || 'SICOD'}.pdf`);
-}
-
-
 // openPrintWindow : alias vers exportPSPDF
 function openPrintWindow() { exportPSPDF(); }
 
@@ -2956,7 +2593,7 @@ function initCommandForm() {
   ensureCommandState();
   const cmdType = document.getElementById('cmdType');
   if (cmdType) cmdType.innerHTML = commandTypes.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join('');
-  if (!isPageActive('command')) return;
+  if (!isEventWorkspaceActive('command')) return;
   renderCommandList();
   if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
     renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
@@ -3148,26 +2785,12 @@ function selectCommand(id) {
   renderCommandPreview(byId(state.commandMessages, id));
 }
 
-function filterCommandByEvent(eventId) {
-  state.selectedCommandEventFilter = eventId || null;
-  renderCommandList();
-}
-
 function renderCommandList() {
-  const el = document.getElementById(isPageActive('events') ? 'eventCommandList' : 'commandList');
+  const el = document.getElementById('eventCommandList');
   if (!el) return;
 
-  // Populate event filter dropdown
-  const cmdEventFilter = document.getElementById('cmdEventFilter');
-  if (cmdEventFilter) {
-    const events = getActiveItems(state.events);
-    const cur = state.selectedCommandEventFilter || '';
-    cmdEventFilter.innerHTML = '<option value="">Tous les événements</option>' +
-      events.map(e => `<option value="${esc(e.id)}" ${cur === e.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
-  }
-
-  const q = (document.getElementById(isPageActive('events') ? 'eventCommandListSearch' : 'commandListSearch')?.value || '').toLowerCase().trim();
-  const eventFilter = state.selectedCommandEventFilter || null;
+  const q = (document.getElementById('eventCommandListSearch')?.value || '').toLowerCase().trim();
+  const eventFilter = state.currentEventId || null;
   let items = [...getActiveItems(state.commandMessages).filter(isLinkedToActiveEvent)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
   if (state.selectedCommandId && !items.some((item) => item.id === state.selectedCommandId)) {
@@ -3274,9 +2897,9 @@ function getCommandData() {
 }
 
 function renderCommandPreview(data) {
-  const commandPreview = document.getElementById(isPageActive('events') ? 'eventCommandPreview' : 'commandPreview');
+  const commandPreview = document.getElementById('eventCommandPreview');
   if (!commandPreview) return;
-  if (!isPageActive('command') && !(isPageActive('events') && state.currentEventWorkspaceTab === 'command')) return;
+  if (!isEventWorkspaceActive('command')) return;
   const d = data || (state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   if (!d) {
     commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
@@ -5387,16 +5010,6 @@ function renderAll() {
   }
   renderDashboard();
   const activePage = getActivePageName();
-  if (activePage === 'ps') {
-    state.currentEventWorkspaceTab = 'ps';
-    goPage('events');
-    return;
-  }
-  if (activePage === 'command') {
-    state.currentEventWorkspaceTab = 'command';
-    goPage('events');
-    return;
-  }
   if (activePage === 'events') renderEvents();
   if (activePage === 'event-archives') renderEventArchives();
   if (activePage === 'fiches') renderFiches();
