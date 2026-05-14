@@ -674,6 +674,9 @@
       },
       async updatePassword(password) {
         return updateSupabasePassword(password);
+      },
+      async refreshRoles() {
+        return loadCurrentUserRoles(true);
       }
     },
     system: {

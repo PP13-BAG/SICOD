@@ -3778,6 +3778,20 @@ function isCurrentUserAdmin() {
   return !!authState.isAdmin;
 }
 
+async function refreshCurrentUserRights() {
+  try {
+    await window.SICODApi?.auth?.refreshRoles?.();
+    const authState = window.SICODApi?.system?.getAuthState?.() || {};
+    showToast(authState.isAdmin ? 'Droits administrateur activés.' : 'Droits actualisés : accès lecture.', authState.isAdmin ? 'success' : 'info');
+    ensureSettingsNavigatorUI();
+    ensureSystemSettingsUI();
+    loadSettingsForm();
+    if (authState.isAdmin) showSettingsTab('db');
+  } catch (error) {
+    showToast(`Actualisation des droits impossible : ${error.message || String(error)}`, 'error');
+  }
+}
+
 function ensureDatabaseSettingsPanel() {
   const pageInner = document.querySelector('#page-settings .page-inner');
   const tabs = document.querySelector('.settings-tabs');
@@ -4430,6 +4444,13 @@ function ensureGeneralPasswordSettingsUI() {
     <div class="card-header"><h2 class="card-title">Accès à l'application</h2></div>
     <div class="card-body">
       <div><label>Compte connecte</label><input value="${esc(authState.email || '')}" readonly></div>
+      <div style="margin-top:1rem">
+        <label>Rôle applicatif</label>
+        <input id="currentUserRoleField" value="${esc(authState.role || 'lecture')}" readonly>
+      </div>
+      <div class="list-actions" style="margin-top:1rem">
+        <button class="fr-btn secondary" type="button" onclick="refreshCurrentUserRights()">Actualiser les droits</button>
+      </div>
       <div class="grid-2" style="margin-top:1rem">
         <div><label for="settingNewPassword">Nouveau mot de passe</label><input id="settingNewPassword" type="password" autocomplete="new-password"></div>
         <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
@@ -4633,6 +4654,7 @@ function loadSettingsForm() {
   if (get('settingTheme')) get('settingTheme').value = state.settings.theme || 'light';
   const accountField = document.querySelector('#passwordSettingsCard input[readonly]');
   if (accountField) accountField.value = authState.email || '';
+  if (get('currentUserRoleField')) get('currentUserRoleField').value = authState.role || 'lecture';
   if (get('settingNewPassword')) get('settingNewPassword').value = '';
   if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
