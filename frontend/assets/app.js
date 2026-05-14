@@ -980,7 +980,10 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
     html,body{margin:0;padding:0;background:#ffffff;color:#161616}
     body{overflow:auto}
     .template-export-stage{padding:1.25rem;min-height:100vh;box-sizing:border-box;display:flex;justify-content:center;align-items:flex-start;background:#f6f6f6}
-    .template-export-stage .document-page{width:${pageWidth};min-height:${pageHeight};margin:0 auto;background:#ffffff;box-shadow:none}
+    .template-export-stage .document-page{width:${pageWidth};min-height:${pageHeight};margin:0 auto;background:#ffffff;box-shadow:none;box-sizing:border-box;overflow:visible}
+    .template-export-stage .document-page>.ps-sheet,
+    .template-export-stage .document-page>.command-sheet{width:100%;min-height:${pageHeight};max-width:none!important;box-sizing:border-box;border:0}
+    .template-export-stage .document-page>.focus-mode{min-height:${pageHeight}}
     @media print{.template-export-stage{padding:0;background:#ffffff}}
   </style>`;
   if (templateLooksLikeDocument(raw)) {
@@ -1053,36 +1056,57 @@ async function exportHtmlTemplatePdf(key, tokens, fileName, options = {}) {
       format: 'a4',
       orientation: isLandscape ? 'landscape' : 'portrait'
     });
-    await new Promise((resolve, reject) => {
-      try {
-        doc.html(target, {
-          margin: [0, 0, 0, 0],
-          autoPaging: 'text',
-          width: doc.internal.pageSize.getWidth(),
-          html2canvas: {
-            scale: Math.min(window.devicePixelRatio || 1, 1.25),
-            useCORS: true,
-            allowTaint: false,
-            backgroundColor: '#ffffff',
-            logging: false,
-            imageTimeout: 8000,
-            removeContainer: true,
-            windowWidth: pageViewport.width,
-            windowHeight: pageViewport.height
-          },
-          callback: (pdf) => {
-            pdf.save(fileName || `${slugify(options.title || key || 'document')}.pdf`);
-            resolve();
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+    const canvas = await window.html2canvas(target, {
+      scale: Math.min(window.devicePixelRatio || 1, 1.5),
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+      imageTimeout: 8000,
+      windowWidth: Math.max(pageViewport.width, target.scrollWidth || 0),
+      windowHeight: Math.max(pageViewport.height, target.scrollHeight || 0)
     });
+    addCanvasPagesToPdf(doc, canvas);
+    doc.save(fileName || `${slugify(options.title || key || 'document')}.pdf`);
   } catch (error) {
     showToast(`Export PDF impossible : ${error.message || String(error)}`, 'error');
   } finally {
     iframe.remove();
+  }
+}
+
+function addCanvasPagesToPdf(doc, sourceCanvas) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageRatio = pageHeight / pageWidth;
+  const sliceHeight = Math.max(1, Math.floor(sourceCanvas.width * pageRatio));
+  const pageCanvas = document.createElement('canvas');
+  const pageContext = pageCanvas.getContext('2d');
+  pageCanvas.width = sourceCanvas.width;
+  let offsetY = 0;
+  let pageIndex = 0;
+  while (offsetY < sourceCanvas.height) {
+    const currentSliceHeight = Math.min(sliceHeight, sourceCanvas.height - offsetY);
+    pageCanvas.height = currentSliceHeight;
+    pageContext.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+    pageContext.fillStyle = '#ffffff';
+    pageContext.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+    pageContext.drawImage(
+      sourceCanvas,
+      0,
+      offsetY,
+      sourceCanvas.width,
+      currentSliceHeight,
+      0,
+      0,
+      sourceCanvas.width,
+      currentSliceHeight
+    );
+    if (pageIndex > 0) doc.addPage();
+    const imageHeight = pageWidth * (currentSliceHeight / sourceCanvas.width);
+    doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, pageWidth, imageHeight);
+    offsetY += currentSliceHeight;
+    pageIndex += 1;
   }
 }
 
