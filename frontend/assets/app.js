@@ -4057,6 +4057,8 @@ function openDutyAvailabilityForm(id) {
   setSelectOptions(document.getElementById('dutyAgent'), agents, a?.agent || agents[0] || '');
   document.getElementById('dutyStart').value = a?.start || presetWeek || toLocalISO(startOfMonday(new Date()));
   document.getElementById('dutyNote').value = a?.note || '';
+  const deleteBtn = document.getElementById('dutyDeleteBtn');
+  if (deleteBtn) deleteBtn.style.display = a?.id ? '' : 'none';
   document.getElementById('dutyDialog').showModal();
 }
 
@@ -4094,6 +4096,14 @@ function saveDutyAvailability() {
   renderDutyCalendar();
 }
 
+async function deleteDutyAvailabilityFromDialog() {
+  const id = document.getElementById('dutyId')?.value || '';
+  if (!id) return;
+  if (!await confirmAsync('Supprimer cette disponibilité ?')) return;
+  deleteDutyAvailability(id);
+  document.getElementById('dutyDialog')?.close();
+}
+
 function deleteDutyAvailability(id) {
   window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, id);
   persist();
@@ -4112,7 +4122,7 @@ function getValidDutyAvailabilities() {
   const allowedRoles = new Set(getCurrentDutyRoles());
   const allowedAgents = new Set(getCurrentDutyAgents());
   return getActiveItems(state.dutyAvailabilities).filter((item) =>
-    item && allowedRoles.has(item.role) && allowedAgents.has(item.agent)
+    item && allowedRoles.has(String(item.role || '').trim()) && allowedAgents.has(String(item.agent || '').trim())
   );
 }
 
@@ -4165,10 +4175,11 @@ function renderDutyCalendar() {
   for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 7)) {
     const weekStart = new Date(cur);
     const weekEnd = weekEndInclusive(weekStart);
+    const weekKey = toLocalISO(weekStart);
     const entries = availabilityItems.filter((a) => {
-      const ds = parseDateLocal(a.start);
-      const de = parseDateLocal(a.end);
-      return ds && de && ds <= weekStart && de >= weekEnd && (!filterRole || a.role === filterRole) && (!filterAgent || a.agent === filterAgent);
+      return String(a.start || '').trim() === weekKey
+        && (!filterRole || a.role === filterRole)
+        && (!filterAgent || a.agent === filterAgent);
     });
     const byRole = (role) => entries
       .filter((entry) => entry.role === role)
@@ -4179,9 +4190,9 @@ function renderDutyCalendar() {
       ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="openDutyAvailabilityForm('${item.id}')">${esc(item.agent || '')}</button>`).join('')}</div>`
       : '<span class="table-meta">Aucune disponibilité</span>';
     weekRows.push(`<tr>
-      <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries)}</td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries)}</td>
+      <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${weekKey}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries)}</td>
     </tr>`);
   }
   dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
@@ -4198,7 +4209,7 @@ function generateDutySchedule() {
   const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
   const start = startOfMonday(startInput);
-  const availability = getValidDutyAvailabilities().map(a => ({ ...a, ds: parseDateLocal(a.start), de: parseDateLocal(a.end) })).filter(a => a.ds && a.de);
+  const availability = getValidDutyAvailabilities().map(a => ({ ...a, weekKey: String(a.start || '').trim() }));
 
   const weeks = [];
   for (let cur = new Date(start); cur <= endInput; cur.setDate(cur.getDate() + 7)) {
@@ -4210,7 +4221,7 @@ function generateDutySchedule() {
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
     const key = agentName => `${role}||${agentName}`;
-    const exact = availability.filter(a => a.role === role && a.ds <= week.start && a.de >= week.end && !usedThisWeek.has(a.agent));
+    const exact = availability.filter(a => a.role === role && a.weekKey === toLocalISO(week.start) && !usedThisWeek.has(a.agent));
     const pool = exact.map(a => ({
       a, key: key(a.agent),
       score:
@@ -4249,14 +4260,12 @@ function renderDutySchedule() {
   const rows = state.dutySchedule || [];
   const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
-  const activeAvailabilities = getValidDutyAvailabilities().map(a => ({ ...a, ds: parseDateLocal(a.start), de: parseDateLocal(a.end) })).filter(a => a.ds && a.de);
+  const activeAvailabilities = getValidDutyAvailabilities().map(a => ({ ...a, weekKey: String(a.start || '').trim() }));
 
   el.innerHTML = rows.length
     ? `<div class="week-list">${rows.map((w, i) => {
-        const weekStart = parseDateLocal(w.start);
-        const weekEnd = parseDateLocal(w.end);
         const exactAgentsForRole = (role) => ['', ...new Set(activeAvailabilities
-          .filter((a) => a.role === role && weekStart && weekEnd && a.ds <= weekStart && a.de >= weekEnd)
+          .filter((a) => a.role === role && a.weekKey === String(w.start || '').trim())
           .map((a) => a.agent)
           .filter(Boolean)
           .sort((a, b) => a.localeCompare(b, 'fr')))];
