@@ -396,7 +396,7 @@ input:focus,select:focus,textarea:focus{
   min-height:2rem;
   padding:.25rem;
 }
-.icon-action img{width:1.15rem;height:1.15rem}
+.icon-action img{width:1.28rem;height:1.28rem}
 .fr-btn.secondary.icon-action img{filter:none}
 .sortable-th{
   cursor:pointer;
@@ -748,13 +748,14 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .directory-group .table th:nth-child(5){width:10%}
 .directory-group .table th:nth-child(6),
 .directory-group .table th:nth-child(7){width:13%}
-.directory-group .table th:nth-child(8){width:18%}
+.directory-group .table th:nth-child(8){width:7%}
 .directory-group .table td:last-child{padding:.35rem .4rem}
 .directory-group .table td:last-child .list-actions{gap:.25rem}
 .directory-group .table td:last-child .fr-btn{padding:.3rem .45rem;font-size:.78rem}
 #directorySearch{border-radius:.75rem}
 #page-directory .page-inner{max-width:92rem}
 .compact-list{margin:0;padding-left:1rem}
+.database-settings-grid{grid-template-columns:minmax(0,1fr)!important}
 .user-admin-grid-full{grid-template-columns:minmax(0,1fr)!important}
 .user-admin-grid-full > *{grid-column:1 / -1}
 .user-admin-grid-full .settings-card,
@@ -767,8 +768,17 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .user-admin-table th:nth-child(1){width:36%}
 .user-admin-table th:nth-child(2){width:18%}
 .user-admin-table th:nth-child(3){width:24%}
-.user-admin-table th:nth-child(4){width:22%}
-.user-admin-table td select{min-width:100%}
+.user-admin-table th:nth-child(4){width:8%}
+.directory-table th:last-child,
+.planning-table th:last-child,
+.planning-table td:last-child,
+.duty-availability-table th:last-child,
+.duty-availability-table td:last-child,
+.user-admin-table th:last-child,
+.user-admin-table td:last-child{width:1%;white-space:nowrap}
+.planning-table td:last-child .list-actions,
+.duty-availability-table td:last-child .list-actions,
+.user-admin-table td:last-child .list-actions{justify-content:flex-end}
 
 html[data-theme='dark'] .app-topbar,
 html[data-theme='dark'] .card,

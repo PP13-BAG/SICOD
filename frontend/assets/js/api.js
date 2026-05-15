@@ -542,6 +542,21 @@
     };
   }
 
+  async function deleteSupabaseManagedUser(userId) {
+    const targetUserId = String(userId || '').trim();
+    if (!targetUserId) throw new Error('Utilisateur cible manquant.');
+    await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(targetUserId)}`, {
+      method: 'DELETE'
+    }, true);
+    await supabaseRequest(`/rest/v1/app_user_directory?user_id=eq.${encodeURIComponent(targetUserId)}`, {
+      method: 'DELETE'
+    }, true);
+    return {
+      success: true,
+      userId: targetUserId
+    };
+  }
+
   async function getSupabaseAppState() {
     const payload = await supabaseRequest('/rest/v1/app_settings?key=eq.app_state&select=value_json,updated_at&limit=1', {}, true);
     const row = Array.isArray(payload) ? payload[0] : null;
@@ -809,6 +824,12 @@
         const session = await ensureSupabaseSession();
         if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
         return upsertSupabaseManagedUser(user);
+      },
+      async deleteManagedUser(userId) {
+        if (!isSupabaseConfigured()) throw new Error('Supabase non configuré.');
+        const session = await ensureSupabaseSession();
+        if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
+        return deleteSupabaseManagedUser(userId);
       },
     }
   };

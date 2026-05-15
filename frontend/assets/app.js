@@ -721,6 +721,25 @@ function getPdfAppearance() {
   };
 }
 
+function buildDocumentIssueLine(value = new Date(), includeTime = false) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Marseille, le';
+  const datePart = date.toLocaleDateString('fr-FR');
+  if (!includeTime) return `Marseille, le ${datePart}`;
+  const timePart = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return `Marseille, le ${datePart} à ${timePart}`;
+}
+
+function shiftIsoDateByYears(isoDate, years = 4) {
+  const raw = String(isoDate || '').trim();
+  if (!raw) return '';
+  const date = parseDateLocal(raw);
+  if (!date) return '';
+  const next = new Date(date);
+  next.setFullYear(next.getFullYear() + Number(years || 0));
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+}
+
 function normalizePlanStatus(value) {
   return String(value || '').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -733,26 +752,38 @@ function getPlanExpiryYearsForType(type) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function resolvePlanExpiryDate(item) {
+  if (!item) return '';
+  if (item.expiryDate) return item.expiryDate;
+  const years = getPlanExpiryYearsForType(item.type) || 4;
+  return shiftIsoDateByYears(item.approvalDate, years);
+}
+
+function syncPlanExpiryFromApproval(force = false) {
+  const approvalEl = document.getElementById('planApproval');
+  const expiryEl = document.getElementById('planExpiry');
+  if (!approvalEl || !expiryEl) return;
+  if (!approvalEl.value) {
+    if (force) expiryEl.value = '';
+    return;
+  }
+  if (force || !expiryEl.value) {
+    expiryEl.value = shiftIsoDateByYears(approvalEl.value, 4);
+  }
+}
+
 function applyPlanExpiryRules() {
   getActiveItems(state.planItems).forEach(item => {
     if (normalizePlanStatus(item.status) !== 'a jour') return;
-    const years = getPlanExpiryYearsForType(item.type);
-    if (!years || !item.approvalDate) return;
-    const approval = parseDateLocal(item.approvalDate);
-    if (!approval) return;
-    const limit = new Date(approval);
-    limit.setFullYear(limit.getFullYear() + years);
+    const limit = parseDateLocal(resolvePlanExpiryDate(item));
+    if (!limit) return;
     if (new Date() > limit) item.status = 'A programmer';
   });
 }
 
 function isPlanExpired(item) {
-  const years = getPlanExpiryYearsForType(item.type);
-  if (!years || !item.approvalDate) return false;
-  const approval = parseDateLocal(item.approvalDate);
-  if (!approval) return false;
-  const limit = new Date(approval);
-  limit.setFullYear(limit.getFullYear() + years);
+  const limit = parseDateLocal(resolvePlanExpiryDate(item));
+  if (!limit) return false;
   return new Date() > limit;
 }
 
@@ -967,6 +998,29 @@ function buildCompleteHtmlTemplateDocument(titleHtml, orientation, bodyHtml) {
     .sicod-page .cmd-autotext{margin:5mm 0;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
     .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
     .sicod-page .block{margin:0 0 5mm}
+    .sicod-page--docx{display:flex;flex-direction:column}
+    .sicod-page--docx .sicod-page-body{flex:1;display:flex;flex-direction:column}
+    .sicod-page--docx .sicod-docx-shell{display:flex;flex-direction:column;gap:4mm;min-height:100%}
+    .sicod-page--docx .sicod-letterhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
+    .sicod-page--docx .sicod-docx-brand{display:flex;align-items:flex-start;gap:4mm}
+    .sicod-page--docx .sicod-docx-brand img{width:20mm;max-height:16mm;object-fit:contain}
+    .sicod-page--docx .sicod-docx-brand-text{font-size:10.5px;line-height:1.2;font-weight:700;text-transform:uppercase;color:#161616}
+    .sicod-page--docx .sicod-document-date{margin-left:auto;text-align:right;font-size:11.5px;line-height:1.35}
+    .sicod-page--docx .sicod-document-title{margin:0;text-align:center;font-size:21px;line-height:1.2;font-weight:800;text-transform:uppercase;color:#161616}
+    .sicod-page--docx .sicod-document-subtitle{margin:-1mm 0 0;text-align:center;font-size:14px;line-height:1.35;font-weight:700;color:#161616}
+    .sicod-page--docx .sicod-document-intro{margin:0;font-size:12px;line-height:1.55;color:#161616}
+    .sicod-page--docx .sicod-document-footer{margin-top:auto;padding-top:3mm;border-top:1px solid #7f7f7f;font-size:9.5px;line-height:1.35;color:#4b5563}
+    .sicod-page--docx .sicod-document-footer div{text-align:left}
+    .sicod-page--docx .sicod-docx-signature{margin-top:3mm;display:flex;justify-content:flex-end}
+    .sicod-page--docx .table th,.sicod-page--docx .table td{border-color:#8d8d8d}
+    .sicod-page--docx .table th{background:#fff;color:#161616;font-weight:800}
+    .sicod-page--docx .block-title{background:#fff;color:#161616;border:1px solid #8d8d8d;padding:2.4mm 2.8mm;font-size:12px}
+    .sicod-page--docx .block-body{border:1px solid #8d8d8d;border-top:0}
+    .sicod-page--docx .sicod-reflex-title{margin:0;text-align:center;font-size:18px;font-weight:800;text-transform:uppercase}
+    .sicod-page--docx .sicod-reflex-subtitle{margin:0;text-align:center;font-size:15px;font-weight:700}
+    .sicod-page--docx .sicod-reflex-section h3{margin:0 0 2mm;font-size:13px;text-transform:uppercase}
+    .sicod-page--docx .sicod-reflex-section ul{margin:0;padding-left:1.1rem}
+    .sicod-page--docx .sicod-reflex-section li + li{margin-top:1.5mm}
     .sicod-export-page-break{break-before:page;page-break-before:always}
     .sicod-keep-together{break-inside:avoid;page-break-inside:avoid}
   </style>
@@ -979,38 +1033,60 @@ ${bodyHtml.trim()}
 
 const STABLE_HTML_TEMPLATE_DEFAULTS = {
   point_situation_detail: buildA4HtmlTemplate('portrait', '{{title}}', '{{subtitle}}', `
-      {{cartouche}}
-      <table class="ps-detail-table">
-        <tr><td style="width:24%"><div class="ps-section-title">Situation générale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Bilan</div></td><td><div class="ps-content">{{bilan}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Moyens engagés</div></td><td><div class="ps-content">{{means}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Mesures prises</div></td><td><div class="ps-content">{{measures}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Points d'attention</div></td><td><div class="ps-content">{{attention}}</div></td></tr>
-        <tr><td><div class="ps-section-title">Communication</div></td><td><div class="ps-content">{{communication}}</div></td></tr>
-        {{image_row}}
-        {{sources_row}}
-      </table>
-      {{signature}}
-  `, { className: 'sicod-page--ps-detail' }),
-  point_situation_focus: buildA4HtmlTemplate('landscape', '{{title}}', '{{subtitle}}', `
-      {{cartouche}}
-      <div class="focus-grid">
-        <div class="focus-col">
-          <div class="focus-box"><div class="focus-label">Bilan</div><div class="focus-body">{{bilan}}</div></div>
-          <div class="focus-box"><div class="focus-label">Moyens</div><div class="focus-body">{{means}}</div></div>
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
         </div>
-        <div class="focus-center">
-          <div class="focus-box"><div class="focus-label">Situation générale</div><div class="focus-body">{{situation}}</div></div>
-          <div class="focus-box"><div class="focus-label">Cartographie</div><div class="focus-map">{{image}}</div></div>
-          <div class="focus-box"><div class="focus-label">Mesures prises</div><div class="focus-body">{{measures}}</div></div>
-        </div>
-        <div class="focus-col focus-right">
-          <div class="focus-box"><div class="focus-label">Points d'attention</div><div class="focus-body">{{attention}}</div></div>
-          <div class="focus-box"><div class="focus-label">Communication</div><div class="focus-body">{{communication}}</div></div>
-        </div>
+        <h1 class="sicod-document-title">{{title}}</h1>
+        <p class="sicod-document-subtitle">{{subtitle}}</p>
+        {{cartouche}}
+        <table class="ps-detail-table">
+          <tr><td style="width:27%"><div class="ps-section-title">Situation générale</div></td><td><div class="ps-content">{{situation}}</div></td></tr>
+          <tr><td><div class="ps-section-title">Bilan</div></td><td><div class="ps-content">{{bilan}}</div></td></tr>
+          <tr><td><div class="ps-section-title">Moyens engagés</div></td><td><div class="ps-content">{{means}}</div></td></tr>
+          <tr><td><div class="ps-section-title">Mesures prises</div></td><td><div class="ps-content">{{measures}}</div></td></tr>
+          <tr><td><div class="ps-section-title">Points d'attention</div></td><td><div class="ps-content">{{attention}}</div></td></tr>
+          <tr><td><div class="ps-section-title">Communication</div></td><td><div class="ps-content">{{communication}}</div></td></tr>
+          {{image_row}}
+          {{sources_row}}
+        </table>
+        <div class="sicod-docx-signature">{{signature}}</div>
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
       </div>
-      {{signature}}
-  `, { className: 'sicod-page--ps-focus' }),
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-ps-detail' }),
+  point_situation_focus: buildA4HtmlTemplate('landscape', '{{title}}', '{{subtitle}}', `
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
+        </div>
+        <h1 class="sicod-document-title">{{title}}</h1>
+        <p class="sicod-document-subtitle">{{subtitle}}</p>
+        {{cartouche}}
+        <div class="focus-grid">
+          <div class="focus-col">
+            <div class="focus-box"><div class="focus-label">Bilan</div><div class="focus-body">{{bilan}}</div></div>
+            <div class="focus-box"><div class="focus-label">Moyens</div><div class="focus-body">{{means}}</div></div>
+          </div>
+          <div class="focus-center">
+            <div class="focus-box"><div class="focus-label">Situation générale</div><div class="focus-body">{{situation}}</div></div>
+            <div class="focus-box"><div class="focus-label">Cartographie</div><div class="focus-map">{{image}}</div></div>
+            <div class="focus-box"><div class="focus-label">Communication</div><div class="focus-body">{{communication}}</div></div>
+          </div>
+          <div class="focus-col focus-right">
+            <div class="focus-box"><div class="focus-label">Points d'attention</div><div class="focus-body">{{attention}}</div></div>
+            <div class="focus-box"><div class="focus-label">Mesures prises</div><div class="focus-body">{{measures}}</div></div>
+          </div>
+        </div>
+        <div class="sicod-docx-signature">{{signature}}</div>
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
+      </div>
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-ps-focus' }),
   command_message: buildA4HtmlTemplate('portrait', '{{typeLabel}}', '{{eventTitle}}', `
       <div class="exercise-banner" style="{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
       <div class="cmd-contact-block">
@@ -1034,12 +1110,25 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
       <div class="exercise-banner" style="margin-top:1rem;{{exerciseDisplay}}">EXERCICE - EXERCICE - EXERCICE</div>
   `, { className: 'sicod-page--command {{exerciseClass}}' }),
   main_courante: buildA4HtmlTemplate('portrait', '{{eventTitle}}', '{{eventMeta}}', `
-      <table class="table">
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
+          <div class="sicod-document-date">{{issueLine}}</div>
+        </div>
+        <h1 class="sicod-document-title">MAIN COURANTE</h1>
+        <p class="sicod-document-subtitle">{{eventTitle}}</p>
+        <p class="sicod-document-intro">{{eventMeta}}</p>
+        <table class="table">
         <thead><tr><th style="width:13rem">Date / heure</th><th style="width:10rem">Auteur</th><th>Entrée</th></tr></thead>
         <tbody>{{entriesRows}}</tbody>
-      </table>
-      {{signature}}
-  `, { className: 'sicod-page--main-log' }),
+        </table>
+        <div class="sicod-docx-signature">{{signature}}</div>
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
+      </div>
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-main-log' }),
   directory: buildA4HtmlTemplate('landscape', 'ANNUAIRE ORSEC DEPARTEMENTAL', '{{subtitle}}', `
       {{directory}}
   `, { className: 'sicod-page--directory' }),
@@ -1049,16 +1138,53 @@ const STABLE_HTML_TEMPLATE_DEFAULTS = {
   planning_statistics: buildA4HtmlTemplate('portrait', 'STATISTIQUES DE PLANIFICATION', '{{summary}}', `
       {{charts}}
   `, { className: 'sicod-page--statistics' }),
-  duty_schedule: buildA4HtmlTemplate('portrait', 'TABLEAU DES MISES SOUS ASTREINTES QUALIFIEES COD', '{{period}}', `
-      {{table}}
-      {{signature}}
-  `, { className: 'sicod-page--duty' }),
+  duty_schedule: buildA4HtmlTemplate('portrait', 'CALENDRIER DE MISES SOUS ASTREINTE QUALIFIÉES', '{{period}}', `
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
+          <div class="sicod-document-date">{{issueLine}}</div>
+        </div>
+        <h1 class="sicod-document-title">CALENDRIER DE MISES SOUS ASTREINTE QUALIFIÉES</h1>
+        <p class="sicod-document-subtitle">DE DÉFENSE ET DE SÉCURITÉ CIVILES</p>
+        <p class="sicod-document-intro">{{intro}}</p>
+        {{table}}
+        <div class="sicod-docx-signature">{{signature}}</div>
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
+      </div>
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-duty' }),
   duty_statistics: buildA4HtmlTemplate('portrait', "STATISTIQUES D'ASTREINTES", '{{summary}}', `
-      {{charts}}
-  `, { className: 'sicod-page--statistics' }),
-  reflex_sheet: buildA4HtmlTemplate('portrait', 'Fiches reflexes', '{{header}}', `
-      {{sections}}
-  `, { className: 'sicod-page--reflex' })
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
+          <div class="sicod-document-date">{{issueLine}}</div>
+        </div>
+        <h1 class="sicod-document-title">STATISTIQUES ASTREINTES</h1>
+        <p class="sicod-document-subtitle">Année {{documentYear}}</p>
+        {{charts}}
+        <div class="sicod-docx-signature">{{signature}}</div>
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
+      </div>
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-duty-stats' }),
+  reflex_sheet: buildA4HtmlTemplate('portrait', 'FICHE REFLEXE', '{{header}}', `
+      <div class="sicod-docx-shell">
+        <div class="sicod-letterhead">
+          <div class="sicod-docx-brand">
+            <img src="{{logo}}" alt="">
+            <div class="sicod-docx-brand-text">CABINET<br>SIRACEDPC</div>
+          </div>
+          <div class="sicod-document-date">{{issueLine}}</div>
+        </div>
+        <h1 class="sicod-reflex-title">FICHE REFLEXE</h1>
+        {{sections}}
+        <footer class="sicod-document-footer"><div>Place Félix Baret – CS 80001 – 13282 Marseille Cedex 06</div><div>Téléphone : 04 84 35 40 00</div><div>www.bouches-du-rhone.gouv.fr</div></footer>
+      </div>
+  `, { header: false, className: 'sicod-page--docx sicod-template--docx-reflex' })
 };
 
 const HTML_TEMPLATE_ORIENTATIONS = {
@@ -1073,10 +1199,19 @@ function getHtmlTemplateOrientation(key) {
 
 function ensureOperationalHtmlTemplates() {
   if (!window.SICODPdfTemplates?.setHtmlTemplate) return;
+  const docxMarkers = {
+    point_situation_detail: 'sicod-template--docx-ps-detail',
+    point_situation_focus: 'sicod-template--docx-ps-focus',
+    main_courante: 'sicod-template--docx-main-log',
+    duty_schedule: 'sicod-template--docx-duty',
+    duty_statistics: 'sicod-template--docx-duty-stats',
+    reflex_sheet: 'sicod-template--docx-reflex'
+  };
   Object.entries(STABLE_HTML_TEMPLATE_DEFAULTS).forEach(([key, html]) => {
     const existing = window.SICODPdfTemplates.getHtmlTemplate(state, key);
     const source = String(existing?.html || '');
-    if (!source || !source.includes('sicod-page') || !source.includes('font-size:22px') || !templateLooksLikeDocument(source) || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source)) {
+    const expectedMarker = docxMarkers[key];
+    if (!source || !source.includes('sicod-page') || !source.includes('font-size:22px') || !templateLooksLikeDocument(source) || /Bloc 1|Bloc 2|<header>\s*<h1>/.test(source) || (expectedMarker && !source.includes(expectedMarker))) {
       window.SICODPdfTemplates.setHtmlTemplate(state, key, html.trim());
     }
   });
@@ -1174,6 +1309,29 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
     .sicod-page .cmd-autotext{margin:5mm 0;font-size:12.5px;line-height:1.55;white-space:pre-wrap}
     .sicod-page .meta-line{width:100%;max-width:100%;margin:0 0 5mm;border:0}
     .sicod-page .block{margin:0 0 5mm}
+    .sicod-page--docx{display:flex;flex-direction:column}
+    .sicod-page--docx .sicod-page-body{flex:1;display:flex;flex-direction:column}
+    .sicod-page--docx .sicod-docx-shell{display:flex;flex-direction:column;gap:4mm;min-height:100%}
+    .sicod-page--docx .sicod-letterhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
+    .sicod-page--docx .sicod-docx-brand{display:flex;align-items:flex-start;gap:4mm}
+    .sicod-page--docx .sicod-docx-brand img{width:20mm;max-height:16mm;object-fit:contain}
+    .sicod-page--docx .sicod-docx-brand-text{font-size:10.5px;line-height:1.2;font-weight:700;text-transform:uppercase;color:#161616}
+    .sicod-page--docx .sicod-document-date{margin-left:auto;text-align:right;font-size:11.5px;line-height:1.35}
+    .sicod-page--docx .sicod-document-title{margin:0;text-align:center;font-size:21px;line-height:1.2;font-weight:800;text-transform:uppercase;color:#161616}
+    .sicod-page--docx .sicod-document-subtitle{margin:-1mm 0 0;text-align:center;font-size:14px;line-height:1.35;font-weight:700;color:#161616}
+    .sicod-page--docx .sicod-document-intro{margin:0;font-size:12px;line-height:1.55;color:#161616}
+    .sicod-page--docx .sicod-document-footer{margin-top:auto;padding-top:3mm;border-top:1px solid #7f7f7f;font-size:9.5px;line-height:1.35;color:#4b5563}
+    .sicod-page--docx .sicod-document-footer div{text-align:left}
+    .sicod-page--docx .sicod-docx-signature{margin-top:3mm;display:flex;justify-content:flex-end}
+    .sicod-page--docx .table th,.sicod-page--docx .table td{border-color:#8d8d8d}
+    .sicod-page--docx .table th{background:#fff;color:#161616;font-weight:800}
+    .sicod-page--docx .block-title{background:#fff;color:#161616;border:1px solid #8d8d8d;padding:2.4mm 2.8mm;font-size:12px}
+    .sicod-page--docx .block-body{border:1px solid #8d8d8d;border-top:0}
+    .sicod-page--docx .sicod-reflex-title{margin:0;text-align:center;font-size:18px;font-weight:800;text-transform:uppercase}
+    .sicod-page--docx .sicod-reflex-subtitle{margin:0;text-align:center;font-size:15px;font-weight:700}
+    .sicod-page--docx .sicod-reflex-section h3{margin:0 0 2mm;font-size:13px;text-transform:uppercase}
+    .sicod-page--docx .sicod-reflex-section ul{margin:0;padding-left:1.1rem}
+    .sicod-page--docx .sicod-reflex-section li + li{margin-top:1.5mm}
     .sicod-export-page-break{break-before:page;page-break-before:always}
     .sicod-keep-together{break-inside:avoid;page-break-inside:avoid}
     .template-export-stage .document-page>.ps-sheet,
@@ -1578,6 +1736,7 @@ function buildEventLogHtmlTokens(eventId) {
     : '';
   return {
     logo: currentLogoSrc(),
+    issueLine: esc(buildDocumentIssueLine(new Date(), true)),
     eventTitle: esc(e?.title || ''),
     eventMeta: esc([e?.type || '—', e?.location || '—', e?.level || '—'].join(' · ')),
     entriesRows: items.length
@@ -1600,12 +1759,15 @@ function buildReflexSheetHtmlTokens() {
   const fiches = getReflexFiches();
   return {
     logo: currentLogoSrc(),
+    issueLine: esc(buildDocumentIssueLine()),
     header: `${fiches.length} fiche(s) active(s)`,
     sections: fiches.length
       ? fiches.map((fiche, index) => `<section class="block sicod-keep-together ${index > 0 ? 'sicod-export-page-break' : ''}">
-          <div class="block-title">${esc(fiche.code || '')} - ${esc(fiche.title || '')}</div>
-          <div class="block-body"><p><strong>Famille :</strong> ${esc(fiche.family || 'Autres')}</p>${
-            (fiche.sections || []).map(sec => `<h3>${esc(sec.heading || 'Contenu')}</h3><ul>${(sec.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul>`).join('')
+          <div class="block-body" style="padding:4mm">
+            <p class="sicod-reflex-subtitle">${esc(fiche.title || fiche.code || '')}</p>
+            <p style="margin:0 0 3mm"><strong>Code :</strong> ${esc(fiche.code || '')}<br><strong>Famille :</strong> ${esc(fiche.family || 'Autres')}</p>
+            ${
+            (fiche.sections || []).map(sec => `<section class="sicod-reflex-section" style="margin-top:4mm"><h3>${esc(sec.heading || 'Contenu')}</h3><ul>${(sec.items || []).map(item => `<li>${esc(item)}</li>`).join('')}</ul></section>`).join('')
           }</div>
         </section>`).join('')
       : '<p class="help">Aucune fiche réflexe active.</p>'
@@ -1648,7 +1810,7 @@ function buildPlanningFollowUpHtmlTokens() {
   const summary = [`${items.length} item(s)`, ...Object.entries(counts).map(([label, value]) => `${label} : ${value}`)].join(' - ');
   const rows = items.map(p => `<tr>
     <td>${esc(p.type || '')}</td><td>${esc(p.risk || '')}</td><td>${esc(p.item || '')}</td><td>${esc(p.priority || '')}</td>
-    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(p.approvalDate || '')}</td><td>${esc(p.observation || '')}</td>
+    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(p.approvalDate || '')}${resolvePlanExpiryDate(p) ? ` (exp. ${esc(resolvePlanExpiryDate(p))})` : ''}</td><td>${esc(p.observation || '')}</td>
   </tr>`).join('');
   return {
     logo: currentLogoSrc(),
@@ -1695,8 +1857,10 @@ function buildDutyScheduleHtmlTokens() {
   }
   return {
     logo: currentLogoSrc(),
+    issueLine: esc(buildDocumentIssueLine()),
     period,
-    table: `<p>${esc(`Les astreintes qualifiées défense et sécurité civiles, pour la ${period.toLowerCase()}, doivent être prises en compte comme suit :`)}</p><table class="table"><thead><tr><th>Période</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${tableRows || '<tr><td colspan="3">Aucun planning généré.</td></tr>'}</tbody></table>`,
+    intro: esc(`Les astreintes qualifiées de défense et de sécurité civiles, pour la période comprise entre le ${startPeriod ? formatDateLocal(startPeriod) : '...'} et le ${endPeriod ? formatDateLocal(endPeriod) : '...'}, doivent être prises en compte comme suit :`),
+    table: `<table class="table"><thead><tr><th>Période</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${tableRows || '<tr><td colspan="3">Aucun planning généré.</td></tr>'}</tbody></table>`,
     signature
   };
 }
@@ -1704,13 +1868,23 @@ function buildDutyScheduleHtmlTokens() {
 function buildDutyStatisticsHtmlTokens() {
   const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
   const s = getDutyStatsData(year);
+  let signature = '';
+  if (shouldApplyPdfSignature('duty')) {
+    const signLast = state.settings.dutySignerLastName || 'HAUPTMANN';
+    const signFirst = state.settings.dutySignerFirstName || 'Nicolas';
+    const signFunction = state.settings.dutySignerFunction || 'le directeur de cabinet';
+    signature = `<div class="ps-signature"><div class="ps-signature-box"><div class="sig-line1">Pour le préfet, par délégation</div><div class="sig-line2">${esc(signFunction)}</div><div class="sig-line2">${esc(`${signFirst} ${signLast}`.trim() || 'SIRACEDPC')}</div></div></div>`;
+  }
   return {
     logo: currentLogoSrc(),
+    issueLine: esc(buildDocumentIssueLine()),
+    documentYear: esc(String(s.year)),
     summary: `Année ${s.year}`,
     charts: buildStatHtmlTables([
       [`${s.role1} - répartition annuelle`, s.a1],
       [`${s.role2} - répartition annuelle`, s.a2]
-    ])
+    ]),
+    signature
   };
 }
 
@@ -3296,7 +3470,7 @@ function renderDirectory() {
     });
     return `<div class="card directory-group">
       <div class="card-header"><h2 class="card-title">${esc(group)}</h2></div>
-      <div class="card-body"><table class="table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphone 1','entity','asc')}<th>Téléphone 2</th>${sortableTh('directory','email1','e-mail 1','entity','asc')}<th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
+      <div class="card-body"><table class="table directory-table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphone 1','entity','asc')}<th>Téléphone 2</th>${sortableTh('directory','email1','e-mail 1','entity','asc')}<th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
         sortedItems.map(c => `<tr>
           <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td><td>${esc(c.phone1||'')}</td><td>${esc(c.phone2||'')}</td>
           <td>${esc(c.email1||'')}</td><td>${esc(c.email2||'')}</td>
@@ -3481,8 +3655,10 @@ function openPlanForm(id) {
   setSelectOptions(document.getElementById('planStatus'), getDynamicList('planStatuses'), p?.status);
   document.getElementById('planItem').value = p?.item || '';
   document.getElementById('planApproval').value = p?.approvalDate || '';
+  document.getElementById('planExpiry').value = p?.expiryDate || resolvePlanExpiryDate(p) || '';
   document.getElementById('planObservation').value = p?.observation || '';
   document.getElementById('planUrl').value = p?.url || '';
+  if (!p) syncPlanExpiryFromApproval(true);
   document.getElementById('planningDialog').showModal();
 }
 
@@ -3509,6 +3685,7 @@ function savePlanItem() {
     statusId: statusSnapshot.id,
     statusLabelSnapshot: statusSnapshot.label,
     approvalDate: document.getElementById('planApproval').value,
+    expiryDate: document.getElementById('planExpiry').value || shiftIsoDateByYears(document.getElementById('planApproval').value, 4),
     observation: document.getElementById('planObservation').value.trim(),
     url: document.getElementById('planUrl').value.trim()
   };
@@ -3547,14 +3724,14 @@ function renderPlanning() {
     observation: (p) => p.observation || ''
   });
   planningList.innerHTML = ordered.length
-    ? `<table class="table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}<th>Actions</th></tr></thead><tbody>${
-        ordered.map(p => `<tr>
+    ? `<table class="table planning-table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}<th>Actions</th></tr></thead><tbody>${
+      ordered.map(p => `<tr>
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
           <td>${esc(p.item || '')}</td>
           <td>${esc(p.priority || '')}</td>
           <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
-          <td>${esc(p.approvalDate || '')}</td>
+          <td><div class="event-title-block"><span class="event-label">${esc(p.approvalDate || '')}</span><span class="table-meta">Expiration : ${esc(resolvePlanExpiryDate(p) || '—')}</span></div></td>
           <td>${esc(p.observation || '')}</td>
           <td><div class="list-actions plan-actions-single">
             ${actionIconButton('edit', 'Modifier', `openPlanForm('${p.id}')`)}
@@ -3782,7 +3959,7 @@ function renderDutyAvailabilityList() {
     note: (a) => a.note || ''
   });
   el.innerHTML = ordered.length
-    ? `<table class="table"><thead><tr>${sortableTh('dutyAvailability','agent','Agent','start','asc')}${sortableTh('dutyAvailability','role','Rôle','start','asc')}<th>Période</th>${sortableTh('dutyAvailability','note','Observation','start','asc')}<th>Actions</th></tr></thead><tbody>${
+    ? `<table class="table duty-availability-table"><thead><tr>${sortableTh('dutyAvailability','agent','Agent','start','asc')}${sortableTh('dutyAvailability','role','Rôle','start','asc')}<th>Période</th>${sortableTh('dutyAvailability','note','Observation','start','asc')}<th>Actions</th></tr></thead><tbody>${
         ordered.map(a => `<tr>
           <td>${esc(a.agent)}</td><td>${esc(a.role)}</td>
           <td>${esc(a.start)} → ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
@@ -3991,6 +4168,7 @@ function showDutySection(which) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function showSettingsTab(tab) {
+  if (tab === 'ps' || tab === 'command') tab = 'events';
   const restricted = tab !== 'general';
   if (restricted && !isCurrentUserAdmin()) {
     tab = 'general';
@@ -4033,7 +4211,7 @@ function ensureDatabaseSettingsPanel() {
     button.className = 'settings-tab';
     button.type = 'button';
     button.dataset.settingsTab = 'db';
-    button.textContent = 'BDD';
+    button.textContent = 'Base de données';
     button.onclick = () => showSettingsTab('db');
     const generalTab = tabs.querySelector('[data-settings-tab="general"]');
     if (generalTab?.nextSibling) tabs.insertBefore(button, generalTab.nextSibling);
@@ -4043,7 +4221,7 @@ function ensureDatabaseSettingsPanel() {
     const panel = document.createElement('div');
     panel.className = 'settings-panel';
     panel.dataset.settingsPanel = 'db';
-    panel.innerHTML = `<div class="settings-grid" id="databaseSettingsGrid"></div>`;
+    panel.innerHTML = `<div class="settings-grid database-settings-grid" id="databaseSettingsGrid"></div>`;
     const generalPanel = pageInner.querySelector('[data-settings-panel="general"]');
     if (generalPanel?.nextSibling) pageInner.insertBefore(panel, generalPanel.nextSibling);
     else pageInner.appendChild(panel);
@@ -4166,7 +4344,7 @@ function ensureSettingsFooterActions() {
 function refreshStorageStatus() {
   const label = document.getElementById('storageStatusLabel');
   if (!label) return;
-  label.textContent = 'Base de donnée';
+  label.textContent = 'Base de données';
 }
 
 function ensureTopbarAuthAction() {
@@ -4539,7 +4717,7 @@ async function checkSupabaseState() {
     const authState = window.SICODApi.system.getAuthState?.() || {};
     updateCloudStateStatus(`
       <strong>Supabase joignable.</strong><br>
-      Support : Base de donnée<br>
+      Support : Base de données<br>
       Utilisateur : ${esc(authState.email || 'non identifie')}<br>
       Modèles PDF : ${remoteTemplates.length}<br>
       Événements : ${counts.events} · PS : ${counts.ps} · Messages : ${counts.commandMessages} · Contacts : ${counts.contacts}
@@ -4644,7 +4822,7 @@ function ensureSystemSettingsUI() {
   const remoteConfig = window.SICODApi?.system?.getRemoteConfig?.() || {};
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
   card.innerHTML = `
-    <div class="card-header"><h2 class="card-title">Base de donnée</h2></div>
+    <div class="card-header"><h2 class="card-title">Base de données</h2></div>
     <div class="card-body">
       <div class="grid-2">
         <div><label>Fournisseur</label><input value="Supabase" readonly></div>
@@ -4685,9 +4863,6 @@ function ensureGeneralPasswordSettingsUI() {
         <label>Rôle applicatif</label>
         <input id="currentUserRoleField" value="${esc(authState.role || 'lecture')}" readonly>
       </div>
-      <div class="list-actions" style="margin-top:1rem">
-        <button class="fr-btn secondary" type="button" onclick="refreshCurrentUserRights()">Actualiser les droits</button>
-      </div>
       <div class="grid-2" style="margin-top:1rem">
         <div><label for="settingNewPassword">Nouveau mot de passe</label><input id="settingNewPassword" type="password" autocomplete="new-password"></div>
         <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
@@ -4696,6 +4871,27 @@ function ensureGeneralPasswordSettingsUI() {
     </div>
   `;
   generalGrid.appendChild(card);
+}
+
+function ensureMergedEventSettingsUI() {
+  const eventsTab = document.querySelector('.settings-tab[data-settings-tab="events"]');
+  const psTab = document.querySelector('.settings-tab[data-settings-tab="ps"]');
+  const commandTab = document.querySelector('.settings-tab[data-settings-tab="command"]');
+  const eventsPanel = document.querySelector('[data-settings-panel="events"]');
+  const psPanel = document.querySelector('[data-settings-panel="ps"]');
+  const commandPanel = document.querySelector('[data-settings-panel="command"]');
+  if (!eventsPanel || eventsPanel.dataset.mergedEventSettings === '1') return;
+  if (eventsTab) eventsTab.textContent = 'Évènements';
+  const movedCards = [];
+  [psPanel, commandPanel].forEach((panel) => {
+    Array.from(panel?.children || []).forEach((child) => movedCards.push(child));
+  });
+  movedCards.forEach((card) => eventsPanel.appendChild(card));
+  psTab?.remove();
+  commandTab?.remove();
+  psPanel?.remove();
+  commandPanel?.remove();
+  eventsPanel.dataset.mergedEventSettings = '1';
 }
 
 function formatUserAdminRoleLabel(role) {
@@ -4719,25 +4915,16 @@ function ensureUserAdminSettingsUI() {
     <div class="card-header">
       <h2 class="card-title">Administration des utilisateurs</h2>
       <div class="list-actions">
+        <button class="fr-btn" type="button" onclick="openManagedUserDialog()">Ajouter un utilisateur</button>
         <button class="fr-btn secondary small" type="button" onclick="loadUserAdminDirectory(true)">Actualiser</button>
       </div>
     </div>
     <div class="card-body">
-      <div class="grid-3" style="margin:1rem 0">
-        <input id="managedUserId" type="hidden">
-        <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
-        <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
-        <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
-        <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
-        <div class="list-actions user-admin-form-actions" style="align-self:end">
-          <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
-          <button class="fr-btn secondary" type="button" onclick="resetManagedUserForm()">Réinitialiser</button>
-        </div>
-      </div>
       <div id="userAdminStatus" class="help">Chargement en attente.</div>
       <div id="userAdminList"></div>
     </div>
   `;
+  ensureManagedUserDialog();
 }
 
 function updateUserAdminStatus(message, tone = 'info') {
@@ -4778,9 +4965,6 @@ function renderUserAdminDirectory() {
               ? 'admin'
               : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture');
             const locked = item.userId === currentUserId;
-            const options = ['admin', 'redacteur', 'lecture']
-              .map((value) => `<option value="${value}" ${role === value ? 'selected' : ''}>${formatUserAdminRoleLabel(value)}</option>`)
-              .join('');
             return `<tr>
               <td>
                 <div class="event-title-block">
@@ -4788,16 +4972,12 @@ function renderUserAdminDirectory() {
                   <span class="table-meta">${esc(item.email || '')}${locked ? ' · compte courant' : ''}</span>
                 </div>
               </td>
-              <td>
-                <select id="userRole-${esc(item.userId)}" ${locked ? 'disabled' : ''}>
-                  ${options}
-                </select>
-              </td>
+              <td>${formatUserAdminRoleLabel(role)}</td>
               <td>${esc(item.lastSeenAt ? formatDateTimeValueFR(item.lastSeenAt) : 'Jamais')}</td>
               <td>
                 <div class="list-actions">
-                  ${actionIconButton('edit', 'Modifier le compte', `editManagedUserAccount('${esc(item.userId)}')`)}
-                  ${actionIconButton('save', 'Enregistrer le rôle', `saveManagedUserRole('${esc(item.userId)}')`, { disabled: locked })}
+                  ${actionIconButton('edit', 'Modifier le compte', `openManagedUserDialog('${esc(item.userId)}')`)}
+                  ${actionIconButton('delete', 'Supprimer le compte', `deleteManagedUserAccount('${esc(item.userId)}')`, { variant: 'danger', disabled: locked })}
                 </div>
               </td>
             </tr>`;
@@ -4831,29 +5011,6 @@ async function loadUserAdminDirectory(force = false) {
   }
 }
 
-async function saveManagedUserRole(userId) {
-  const targetUserId = String(userId || '').trim();
-  if (!targetUserId) return;
-  const select = document.getElementById(`userRole-${targetUserId}`);
-  const nextRole = select?.value || '';
-  if (!nextRole) {
-    showToast('Sélectionnez un rôle valide.', 'error');
-    return;
-  }
-  updateUserAdminStatus('Enregistrement du rôle utilisateur...', 'info');
-  try {
-    await window.SICODApi?.system?.saveManagedUserRoles?.(targetUserId, [nextRole]);
-    const target = userAdminState.items.find((item) => item.userId === targetUserId);
-    if (target) target.roles = [nextRole];
-    renderUserAdminDirectory();
-    updateUserAdminStatus('Rôle utilisateur enregistré.', 'success');
-    showToast('Rôle utilisateur enregistré.');
-  } catch (error) {
-    updateUserAdminStatus(`Enregistrement impossible : ${error.message || String(error)}`, 'warning');
-    showToast(`Rôle non modifié : ${error.message || String(error)}`, 'error');
-  }
-}
-
 function resetManagedUserForm() {
   ['managedUserId', 'managedUserEmail', 'managedUserName', 'managedUserPassword'].forEach((id) => {
     const el = document.getElementById(id);
@@ -4861,22 +5018,82 @@ function resetManagedUserForm() {
   });
   const role = document.getElementById('managedUserRole');
   if (role) role.value = 'lecture';
+  const title = document.getElementById('managedUserDialogTitle');
+  if (title) title.textContent = 'Compte utilisateur';
 }
 
-function editManagedUserAccount(userId) {
-  const item = userAdminState.items.find((entry) => entry.userId === userId);
-  if (!item) return;
-  const role = item.roles?.includes('admin') ? 'admin' : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture');
-  const idEl = document.getElementById('managedUserId');
-  const emailEl = document.getElementById('managedUserEmail');
-  const nameEl = document.getElementById('managedUserName');
-  const roleEl = document.getElementById('managedUserRole');
-  const passwordEl = document.getElementById('managedUserPassword');
-  if (idEl) idEl.value = item.userId || '';
-  if (emailEl) emailEl.value = item.email || '';
-  if (nameEl) nameEl.value = item.displayName || '';
-  if (roleEl) roleEl.value = role;
-  if (passwordEl) passwordEl.value = '';
+function ensureManagedUserDialog() {
+  if (document.getElementById('managedUserDialog')) return;
+  const dialog = document.createElement('dialog');
+  dialog.id = 'managedUserDialog';
+  dialog.innerHTML = `
+    <form method="dialog" class="card" style="width:min(38rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem);margin:0">
+      <div class="card-header">
+        <h2 class="card-title" id="managedUserDialogTitle">Compte utilisateur</h2>
+      </div>
+      <div class="card-body" style="overflow-x:hidden;overflow-y:auto;max-height:calc(100vh - 8rem)">
+        <input id="managedUserId" type="hidden">
+        <div class="grid-2">
+          <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
+          <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
+          <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
+          <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
+        </div>
+        <div class="tool-actions">
+          <button class="fr-btn secondary" type="button" onclick="closeManagedUserDialog()">Annuler</button>
+          <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(dialog);
+}
+
+function closeManagedUserDialog() {
+  document.getElementById('managedUserDialog')?.close();
+}
+
+function openManagedUserDialog(userId = '') {
+  ensureManagedUserDialog();
+  resetManagedUserForm();
+  const title = document.getElementById('managedUserDialogTitle');
+  const item = userId ? userAdminState.items.find((entry) => entry.userId === userId) : null;
+  if (item) {
+    const role = item.roles?.includes('admin') ? 'admin' : (item.roles?.includes('redacteur') ? 'redacteur' : 'lecture');
+    document.getElementById('managedUserId').value = item.userId || '';
+    document.getElementById('managedUserEmail').value = item.email || '';
+    document.getElementById('managedUserName').value = item.displayName || '';
+    document.getElementById('managedUserRole').value = role;
+    document.getElementById('managedUserPassword').value = '';
+    if (title) title.textContent = 'Compte utilisateur';
+  } else if (title) {
+    title.textContent = 'Compte utilisateur';
+  }
+  document.getElementById('managedUserDialog')?.showModal();
+}
+
+async function deleteManagedUserAccount(userId) {
+  const targetUserId = String(userId || '').trim();
+  if (!targetUserId) return;
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  if (authState.userId === targetUserId) {
+    showToast('Le compte connecté ne peut pas être supprimé ici.', 'error');
+    return;
+  }
+  const item = userAdminState.items.find((entry) => entry.userId === targetUserId);
+  const label = item?.displayName || item?.email || 'cet utilisateur';
+  if (!await confirmAsync(`Supprimer ${label} de l'administration applicative ?`)) return;
+  updateUserAdminStatus('Suppression du compte utilisateur...', 'info');
+  try {
+    await window.SICODApi?.system?.deleteManagedUser?.(targetUserId);
+    userAdminState.items = userAdminState.items.filter((entry) => entry.userId !== targetUserId);
+    renderUserAdminDirectory();
+    updateUserAdminStatus('Compte utilisateur supprimé.', 'success');
+    showToast('Compte utilisateur supprimé.');
+  } catch (error) {
+    updateUserAdminStatus(`Suppression impossible : ${error.message || String(error)}`, 'warning');
+    showToast(`Compte non supprimé : ${error.message || String(error)}`, 'error');
+  }
 }
 
 async function saveManagedUserAccount() {
@@ -4916,6 +5133,7 @@ async function saveManagedUserAccount() {
     else userAdminState.items.push(next);
     userAdminState.items.sort((a, b) => String(a.email || '').localeCompare(String(b.email || ''), 'fr'));
     resetManagedUserForm();
+    closeManagedUserDialog();
     renderUserAdminDirectory();
     updateUserAdminStatus('Compte utilisateur enregistré.', 'success');
     showToast('Compte utilisateur enregistré.');
@@ -4938,6 +5156,7 @@ function ensureSettingsEnhancements() {
   ensureSystemSettingsUI();
   ensureGeneralPasswordSettingsUI();
   ensureUserAdminSettingsUI();
+  ensureMergedEventSettingsUI();
   ensureEventSignatureSettingsUI();
   ensureExportSettingsCleanupUI();
   ensureSettingsCleanupUI();
@@ -5169,6 +5388,51 @@ function renderAll() {
   refreshAuthGate();
 }
 
+let appHiddenAt = 0;
+let appResumePromise = null;
+let lastAppResumeAt = 0;
+
+async function resumeApplicationAfterInactivity(force = false) {
+  const now = Date.now();
+  if (!force && now - lastAppResumeAt < 15000) return null;
+  if (appResumePromise) return appResumePromise;
+  lastAppResumeAt = now;
+  appResumePromise = (async () => {
+    try {
+      await withTimeout(
+        Promise.resolve(window.SICODApi?.auth?.restoreSession?.()),
+        10000,
+        "La reprise de session a expiré."
+      );
+      const authState = window.SICODApi?.system?.getAuthState?.() || {};
+      if (authState.authenticated) {
+        try {
+          const remoteState = await withTimeout(
+            Promise.resolve(window.SICODApi?.system?.hydrateState?.()),
+            12000,
+            "Le rechargement distant a expiré."
+          );
+          if (remoteState && typeof remoteState === 'object') {
+            applyRemoteStateSnapshot(remoteState);
+          }
+          await withTimeout(Promise.resolve(hydrateReferenceCatalogFromSupabase()), 12000, "Le rechargement du référentiel a expiré.");
+        } catch (error) {
+          console.warn('[Resume] Reprise distante incomplète :', error.message || error);
+        }
+      }
+      refreshStorageStatus();
+      renderAll();
+    } catch (error) {
+      console.warn('[Resume] Reprise de session indisponible :', error.message || error);
+      refreshAuthGate();
+      refreshStorageStatus();
+    } finally {
+      appResumePromise = null;
+    }
+  })();
+  return appResumePromise;
+}
+
 // Initialisation
 applyTheme(state.settings.theme);
 
@@ -5213,6 +5477,24 @@ setInterval(() => {
   const el = document.getElementById('kpiTime');
   if (el) el.textContent = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }, 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    appHiddenAt = Date.now();
+    return;
+  }
+  if (!appHiddenAt || Date.now() - appHiddenAt > 60000) {
+    resumeApplicationAfterInactivity();
+  }
+});
+window.addEventListener('focus', () => {
+  if (!appHiddenAt || Date.now() - appHiddenAt > 60000) {
+    resumeApplicationAfterInactivity();
+  }
+});
+window.addEventListener('pageshow', () => {
+  resumeApplicationAfterInactivity(true);
+});
 
 
 function editSelectedPS(){
