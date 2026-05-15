@@ -404,15 +404,15 @@ input:focus,select:focus,textarea:focus{
   align-items:center;
 }
 .icon-action{
-  width:2.125rem;
-  min-width:2.125rem;
-  height:2.125rem;
-  min-height:2.125rem;
+  width:2rem;
+  min-width:2rem;
+  height:2rem;
+  min-height:2rem;
   padding:.25rem;
   border-radius:var(--radius-sm);
-  flex:0 0 2.125rem;
+  flex:0 0 2rem;
 }
-.icon-action img{width:1.18rem;height:1.18rem}
+.icon-action img{width:1.28rem;height:1.28rem}
 .fr-btn.secondary.icon-action img{filter:none}
 .sortable-th{
   cursor:pointer;
@@ -440,10 +440,10 @@ input:focus,select:focus,textarea:focus{
 .table td .fr-btn.icon-action,
 .table td a.icon-action,
 .table td button.icon-action{
-  width:2.125rem;
-  min-width:2.125rem;
-  max-width:2.125rem;
-  flex:0 0 2.125rem;
+  width:2rem;
+  min-width:2rem;
+  max-width:2rem;
+  flex:0 0 2rem;
 }
 
 .fiche-layout{display:grid;grid-template-columns:20rem minmax(0,1fr);gap:1rem;min-height:0}
@@ -500,6 +500,8 @@ input:focus,select:focus,textarea:focus{
 
 .settings-tabs{display:none}
 .page-subtabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.page-header-stack{display:grid;gap:.35rem;min-width:0}
+.page-subtabs-inline{margin:0}
 .settings-selector-row{
   display:grid;
   gap:.35rem;
@@ -643,6 +645,8 @@ input[type='color']{
   border:1px solid var(--border);
 }
 .calendar-cell{min-height:7rem;padding:.5rem;background:#fff}
+.calendar-cell.is-clickable{cursor:pointer}
+.calendar-cell.is-clickable:hover{outline:1px solid var(--blue-france);outline-offset:-1px}
 .calendar-daynum{font-weight:700;margin-bottom:.35rem;color:var(--blue-france)}
 .calendar-tags{display:flex;flex-direction:column;gap:.35rem}
 .calendar-tag{display:block;padding:.25rem .35rem;background:var(--blue-soft);font-size:.75rem;color:var(--blue-france)}
@@ -710,8 +714,6 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .event-card + .event-card{margin-top:.75rem}
 .event-card-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}
 .event-card-main{min-width:0}
-.event-card-stats{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0;color:var(--text-light);font-size:.8125rem}
-.event-card-stats span{padding:.15rem .45rem;border:1px solid var(--border);background:var(--bg-alt);border-radius:.35rem}
 .event-context-card{margin-bottom:1rem}
 .event-context-heading{display:grid;gap:.35rem}
 .event-context-card .card-body{display:grid;gap:1rem}
@@ -739,18 +741,18 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .directory-group{margin-bottom:1rem}
 .directory-group .card-body{overflow-x:auto}
 .directory-group .table{min-width:100%}
-.directory-group .table th:nth-child(1){width:12%}
-.directory-group .table th:nth-child(2){width:11%}
-.directory-group .table th:nth-child(3){width:13%}
+.directory-group .table th:nth-child(1){width:14%}
+.directory-group .table th:nth-child(2){width:13%}
+.directory-group .table th:nth-child(3){width:15%}
 .directory-group .table th:nth-child(4),
-.directory-group .table th:nth-child(5){width:10%}
+.directory-group .table th:nth-child(5){width:11%}
 .directory-group .table th:nth-child(6),
-.directory-group .table th:nth-child(7){width:13%}
-.directory-group .table th:nth-child(8){width:7%}
+.directory-group .table th:nth-child(7){width:14%}
+.directory-group .table th:nth-child(8){width:1%}
 .directory-group .table td:last-child{padding:.35rem .45rem}
 .directory-group .table td:last-child .list-actions{gap:.25rem}
 #directorySearch{border-radius:.75rem}
-#page-directory .page-inner{max-width:92rem}
+#page-directory .page-inner{max-width:96rem}
 .compact-list{margin:0;padding-left:1rem}
 .database-settings-grid{grid-template-columns:minmax(0,1fr)!important}
 .user-admin-grid-full{grid-template-columns:minmax(0,1fr)!important}
@@ -761,11 +763,18 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 #userAdminCard .list-actions{justify-content:flex-end}
 #userAdminCard .user-admin-form-actions{justify-content:center;grid-column:1 / -1;align-self:center}
 #userAdminCard .table-wrap{overflow-x:auto}
-#userAdminCard .user-admin-table{min-width:52rem}
-.user-admin-table th:nth-child(1){width:36%}
+#userAdminCard .user-admin-table{min-width:50rem}
+.user-admin-table th:nth-child(1){width:42%}
 .user-admin-table th:nth-child(2){width:18%}
 .user-admin-table th:nth-child(3){width:24%}
-.user-admin-table th:nth-child(4){width:8%}
+.user-admin-table th:nth-child(4){width:1%}
+.planning-table th:nth-child(1){width:11%}
+.planning-table th:nth-child(2){width:10%}
+.planning-table th:nth-child(3){width:25%}
+.planning-table th:nth-child(4){width:8%}
+.planning-table th:nth-child(5){width:9%}
+.planning-table th:nth-child(6){width:12%}
+.planning-table th:nth-child(7){width:23%}
 .directory-table th:last-child,
 .planning-table th:last-child,
 .planning-table td:last-child,
@@ -782,6 +791,9 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .user-admin-table td:last-child .list-actions,
 .directory-table td:last-child .list-actions{justify-content:flex-end}
 .plan-actions-single{gap:.3rem}
+#managedUserDialog{max-width:calc(100vw - 2rem);width:min(32rem,calc(100vw - 2rem))}
+#managedUserDialog form.card{width:100%}
+#managedUserDialog .grid-2{grid-template-columns:1fr}
 
 html[data-theme='dark'] .app-topbar,
 html[data-theme='dark'] .card,

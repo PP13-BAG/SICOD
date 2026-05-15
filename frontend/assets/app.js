@@ -128,7 +128,7 @@ function buildDefaultState() {
     commandMessages: [],
     selectedCommandId: null,
     currentEventId: null,
-    currentEventWorkspaceTab: 'overview',
+    currentEventWorkspaceTab: 'timeline',
     selectedPSId: null,
     selectedFiche: (reflexLibrary.fiches[0] || {}).code || null,
     reflexFiches: JSON.parse(JSON.stringify(reflexLibrary.fiches || [])),
@@ -966,13 +966,15 @@ function resolvePlanExpiryDate(item) {
 function syncPlanExpiryFromApproval(force = false) {
   const approvalEl = document.getElementById('planApproval');
   const expiryEl = document.getElementById('planExpiry');
+  const typeEl = document.getElementById('planType');
   if (!approvalEl || !expiryEl) return;
   if (!approvalEl.value) {
     if (force) expiryEl.value = '';
     return;
   }
   if (force || !expiryEl.value) {
-    expiryEl.value = shiftIsoDateByYears(approvalEl.value, 4);
+    const years = getPlanExpiryYearsForType(typeEl?.value || '') || 4;
+    expiryEl.value = shiftIsoDateByYears(approvalEl.value, years);
   }
 }
 
@@ -1006,14 +1008,7 @@ function getEventSignatureConfig() {
   };
 }
 function shouldApplyPdfSignature(context) {
-  const idMap = {
-    ps: ['eventPsApplySignature', 'psApplySignature'],
-    command: ['eventCmdApplySignature', 'cmdApplySignature'],
-    event: ['eventApplySignature'],
-    duty: ['dutyApplySignature']
-  };
-  const ids = idMap[context || ''] || [];
-  return ids.some((id) => document.getElementById(id)?.checked);
+  return false;
 }
 function getEligiblePdfSignatureConfig(context) {
   if (!shouldApplyPdfSignature(context)) return { mode:'prefet', name:'', role:'' };
@@ -2184,9 +2179,6 @@ function ensureEventWorkspaceUI() {
   const timelineCard = document.getElementById('eventTimelineCard');
   if (!activeCard || !timelineCard) return;
   activeCard.classList.add('event-selector-card');
-  const contextCard = document.createElement('div');
-  contextCard.className = 'card event-context-card';
-  contextCard.id = 'eventWorkspaceContext';
   const workspace = document.createElement('div');
   workspace.className = 'card';
   workspace.id = 'eventWorkspaceCard';
@@ -2194,31 +2186,24 @@ function ensureEventWorkspaceUI() {
     <div class="card-header">
       <h2 class="card-title">Conduite de l'événement</h2>
       <div class="page-subtabs" id="eventWorkspaceTabs">
-        <button class="page-subtab active" data-workspace-tab="overview" type="button" onclick="showEventWorkspaceTab('overview')">Vue d'ensemble</button>
-        <button class="page-subtab" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
+        <button class="page-subtab active" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
         <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
         <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
       </div>
     </div>
     <div class="card-body event-workspace">
-      <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
-      <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
+      <div id="eventWorkspaceTimeline" class="event-workspace-panel active"></div>
       <div id="eventWorkspacePs" class="event-workspace-panel">
         <div class="card event-manager-card">
           <div class="card-header">
             <h2 class="card-title">Points de situation</h2>
             <div class="list-actions">
-              <label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label>
-              <button class="fr-btn secondary" type="button" onclick="exportPSPDF()">Exporter DOCX</button>
-              <button class="fr-btn secondary" type="button" onclick="editSelectedPS()">Modifier</button>
-              <button class="fr-btn danger" type="button" onclick="deleteSelectedPS()">Supprimer</button>
               <button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button>
             </div>
           </div>
           <div class="card-body event-list-shell">
             <div class="event-tab-toolbar">
               <input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()">
-              <p class="help">Sélectionnez une ligne pour modifier, supprimer ou exporter le document.</p>
             </div>
             <div class="table-wrap" id="eventPsList"></div>
           </div>
@@ -2227,19 +2212,14 @@ function ensureEventWorkspaceUI() {
       <div id="eventWorkspaceCommand" class="event-workspace-panel">
         <div class="card event-manager-card">
           <div class="card-header">
-            <h2 class="card-title">Messages de commandement</h2>
+            <h2 class="card-title">Message de commandement</h2>
             <div class="list-actions">
-              <label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label>
-              <button class="fr-btn secondary" type="button" onclick="exportCommandPDF()">Exporter PDF</button>
-              <button class="fr-btn secondary" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button>
-              <button class="fr-btn danger" type="button" onclick="deleteSelectedCommand()">Supprimer</button>
-              <button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button>
+              <button class="fr-btn" type="button" onclick="openCommandForm()">Message de commandement</button>
             </div>
           </div>
           <div class="card-body event-list-shell">
             <div class="event-tab-toolbar">
               <input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()">
-              <p class="help">La sélection courante pilote l’export et les actions d’édition.</p>
             </div>
             <div class="table-wrap" id="eventCommandList"></div>
           </div>
@@ -2247,24 +2227,23 @@ function ensureEventWorkspaceUI() {
       </div>
     </div>
   `;
-  activeCard.after(contextCard);
-  contextCard.after(workspace);
+  activeCard.after(workspace);
   document.getElementById('eventWorkspaceTimeline')?.appendChild(timelineCard);
 }
 
 function showEventWorkspaceTab(tab) {
-  state.currentEventWorkspaceTab = tab || 'overview';
+  const normalizedTab = ['timeline', 'ps', 'command'].includes(tab) ? tab : 'timeline';
+  state.currentEventWorkspaceTab = normalizedTab;
   persist();
   document.querySelectorAll('#eventWorkspaceTabs .page-subtab').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === state.currentEventWorkspaceTab);
   });
   document.querySelectorAll('.event-workspace-panel').forEach((panel) => panel.classList.remove('active'));
   const target = {
-    overview: 'eventWorkspaceOverview',
     timeline: 'eventWorkspaceTimeline',
     ps: 'eventWorkspacePs',
     command: 'eventWorkspaceCommand'
-  }[state.currentEventWorkspaceTab] || 'eventWorkspaceOverview';
+  }[state.currentEventWorkspaceTab] || 'eventWorkspaceTimeline';
   document.getElementById(target)?.classList.add('active');
   if (state.currentEventWorkspaceTab === 'ps') {
     renderPSList();
@@ -2272,7 +2251,6 @@ function showEventWorkspaceTab(tab) {
   if (state.currentEventWorkspaceTab === 'command') {
     renderCommandList();
   }
-  if (state.currentEventWorkspaceTab === 'overview') renderEventOverviewSummary();
   if (state.currentEventWorkspaceTab === 'timeline') renderEventTimeline(state.currentEventId);
 }
 
@@ -2443,6 +2421,7 @@ function openEvent(id) {
   const e = byId(state.events, id);
   if (!e) return;
   state.currentEventId = id;
+  state.currentEventWorkspaceTab = 'timeline';
   renderEvents();
 }
 
@@ -2525,147 +2504,6 @@ function renderEventTimeline(eventId) {
   tableWrap.innerHTML = sortedItems.length ? `<table class="table"><thead><tr><th style="width:13rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','date')" onkeydown="handleSortHeaderKey(event,'timeline','date')">Date / heure${getTableSort('timeline','date','desc').key === 'date' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th style="width:10rem" class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','author')" onkeydown="handleSortHeaderKey(event,'timeline','author')">Auteur${getTableSort('timeline','date','desc').key === 'author' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th><th class="sortable-th" role="button" tabindex="0" onclick="sortTableColumn('timeline','title')" onkeydown="handleSortHeaderKey(event,'timeline','title')">Entrée${getTableSort('timeline','date','desc').key === 'title' ? (getTableSort('timeline','date','desc').direction === 'asc' ? ' ▲' : ' ▼') : ''}</th></tr></thead><tbody>${sortedItems.map(item => `<tr><td>${formatDateTimeValueFR(item.date)}</td><td>${esc(item.author || 'SIRACEDPC')}</td><td><div class="timeline-title">${esc(item.title || '')}</div><div>${nl2br(item.detail || '')}</div></td></tr>`).join('')}</tbody></table>` : '<p class="help">Aucune entrée de main courante.</p>';
 }
 
-function renderEventWorkspaceContext() {
-  const mount = document.getElementById('eventWorkspaceContext');
-  if (!mount) return;
-  const event = byId(state.events, state.currentEventId);
-  if (!event) {
-    mount.innerHTML = `
-      <div class="card-body event-context-empty">
-        <h2 class="card-title">Aucun événement sélectionné</h2>
-        <p class="help">Choisissez un événement dans la liste pour accéder à la main courante, aux points de situation et aux messages.</p>
-      </div>
-    `;
-    return;
-  }
-  const psItems = getActiveItems(state.ps).filter((item) => item.eventId === event.id);
-  const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
-  const timelineItems = getEventTimelineItems(event.id);
-  const lastPs = psItems[0];
-  const lastCommand = commandItems[0];
-  mount.innerHTML = `
-    <div class="card-header">
-      <div class="event-context-heading">
-        <h2 class="card-title">${esc(event.title || 'Événement')}</h2>
-        <div class="event-meta">
-          <span>${esc(event.type || 'Type non renseigné')}</span>
-          <span>${esc(event.location || 'Localisation non renseignée')}</span>
-          <span>${esc(event.level || 'Niveau non renseigné')}</span>
-          ${event.synergi ? `<span>ID Synergi ${esc(event.synergi)}</span>` : ''}
-        </div>
-      </div>
-      <div class="event-actions">
-        <button class="fr-btn secondary small" type="button" onclick="openEventForm('${event.id}')">Modifier</button>
-        <button class="fr-btn secondary small" type="button" onclick="openEventEntryForm()">Ajouter une entrée</button>
-        <button class="fr-btn secondary small" type="button" onclick="archiveEvent('${event.id}')">Archiver</button>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="event-context-summary">
-        <div class="event-context-facts">
-          <div class="event-context-line"><span class="event-context-label">Statut</span><strong class="event-context-value">${esc(event.status || 'Actif')}</strong></div>
-          <div class="event-context-line"><span class="event-context-label">Entrées de main courante</span><strong class="event-context-value">${timelineItems.length}</strong></div>
-          <div class="event-context-line"><span class="event-context-label">Points de situation</span><strong class="event-context-value">${psItems.length}</strong></div>
-          <div class="event-context-line"><span class="event-context-label">Messages</span><strong class="event-context-value">${commandItems.length}</strong></div>
-        </div>
-        <div class="event-context-updates">
-          <div class="event-context-block">
-            <div class="event-context-label">Dernier point de situation</div>
-            <div class="event-context-value">${lastPs ? `PS ${esc(lastPs.number || '')} · ${esc(formatDateTimeValueFR(lastPs.updatedAt || lastPs.createdAt || ''))}` : 'Aucun point de situation'}</div>
-          </div>
-          <div class="event-context-block">
-            <div class="event-context-label">Dernier message</div>
-            <div class="event-context-value">${lastCommand ? `${esc(lastCommand.typeLabel || 'Message')} · ${esc(formatDateTimeValueFR(lastCommand.updatedAt || lastCommand.createdAt || ''))}` : 'Aucun message de commandement'}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderEventOverviewSummary() {
-  const mount = document.getElementById('eventWorkspaceOverview');
-  if (!mount) return;
-  const event = byId(state.events, state.currentEventId);
-  if (!event) {
-    mount.innerHTML = '<p class="help">Sélectionnez un événement dans la colonne de gauche pour afficher sa synthèse.</p>';
-    return;
-  }
-  const psItems = getActiveItems(state.ps).filter((item) => item.eventId === event.id);
-  const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
-  const timelineItems = getEventTimelineItems(event.id);
-  const lastLog = timelineItems[0];
-  const recentLogs = timelineItems.slice(0, 4);
-  const recentPs = [...psItems].sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))).slice(0, 3);
-  const recentCommands = [...commandItems].sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))).slice(0, 3);
-  mount.innerHTML = `
-    <div class="event-overview-grid event-overview-grid-rework">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Résumé opérationnel</h2></div>
-        <div class="card-body">
-          <div class="info-pairs">
-            <div><strong>Niveau</strong><br>${esc(event.level || 'Non renseigné')}</div>
-            <div><strong>Commune / site</strong><br>${esc(event.location || 'Non renseigné')}</div>
-            <div><strong>Type</strong><br>${esc(event.type || 'Non renseigné')}</div>
-            <div><strong>ID Synergi</strong><br>${esc(event.synergi || 'Non renseigné')}</div>
-          </div>
-          <div class="event-overview-note">
-            ${lastLog ? `<strong>Dernière activité</strong><br>${esc(formatDateTimeValueFR(lastLog.date || ''))} · ${esc(lastLog.title || '')}` : 'Aucune activité enregistrée pour le moment.'}
-          </div>
-          <div class="event-overview-actions">
-            <button class="fr-btn small" type="button" onclick="openEventEntryForm()">Ajouter une entrée</button>
-            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('timeline')">Voir la main courante</button>
-          </div>
-        </div>
-      </div>
-      <div class="settings-stack">
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Productions récentes</h2></div>
-        <div class="card-body">
-          <div class="event-overview-list">
-            <div><strong>${psItems.length}</strong><span>Points de situation</span></div>
-            <div><strong>${commandItems.length}</strong><span>Messages de commandement</span></div>
-            <div><strong>${timelineItems.length}</strong><span>Entrées de main courante</span></div>
-          </div>
-          <div class="event-overview-actions">
-            <button class="fr-btn small" type="button" onclick="showEventWorkspaceTab('ps')">Gérer les PS</button>
-            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('command')">Gérer les messages</button>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><h2 class="card-title">Derniers éléments</h2></div>
-        <div class="card-body">
-          <div class="event-activity-list">
-            ${recentLogs.length ? recentLogs.map((item) => `
-              <div class="event-activity-item">
-                <div class="event-activity-meta">${esc(formatDateTimeValueFR(item.date || item.createdAt || ''))} · ${esc(item.author || 'SIRACEDPC')}</div>
-                <strong>${esc(item.title || 'Entrée')}</strong>
-                <div>${esc(String(item.detail || '').trim() || 'Sans complément')}</div>
-              </div>
-            `).join('') : '<p class="help">Aucune entrée récente.</p>'}
-            ${recentPs.length ? recentPs.map((item) => `
-              <div class="event-activity-item">
-                <div class="event-activity-meta">PS ${esc(item.number || '')} · ${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</div>
-                <strong>${esc(item.title || getEventTitle(item.eventId) || 'Point de situation')}</strong>
-                <div>${esc(item.status || 'Brouillon')}</div>
-              </div>
-            `).join('') : ''}
-            ${recentCommands.length ? recentCommands.map((item) => `
-              <div class="event-activity-item">
-                <div class="event-activity-meta">Message ${esc(item.number || '')} · ${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</div>
-                <strong>${esc(item.typeLabel || 'Message de commandement')}</strong>
-                <div>${esc(item.status || 'Brouillon')}</div>
-              </div>
-            `).join('') : ''}
-          </div>
-        </div>
-      </div>
-      </div>
-    </div>
-  `;
-}
-
 async function exportEventLogDocx() {
   const eventId = state.currentEventId;
   const event = byId(state.events, eventId);
@@ -2709,9 +2547,6 @@ function renderEvents() {
 
   const tmpl = e => {
     const isOpen = state.currentEventId === e.id;
-    const psCount = getActiveItems(state.ps).filter((item) => item.eventId === e.id).length;
-    const cmdCount = getActiveItems(state.commandMessages).filter((item) => item.eventId === e.id).length;
-    const timelineCount = getEventTimelineItems(e.id).length;
     return `<div class="event-card">
       <div class="event-card-head">
         <div class="event-card-main">
@@ -2725,17 +2560,14 @@ function renderEvents() {
         </div>
         <span class="badge ${isOpen ? 'success' : 'info'}">${isOpen ? 'Sélectionné' : 'Disponible'}</span>
       </div>
-      <div class="event-card-stats">
-        <span>${timelineCount} entrée(s)</span>
-        <span>${psCount} PS</span>
-        <span>${cmdCount} message(s)</span>
-      </div>
       <div class="event-actions">
         ${e.status === 'Archivé'
           ? `<button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
              <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
           : `<button class="fr-btn small" onclick="openEvent('${e.id}')">${isOpen ? 'Fermer' : 'Ouvrir'}</button>
-             <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>`
+             <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>
+             <button class="fr-btn secondary small" onclick="archiveEvent('${e.id}')">Archiver</button>
+             <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
         }
       </div>
     </div>`;
@@ -2744,10 +2576,8 @@ function renderEvents() {
   eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   updatePSEventSelect();
   populateCommuneDatalist();
-  renderEventWorkspaceContext();
-  renderEventOverviewSummary();
   renderEventTimeline(state.currentEventId);
-  showEventWorkspaceTab(state.currentEventWorkspaceTab || 'overview');
+  showEventWorkspaceTab(state.currentEventWorkspaceTab || 'timeline');
 }
 
 function renderEventArchives() {
@@ -2992,8 +2822,10 @@ function renderPSList() {
           <td>${esc(getEventTitle(ps.eventId))}</td>
           <td>${badge(ps.status)}</td>
           <td><div class="list-actions">
-            ${actionIconButton(state.selectedPSId === ps.id ? 'close' : 'open', state.selectedPSId === ps.id ? 'Fermer' : 'Ouvrir', `selectPS('${ps.id}')`, { className: 'ps-toggle-btn' })}
+            ${actionIconButton('edit', 'Modifier', `openPSForm('${ps.id}')`)}
             ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
+            ${actionIconButton('export', 'Exporter', `state.selectedPSId='${ps.id}';persist();exportPSPDF()`)}
+            ${actionIconButton('delete', 'Supprimer', `deletePS('${ps.id}')`, { variant: 'danger' })}
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
@@ -3385,8 +3217,10 @@ function renderCommandList() {
       <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
       <td>${badge(item.status)}</td>
       <td><div class="list-actions">
-        ${actionIconButton(item.id === state.selectedCommandId ? 'close' : 'open', item.id === state.selectedCommandId ? 'Fermer' : 'Ouvrir', `toggleCommandPreview('${item.id}')`)}
+        ${actionIconButton('edit', 'Modifier', `openCommandForm('${item.id}')`)}
         ${actionIconButton('duplicate', 'Dupliquer', `duplicateCommand('${item.id}')`)}
+        ${actionIconButton('export', 'Exporter', `state.selectedCommandId='${item.id}';persist();exportCommandPDF()`)}
+        ${actionIconButton('delete', 'Supprimer', `deleteCommandById('${item.id}')`, { variant: 'danger' })}
       </div></td>
     </tr>`).join('')
   }</tbody></table>`;
@@ -3407,6 +3241,12 @@ function duplicateCommand(id) {
   persist();
   renderCommandList();
   showToast('Message de commandement dupliqué.');
+}
+
+async function deleteCommandById(id) {
+  state.selectedCommandId = id;
+  persist();
+  return deleteSelectedCommand();
 }
 
 function addServiceRow(data) {
@@ -4033,7 +3873,7 @@ function renderPlanning() {
       ordered.map(p => `<tr>
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
-          <td>${esc(p.item || '')}</td>
+          <td><div class="event-title-block"><span class="event-label">${esc(p.item || '')}</span><span class="table-meta">${p.url ? 'Lien Resana disponible' : ''}</span></div></td>
           <td>${esc(p.priority || '')}</td>
           <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(p.approvalDate || '')}</span><span class="table-meta">Expiration : ${esc(resolvePlanExpiryDate(p) || '—')}</span></div></td>
@@ -4044,7 +3884,7 @@ function renderPlanning() {
           </div></td>
         </tr>`).join('')
       }</tbody></table>`
-    : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter une planification', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
+    : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter un plan', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
 
   if (planningSummary) {
     const counts = {};
@@ -4167,15 +4007,13 @@ function addPdfStatTable(doc, y, title, data) {
 
 function ensurePlanningStatsUI() {
   const page = document.getElementById('page-planning');
-  if (!page || document.getElementById('planningSubtabs')) return;
+  const tabs = document.getElementById('planningSubtabs');
+  if (!page || !tabs || tabs.dataset.ready === '1') return;
   const inner = page.querySelector('.page-inner');
-  const header = page.querySelector('.page-header');
-  if (!inner || !header) return;
+  if (!inner) return;
   const cards = [...inner.querySelectorAll(':scope > .card')];
-  const tabs = document.createElement('div');
-  tabs.className = 'page-subtabs'; tabs.id = 'planningSubtabs';
-  tabs.innerHTML = `<button class="page-subtab active" type="button" onclick="showPlanningSection('overview')">Suivi</button><button class="page-subtab" type="button" onclick="showPlanningSection('stats')">Statistiques</button>`;
-  header.after(tabs);
+  tabs.innerHTML = `<button class="page-subtab active" type="button" onclick="showPlanningSection('overview')">Tableau de suivi</button><button class="page-subtab" type="button" onclick="showPlanningSection('stats')">Statistiques</button>`;
+  tabs.dataset.ready = '1';
   const overview = document.createElement('div'); overview.id = 'planningOverview'; overview.className = 'page-subpanel active';
   cards.forEach(c => overview.appendChild(c));
   const stats = document.createElement('div'); stats.id = 'planningStats'; stats.className = 'page-subpanel';
@@ -4213,8 +4051,7 @@ function openDutyAvailabilityForm(id) {
   document.getElementById('dutyId').value = a?.id || '';
   setSelectOptions(document.getElementById('dutyRole'), getDynamicList('dutyRoles'), a?.role || getDynamicList('dutyRoles')[0]);
   setSelectOptions(document.getElementById('dutyAgent'), getDynamicList('dutyAgents'), a?.agent || getDynamicList('dutyAgents')[0] || '');
-  document.getElementById('dutyStart').value = a?.start || todayISO();
-  document.getElementById('dutyEnd').value = a?.end || todayISO();
+  document.getElementById('dutyStart').value = a?.start || toLocalISO(startOfMonday(new Date()));
   document.getElementById('dutyNote').value = a?.note || '';
   document.getElementById('dutyDialog').showModal();
 }
@@ -4233,48 +4070,32 @@ function saveDutyAvailability() {
     roleId: roleSnapshot.id,
     roleLabelSnapshot: roleSnapshot.label,
     start: document.getElementById('dutyStart').value,
-    end: document.getElementById('dutyEnd').value,
+    end: '',
     note: document.getElementById('dutyNote').value.trim()
   };
   if (!data.agent || !data.role) { showToast("Sélectionnez un agent et un rôle d'astreinte.", 'error'); return; }
-  if (!data.start || !data.end || data.end < data.start) { showToast("Définissez une période de disponibilité valide.", 'error'); return; }
+  if (!data.start) { showToast("Définissez le lundi de la semaine d'astreinte.", 'error'); return; }
+  const monday = startOfMonday(parseDateLocal(data.start));
+  if (!monday) { showToast("Définissez une semaine d'astreinte valide.", 'error'); return; }
+  data.start = toLocalISO(monday);
+  data.end = toLocalISO(weekEndInclusive(monday));
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
   document.getElementById('dutyDialog').close();
   renderDutyCalendar();
-  renderDutyAvailabilityList();
 }
 
 function deleteDutyAvailability(id) {
   window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, id);
   persist();
   renderDutyCalendar();
-  renderDutyAvailabilityList();
 }
 
 function renderDutyAvailabilityList() {
   const el = document.getElementById('dutyAvailabilityList');
   if (!el) return;
-  const items = getActiveItems(state.dutyAvailabilities);
-  const ordered = sortItems(items, 'dutyAvailability', 'start', 'asc', {
-    agent: (a) => a.agent || '',
-    role: (a) => a.role || '',
-    start: (a) => a.start || '',
-    note: (a) => a.note || ''
-  });
-  el.innerHTML = ordered.length
-    ? `<table class="table duty-availability-table"><thead><tr>${sortableTh('dutyAvailability','agent','Agent','start','asc')}${sortableTh('dutyAvailability','role','Rôle','start','asc')}<th>Période</th>${sortableTh('dutyAvailability','note','Observation','start','asc')}<th>Actions</th></tr></thead><tbody>${
-        ordered.map(a => `<tr>
-          <td>${esc(a.agent)}</td><td>${esc(a.role)}</td>
-          <td>${esc(a.start)} → ${esc(a.end)}</td><td>${esc(a.note||'')}</td>
-          <td><div class="list-actions">
-            ${actionIconButton('edit', 'Modifier', `openDutyAvailabilityForm('${a.id}')`)}
-            ${actionIconButton('delete', 'Supprimer', `deleteDutyAvailability('${a.id}')`, { variant: 'danger' })}
-          </div></td>
-        </tr>`).join('')
-      }</tbody></table>`
-    : (window.SICODUI?.setEmptyState?.('Aucune disponibilité saisie. Ajouter une disponibilité.', 'Ajouter une disponibilité', 'openDutyAvailabilityForm()') || '<p class="help">Aucune disponibilité saisie.</p>');
+  el.innerHTML = '';
 }
 
 function renderDutyCalendar() {
@@ -4298,19 +4119,23 @@ function renderDutyCalendar() {
   const filterRole = document.getElementById('dutyRoleFilter')?.value || '';
   const filterAgent = document.getElementById('dutyAgentFilter')?.value || '';
 
+  const availabilityItems = getActiveItems(state.dutyAvailabilities);
   let html = '<div class="calendar-grid">' + ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d => `<div class="calendar-head">${d}</div>`).join('');
   for (let i = 0; i < 42; i++) {
     const day = new Date(start); day.setDate(start.getDate() + i);
     const iso = toLocalISO(day);
     const inMonth = day.getMonth() === (month - 1);
-    const tags = getActiveItems(state.dutyAvailabilities).filter(a => {
+    const weekStart = toLocalISO(startOfMonday(day));
+    const tags = availabilityItems.filter(a => {
       const ds = parseDateLocal(a.start), de = parseDateLocal(a.end), cur = parseDateLocal(iso);
       return ds && de && cur && cur >= ds && cur <= de && (!filterRole || a.role === filterRole) && (!filterAgent || a.agent === filterAgent);
     });
-    html += `<div class="calendar-cell" style="opacity:${inMonth ? 1 : .5}"><div class="calendar-daynum">${day.getDate()}</div><div class="calendar-tags">${tags.map(t => `<span class="calendar-tag">${esc(t.agent)} · ${esc(t.role)}</span>`).join('')}</div></div>`;
+    const primary = tags[0] || null;
+    html += `<div class="calendar-cell ${primary ? 'is-clickable' : ''}" style="opacity:${inMonth ? 1 : .5}" ${primary ? `onclick="openDutyAvailabilityForm('${primary.id}')"` : ''}><div class="calendar-daynum">${day.getDate()}</div><div class="calendar-tags">${tags.map(t => `<span class="calendar-tag">${esc(t.agent)} · ${esc(t.role)}</span>`).join('')}</div></div>`;
   }
   html += '</div>';
   dutyCalendar.innerHTML = html;
+  document.getElementById('dutyAvailabilityCard')?.remove();
 }
 
 function generateDutySchedule() {
@@ -4497,18 +4322,17 @@ function exportDutyStatsPDF() {
 
 function ensureDutyStatsUI() {
   const page = document.getElementById('page-duty');
-  if (!page || document.getElementById('dutySubtabs')) return;
+  const tabs = document.getElementById('dutySubtabs');
+  if (!page || !tabs || tabs.dataset.ready === '1') return;
   const inner = page.querySelector('.page-inner');
-  const header = page.querySelector('.page-header');
-  if (!inner || !header) return;
+  if (!inner) return;
   const grids = [...inner.querySelectorAll(':scope > .planning-grid')];
-  const tabs = document.createElement('div'); tabs.className = 'page-subtabs'; tabs.id = 'dutySubtabs';
   tabs.innerHTML = `<button class="page-subtab active" type="button" onclick="showDutySection('planner')">Planning</button><button class="page-subtab" type="button" onclick="showDutySection('stats')">Statistiques</button>`;
-  header.after(tabs);
+  tabs.dataset.ready = '1';
   const planner = document.createElement('div'); planner.id = 'dutyPlanner'; planner.className = 'page-subpanel active';
   grids.forEach(g => planner.appendChild(g));
   const stats = document.createElement('div'); stats.id = 'dutyStatsPanel'; stats.className = 'page-subpanel';
-  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">Année</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter DOCX</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
+  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">Année</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
   inner.appendChild(planner); inner.appendChild(stats);
   const yearEl = document.getElementById('dutyStatsYear');
   if (yearEl && !yearEl.value) yearEl.value = String(new Date().getFullYear());
@@ -5250,6 +5074,11 @@ function ensureMergedEventSettingsUI() {
   commandTab?.remove();
   psPanel?.remove();
   commandPanel?.remove();
+  ['settingPsSignatureMode','settingPsSignatureName','settingPsSignatureRole','settingCommandSignatureMode','settingCommandSignatureName','settingCommandSignatureRole','settingCommandPhone','settingCommandFax','settingCommandEmail','settingCommandAudioConf'].forEach((id) => {
+    const field = document.getElementById(id);
+    field?.closest('.grid-3')?.remove();
+    field?.closest('.grid-2')?.remove();
+  });
   eventsPanel.dataset.mergedEventSettings = '1';
 }
 
@@ -5275,7 +5104,7 @@ function ensureUserAdminSettingsUI() {
       <h2 class="card-title">Administration des utilisateurs</h2>
       <div class="list-actions">
         <button class="fr-btn" type="button" onclick="openManagedUserDialog()">Ajouter un utilisateur</button>
-        <button class="fr-btn secondary small" type="button" onclick="loadUserAdminDirectory(true)">Actualiser</button>
+        <button class="fr-btn secondary" type="button" onclick="loadUserAdminDirectory(true)">Actualiser</button>
       </div>
     </div>
     <div class="card-body">
@@ -5386,7 +5215,7 @@ function ensureManagedUserDialog() {
   const dialog = document.createElement('dialog');
   dialog.id = 'managedUserDialog';
   dialog.innerHTML = `
-    <form method="dialog" class="card" style="width:min(38rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem);margin:0">
+    <form method="dialog" class="card" style="width:min(32rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem);margin:0">
       <div class="card-header">
         <h2 class="card-title" id="managedUserDialogTitle">Compte utilisateur</h2>
       </div>
@@ -5510,14 +5339,11 @@ function ensureExportSettingsCleanupUI() {
 }
 
 function ensureSettingsEnhancements() {
-  ensureExportSettingsUI();
   ensureSettingsNavigatorUI();
   ensureSystemSettingsUI();
   ensureGeneralPasswordSettingsUI();
   ensureUserAdminSettingsUI();
   ensureMergedEventSettingsUI();
-  ensureEventSignatureSettingsUI();
-  ensureExportSettingsCleanupUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
   bindCloudStateImport();
@@ -5577,14 +5403,7 @@ function loadSettingsForm() {
   if (get('settingClassification')) get('settingClassification').value = state.settings.classification || 'Non protégé';
   if (get('settingAuthor')) get('settingAuthor').value = state.settings.author || 'SIRACEDPC';
   if (get('settingEventTypes')) get('settingEventTypes').value = getDynamicList('eventTypes').join('\n');
-  if (get('eventUnifiedSignatureMode')) get('eventUnifiedSignatureMode').value = state.settings.eventUnifiedSignatureMode || state.settings.eventSignatureMode || state.settings.psSignatureMode || 'delegation';
-  if (get('eventUnifiedSignatureName')) get('eventUnifiedSignatureName').value = state.settings.eventUnifiedSignatureName || state.settings.eventSignatureName || state.settings.psSignatureName || '';
-  if (get('eventUnifiedSignatureRole')) get('eventUnifiedSignatureRole').value = state.settings.eventUnifiedSignatureRole || state.settings.eventSignatureRole || state.settings.psSignatureRole || '';
   if (get('settingCommandTypes')) get('settingCommandTypes').value = getDynamicList('commandTypes').join('\n');
-  if (get('settingCommandPhone')) get('settingCommandPhone').value = state.settings.commandPhone || '';
-  if (get('settingCommandFax')) get('settingCommandFax').value = state.settings.commandFax || '';
-  if (get('settingCommandEmail')) get('settingCommandEmail').value = state.settings.commandEmail || '';
-  if (get('settingCommandAudioConf')) get('settingCommandAudioConf').value = state.settings.commandAudioConf || '';
   if (get('settingDirectoryGroups')) get('settingDirectoryGroups').value = getDynamicList('directoryGroups').join('\n');
   if (get('settingDirectoryEntities')) get('settingDirectoryEntities').value = getDynamicList('directoryEntities').join('\n');
   if (get('settingPlanTypes')) get('settingPlanTypes').value = getDynamicList('planTypes').join('\n');
@@ -5592,25 +5411,15 @@ function loadSettingsForm() {
   if (get('settingPlanPriorities')) get('settingPlanPriorities').value = getDynamicList('planPriorities').join('\n');
   if (get('settingPlanStatuses')) get('settingPlanStatuses').value = getDynamicList('planStatuses').join('\n');
   if (get('settingDutyRoles')) get('settingDutyRoles').value = getDynamicList('dutyRoles').join('\n');
-  if (get('settingDutySignerLastName')) get('settingDutySignerLastName').value = state.settings.dutySignerLastName || '';
-  if (get('settingDutySignerFirstName')) get('settingDutySignerFirstName').value = state.settings.dutySignerFirstName || '';
-  if (get('settingDutySignerFunction')) get('settingDutySignerFunction').value = state.settings.dutySignerFunction || '';
   if (get('settingDutyAgents')) get('settingDutyAgents').value = getDynamicList('dutyAgents').join('\n');
   if (get('settingReflexFamilies')) get('settingReflexFamilies').value = getDynamicList('reflexFamilies').join('\n');
   if (get('settingPlanExpiryRules')) get('settingPlanExpiryRules').value = Object.entries(state.settings.planExpiryYears || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
-  populateHtmlTemplateEditor();
-  if (get('settingPdfPrimaryColor')) get('settingPdfPrimaryColor').value = state.settings.pdfAppearance?.primaryColor || DEFAULT_SETTINGS.pdfAppearance.primaryColor;
-  if (get('settingPdfAccentColor')) get('settingPdfAccentColor').value = state.settings.pdfAppearance?.accentColor || DEFAULT_SETTINGS.pdfAppearance.accentColor;
-  if (get('settingPdfTextColor')) get('settingPdfTextColor').value = state.settings.pdfAppearance?.textColor || DEFAULT_SETTINGS.pdfAppearance.textColor;
-  if (get('settingPdfAlertColor')) get('settingPdfAlertColor').value = state.settings.pdfAppearance?.alertColor || DEFAULT_SETTINGS.pdfAppearance.alertColor;
-  if (get('settingPdfLogoScale')) get('settingPdfLogoScale').value = String(state.settings.pdfAppearance?.logoScale || DEFAULT_SETTINGS.pdfAppearance.logoScale);
   showSettingsTab(activeTab);
   refreshStorageStatus();
 }
 
 async function saveSettings() {
   const get = id => document.getElementById(id);
-  syncHtmlTemplateEditorValue();
   const nextPassword = (get('settingNewPassword')?.value || '').trim();
   const confirmPassword = (get('settingConfirmPassword')?.value || '').trim();
   if (nextPassword || confirmPassword) {
@@ -5630,32 +5439,6 @@ async function saveSettings() {
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
   state.settings.classification = get('settingClassification')?.value || 'Non protégé';
   state.settings.author = (get('settingAuthor')?.value || '').trim() || 'SIRACEDPC';
-  state.settings.dutySignerLastName = (get('settingDutySignerLastName')?.value || '').trim();
-  state.settings.dutySignerFirstName = (get('settingDutySignerFirstName')?.value || '').trim();
-  state.settings.dutySignerFunction = (get('settingDutySignerFunction')?.value || '').trim();
-  state.settings.eventUnifiedSignatureMode = get('eventUnifiedSignatureMode')?.value || state.settings.eventUnifiedSignatureMode || 'delegation';
-  state.settings.eventUnifiedSignatureName = (get('eventUnifiedSignatureName')?.value || '').trim();
-  state.settings.eventUnifiedSignatureRole = (get('eventUnifiedSignatureRole')?.value || '').trim();
-  state.settings.commandSignatureMode = state.settings.eventUnifiedSignatureMode;
-  state.settings.commandSignatureName = state.settings.eventUnifiedSignatureName;
-  state.settings.commandSignatureRole = state.settings.eventUnifiedSignatureRole;
-  state.settings.commandPhone = (get('settingCommandPhone')?.value || '').trim();
-  state.settings.commandFax = (get('settingCommandFax')?.value || '').trim();
-  state.settings.commandEmail = (get('settingCommandEmail')?.value || '').trim();
-  state.settings.commandAudioConf = (get('settingCommandAudioConf')?.value || '').trim();
-  state.settings.psSignatureMode = state.settings.eventUnifiedSignatureMode;
-  state.settings.psSignatureName = state.settings.eventUnifiedSignatureName;
-  state.settings.psSignatureRole = state.settings.eventUnifiedSignatureRole;
-  state.settings.eventSignatureMode = state.settings.eventUnifiedSignatureMode;
-  state.settings.eventSignatureName = state.settings.eventUnifiedSignatureName;
-  state.settings.eventSignatureRole = state.settings.eventUnifiedSignatureRole;
-  state.settings.pdfAppearance = {
-    primaryColor: get('settingPdfPrimaryColor')?.value || DEFAULT_SETTINGS.pdfAppearance.primaryColor,
-    accentColor: get('settingPdfAccentColor')?.value || DEFAULT_SETTINGS.pdfAppearance.accentColor,
-    textColor: get('settingPdfTextColor')?.value || DEFAULT_SETTINGS.pdfAppearance.textColor,
-    alertColor: get('settingPdfAlertColor')?.value || DEFAULT_SETTINGS.pdfAppearance.alertColor,
-    logoScale: Number(get('settingPdfLogoScale')?.value || DEFAULT_SETTINGS.pdfAppearance.logoScale)
-  };
   state.settings.remoteSync = Object.assign({}, window.SICODApi?.system?.getRemoteConfig?.() || DEFAULT_SETTINGS.remoteSync);
   refreshAuthGate();
 
@@ -5705,7 +5488,6 @@ async function saveSettings() {
   renderDirectory();
   renderPlanning();
   renderDutyCalendar();
-  renderDutyAvailabilityList();
   renderDutySchedule();
   renderPlanningStats();
   renderDutyStats();
