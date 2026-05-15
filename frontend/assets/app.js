@@ -4112,29 +4112,41 @@ function renderDutyCalendar() {
   const [year, month] = monthVal.split('-').map(Number);
   if (!year || !month) return;
   const first = new Date(year, month - 1, 1);
-  const offset = (first.getDay() + 6) % 7;
-  const start = new Date(first);
-  start.setDate(first.getDate() - offset);
+  const last = new Date(year, month, 0);
+  const start = startOfMonday(first);
+  const end = weekEndInclusive(last);
 
   const filterRole = document.getElementById('dutyRoleFilter')?.value || '';
   const filterAgent = document.getElementById('dutyAgentFilter')?.value || '';
 
   const availabilityItems = getActiveItems(state.dutyAvailabilities);
-  let html = '<div class="calendar-grid">' + ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d => `<div class="calendar-head">${d}</div>`).join('');
-  for (let i = 0; i < 42; i++) {
-    const day = new Date(start); day.setDate(start.getDate() + i);
-    const iso = toLocalISO(day);
-    const inMonth = day.getMonth() === (month - 1);
-    const weekStart = toLocalISO(startOfMonday(day));
-    const tags = availabilityItems.filter(a => {
-      const ds = parseDateLocal(a.start), de = parseDateLocal(a.end), cur = parseDateLocal(iso);
-      return ds && de && cur && cur >= ds && cur <= de && (!filterRole || a.role === filterRole) && (!filterAgent || a.agent === filterAgent);
+  const roles = getDynamicList('dutyRoles');
+  const role1 = roles[0] || 'Astreinte 1';
+  const role2 = roles[1] || 'Astreinte 2';
+  const weekRows = [];
+  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 7)) {
+    const weekStart = new Date(cur);
+    const weekEnd = weekEndInclusive(weekStart);
+    const entries = availabilityItems.filter((a) => {
+      const ds = parseDateLocal(a.start);
+      const de = parseDateLocal(a.end);
+      return ds && de && ds <= weekStart && de >= weekEnd && (!filterRole || a.role === filterRole) && (!filterAgent || a.agent === filterAgent);
     });
-    const primary = tags[0] || null;
-    html += `<div class="calendar-cell ${primary ? 'is-clickable' : ''}" style="opacity:${inMonth ? 1 : .5}" ${primary ? `onclick="openDutyAvailabilityForm('${primary.id}')"` : ''}><div class="calendar-daynum">${day.getDate()}</div><div class="calendar-tags">${tags.map(t => `<span class="calendar-tag">${esc(t.agent)} · ${esc(t.role)}</span>`).join('')}</div></div>`;
+    const byRole = (role) => entries
+      .filter((entry) => entry.role === role)
+      .sort((a, b) => String(a.agent || '').localeCompare(String(b.agent || ''), 'fr'));
+    const role1Entries = byRole(role1);
+    const role2Entries = byRole(role2);
+    const renderEntries = (items) => items.length
+      ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="openDutyAvailabilityForm('${item.id}')">${esc(item.agent || '')}</button>`).join('')}</div>`
+      : '<span class="table-meta">Aucune disponibilité</span>';
+    weekRows.push(`<tr>
+      <td><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></td>
+      <td>${renderEntries(role1Entries)}</td>
+      <td>${renderEntries(role2Entries)}</td>
+    </tr>`);
   }
-  html += '</div>';
-  dutyCalendar.innerHTML = html;
+  dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
   document.getElementById('dutyAvailabilityCard')?.remove();
 }
 
@@ -4155,21 +4167,27 @@ function generateDutySchedule() {
     weeks.push({ start: new Date(ws), end: weekEndInclusive(ws) });
   }
 
-  const assignmentCount = {}, lastAssignedWeek = {};
+  const assignmentCount = {}, lastAssignedWeek = {}, lastAssignedAnyWeek = {};
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
     const key = agentName => `${role}||${agentName}`;
+    const exactBonus = (entry) => entry.ds <= week.start && entry.de >= week.end ? 0 : 2000;
     const exact = availability.filter(a => a.role === role && a.ds <= week.start && a.de >= week.end && !usedThisWeek.has(a.agent));
     const fallback = availability.filter(a => a.role === role && !(a.de < week.start || a.ds > week.end) && !usedThisWeek.has(a.agent));
     const pool = (exact.length ? exact : fallback).map(a => ({
       a, key: key(a.agent),
-      score: (assignmentCount[key(a.agent)] || 0) * 100 + (lastAssignedWeek[key(a.agent)] === weekIndex - 1 ? 1000 : 0)
+      score:
+        exactBonus(a) +
+        (assignmentCount[key(a.agent)] || 0) * 100 +
+        ((lastAssignedWeek[key(a.agent)] === weekIndex - 1) ? 2400 : 0) +
+        ((lastAssignedAnyWeek[a.agent] === weekIndex - 1) ? 6400 : 0)
     })).sort((x, y) => x.score - y.score || x.a.agent.localeCompare(y.a.agent));
     if (!pool.length) return null;
     const chosen = pool[0].a;
     const k = key(chosen.agent);
     assignmentCount[k] = (assignmentCount[k] || 0) + 1;
     lastAssignedWeek[k] = weekIndex;
+    lastAssignedAnyWeek[chosen.agent] = weekIndex;
     usedThisWeek.add(chosen.agent);
     return { name: chosen.agent };
   };
