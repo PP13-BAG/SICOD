@@ -4048,12 +4048,20 @@ function syncDutyPeriodFromMonth() {
 
 function openDutyAvailabilityForm(id) {
   const a = id ? byId(state.dutyAvailabilities, id) : null;
+  const presetWeek = arguments[1] || '';
+  const presetRole = arguments[2] ? decodeURIComponent(arguments[2]) : '';
+  const roles = getCurrentDutyRoles();
+  const agents = getCurrentDutyAgents();
   document.getElementById('dutyId').value = a?.id || '';
-  setSelectOptions(document.getElementById('dutyRole'), getDynamicList('dutyRoles'), a?.role || getDynamicList('dutyRoles')[0]);
-  setSelectOptions(document.getElementById('dutyAgent'), getDynamicList('dutyAgents'), a?.agent || getDynamicList('dutyAgents')[0] || '');
-  document.getElementById('dutyStart').value = a?.start || toLocalISO(startOfMonday(new Date()));
+  setSelectOptions(document.getElementById('dutyRole'), roles, a?.role || presetRole || roles[0] || '');
+  setSelectOptions(document.getElementById('dutyAgent'), agents, a?.agent || agents[0] || '');
+  document.getElementById('dutyStart').value = a?.start || presetWeek || toLocalISO(startOfMonday(new Date()));
   document.getElementById('dutyNote').value = a?.note || '';
   document.getElementById('dutyDialog').showModal();
+}
+
+function openDutyAvailabilityPreset(weekStart, role = '') {
+  openDutyAvailabilityForm('', weekStart, role);
 }
 
 function saveDutyAvailability() {
@@ -4092,6 +4100,34 @@ function deleteDutyAvailability(id) {
   renderDutyCalendar();
 }
 
+function getCurrentDutyRoles() {
+  return getDynamicList('dutyRoles').filter(Boolean);
+}
+
+function getCurrentDutyAgents() {
+  return getDynamicList('dutyAgents').filter(Boolean);
+}
+
+function getValidDutyAvailabilities() {
+  const allowedRoles = new Set(getCurrentDutyRoles());
+  const allowedAgents = new Set(getCurrentDutyAgents());
+  return getActiveItems(state.dutyAvailabilities).filter((item) =>
+    item && allowedRoles.has(item.role) && allowedAgents.has(item.agent)
+  );
+}
+
+function cleanupInvalidDutyAvailabilities() {
+  const allowedRoles = new Set(getCurrentDutyRoles());
+  const allowedAgents = new Set(getCurrentDutyAgents());
+  let changed = false;
+  getActiveItems(state.dutyAvailabilities).forEach((item) => {
+    if (!item || allowedRoles.has(item.role) && allowedAgents.has(item.agent)) return;
+    window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, item.id);
+    changed = true;
+  });
+  if (changed) persist();
+}
+
 function renderDutyAvailabilityList() {
   const el = document.getElementById('dutyAvailabilityList');
   if (!el) return;
@@ -4105,9 +4141,12 @@ function renderDutyCalendar() {
   const dutyMonth = document.getElementById('dutyMonth');
   const monthVal = dutyMonth?.value || todayISO().slice(0, 7);
   if (dutyMonth && !dutyMonth.value) dutyMonth.value = monthVal;
+  cleanupInvalidDutyAvailabilities();
 
-  setSelectOptions(document.getElementById('dutyRoleFilter'), ['', ...getDynamicList('dutyRoles')], document.getElementById('dutyRoleFilter')?.value || '');
-  setSelectOptions(document.getElementById('dutyAgentFilter'), ['', ...getDynamicList('dutyAgents')], document.getElementById('dutyAgentFilter')?.value || '');
+  const roles = getCurrentDutyRoles();
+  const agents = getCurrentDutyAgents();
+  setSelectOptions(document.getElementById('dutyRoleFilter'), ['', ...roles], document.getElementById('dutyRoleFilter')?.value || '');
+  setSelectOptions(document.getElementById('dutyAgentFilter'), ['', ...agents], document.getElementById('dutyAgentFilter')?.value || '');
 
   const [year, month] = monthVal.split('-').map(Number);
   if (!year || !month) return;
@@ -4119,8 +4158,7 @@ function renderDutyCalendar() {
   const filterRole = document.getElementById('dutyRoleFilter')?.value || '';
   const filterAgent = document.getElementById('dutyAgentFilter')?.value || '';
 
-  const availabilityItems = getActiveItems(state.dutyAvailabilities);
-  const roles = getDynamicList('dutyRoles');
+  const availabilityItems = getValidDutyAvailabilities();
   const role1 = roles[0] || 'Astreinte 1';
   const role2 = roles[1] || 'Astreinte 2';
   const weekRows = [];
@@ -4137,13 +4175,13 @@ function renderDutyCalendar() {
       .sort((a, b) => String(a.agent || '').localeCompare(String(b.agent || ''), 'fr'));
     const role1Entries = byRole(role1);
     const role2Entries = byRole(role2);
-    const renderEntries = (items) => items.length
+    const renderEntries = (items, role) => items.length
       ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="openDutyAvailabilityForm('${item.id}')">${esc(item.agent || '')}</button>`).join('')}</div>`
-      : '<span class="table-meta">Aucune disponibilité</span>';
+      : `<button class="duty-week-pill duty-week-pill-add" type="button" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role)}')">Ajouter</button>`;
     weekRows.push(`<tr>
-      <td><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></td>
-      <td>${renderEntries(role1Entries)}</td>
-      <td>${renderEntries(role2Entries)}</td>
+      <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
+      <td>${renderEntries(role1Entries, role1)}</td>
+      <td>${renderEntries(role2Entries, role2)}</td>
     </tr>`);
   }
   dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
@@ -4156,10 +4194,11 @@ function generateDutySchedule() {
   const startInput = parseDateLocal(startVal), endInput = parseDateLocal(endVal);
   if (!startInput || !endInput || endInput < startInput) { showToast('Définissez une période de planning valide.', 'error'); return; }
 
-  const roles = getDynamicList('dutyRoles');
+  cleanupInvalidDutyAvailabilities();
+  const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
   const start = startOfMonday(startInput);
-  const availability = getActiveItems(state.dutyAvailabilities).map(a => ({ ...a, ds: parseDateLocal(a.start), de: parseDateLocal(a.end) })).filter(a => a.ds && a.de);
+  const availability = getValidDutyAvailabilities().map(a => ({ ...a, ds: parseDateLocal(a.start), de: parseDateLocal(a.end) })).filter(a => a.ds && a.de);
 
   const weeks = [];
   for (let cur = new Date(start); cur <= endInput; cur.setDate(cur.getDate() + 7)) {
@@ -4211,9 +4250,9 @@ function renderDutySchedule() {
   const el = document.getElementById('dutyScheduleList');
   if (!el) return;
   const rows = state.dutySchedule || [];
-  const roles = getDynamicList('dutyRoles');
+  const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
-  const activeAvailabilities = getActiveItems(state.dutyAvailabilities);
+  const activeAvailabilities = getValidDutyAvailabilities();
   const agents1 = ['', ...new Set(activeAvailabilities.filter(a => a.role === role1).map(a => a.agent).filter(Boolean))];
   const agents2 = ['', ...new Set(activeAvailabilities.filter(a => a.role === role2).map(a => a.agent).filter(Boolean))];
 
