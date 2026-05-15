@@ -78,7 +78,7 @@ const DEFAULT_DYNAMIC_LISTS = {
   planStatuses: ['A jour','A programmer','En cours'],
   planRiskTypes: ['Naturel','Technologique','Sanitaire','Sécurité publique','Transport','Autre'],
   dutyRoles: ['Astreinte 1','Astreinte 2'],
-  dutyAgents: ['Agent 1','Agent 2'],
+  dutyAgents: [],
   reflexFamilies: ['Risques naturels','Risques technologiques','Risques divers','Autres'],
   directoryEntities: ['Autres']
 };
@@ -4175,13 +4175,13 @@ function renderDutyCalendar() {
       .sort((a, b) => String(a.agent || '').localeCompare(String(b.agent || ''), 'fr'));
     const role1Entries = byRole(role1);
     const role2Entries = byRole(role2);
-    const renderEntries = (items, role) => items.length
+    const renderEntries = (items) => items.length
       ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="openDutyAvailabilityForm('${item.id}')">${esc(item.agent || '')}</button>`).join('')}</div>`
-      : `<button class="duty-week-pill duty-week-pill-add" type="button" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role)}')">Ajouter</button>`;
+      : '<span class="table-meta">Aucune disponibilité</span>';
     weekRows.push(`<tr>
       <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
-      <td>${renderEntries(role1Entries, role1)}</td>
-      <td>${renderEntries(role2Entries, role2)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${toLocalISO(weekStart)}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries)}</td>
     </tr>`);
   }
   dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
@@ -4210,13 +4210,10 @@ function generateDutySchedule() {
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
     const key = agentName => `${role}||${agentName}`;
-    const exactBonus = (entry) => entry.ds <= week.start && entry.de >= week.end ? 0 : 2000;
     const exact = availability.filter(a => a.role === role && a.ds <= week.start && a.de >= week.end && !usedThisWeek.has(a.agent));
-    const fallback = availability.filter(a => a.role === role && !(a.de < week.start || a.ds > week.end) && !usedThisWeek.has(a.agent));
-    const pool = (exact.length ? exact : fallback).map(a => ({
+    const pool = exact.map(a => ({
       a, key: key(a.agent),
       score:
-        exactBonus(a) +
         (assignmentCount[key(a.agent)] || 0) * 100 +
         ((lastAssignedWeek[key(a.agent)] === weekIndex - 1) ? 2400 : 0) +
         ((lastAssignedAnyWeek[a.agent] === weekIndex - 1) ? 6400 : 0)
@@ -4252,18 +4249,27 @@ function renderDutySchedule() {
   const rows = state.dutySchedule || [];
   const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
-  const activeAvailabilities = getValidDutyAvailabilities();
-  const agents1 = ['', ...new Set(activeAvailabilities.filter(a => a.role === role1).map(a => a.agent).filter(Boolean))];
-  const agents2 = ['', ...new Set(activeAvailabilities.filter(a => a.role === role2).map(a => a.agent).filter(Boolean))];
+  const activeAvailabilities = getValidDutyAvailabilities().map(a => ({ ...a, ds: parseDateLocal(a.start), de: parseDateLocal(a.end) })).filter(a => a.ds && a.de);
 
   el.innerHTML = rows.length
-    ? `<div class="week-list">${rows.map((w, i) => `<div class="week-card">
+    ? `<div class="week-list">${rows.map((w, i) => {
+        const weekStart = parseDateLocal(w.start);
+        const weekEnd = parseDateLocal(w.end);
+        const exactAgentsForRole = (role) => ['', ...new Set(activeAvailabilities
+          .filter((a) => a.role === role && weekStart && weekEnd && a.ds <= weekStart && a.de >= weekEnd)
+          .map((a) => a.agent)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b, 'fr')))];
+        const agents1 = exactAgentsForRole(role1);
+        const agents2 = exactAgentsForRole(role2);
+        return `<div class="week-card">
         <strong>Semaine du ${formatDateLocal(parseDateLocal(w.start))} au ${formatDateLocal(parseDateLocal(w.end))}</strong>
         <div class="grid-2" style="margin-top:.75rem">
           <div class="week-assignment"><div class="help">${esc(role1)}</div><select onchange="updateDutyAssignment(${i},'agent1',this.value)">${agents1.map(name => `<option value="${esc(name)}" ${(w.agent1?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
           <div class="week-assignment"><div class="help">${esc(role2)}</div><select onchange="updateDutyAssignment(${i},'agent2',this.value)">${agents2.map(name => `<option value="${esc(name)}" ${(w.agent2?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
         </div>
-      </div>`).join('')}</div>`
+      </div>`;
+      }).join('')}</div>`
     : '<p class="help">Aucun planning généré.</p>';
 
   ensureDutyStatsUI();

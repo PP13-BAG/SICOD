@@ -650,6 +650,8 @@ input[type='color']{
 .duty-week-table th:nth-child(1){width:22%}
 .duty-week-table th:nth-child(2),
 .duty-week-table th:nth-child(3){width:39%}
+.duty-week-slot{cursor:pointer}
+.duty-week-slot:hover{background:var(--bg-alt)}
 .duty-week-list{display:flex;flex-wrap:wrap;gap:.4rem}
 .duty-week-pill{
   display:inline-flex;
@@ -665,7 +667,6 @@ input[type='color']{
   font:inherit;
 }
 .duty-week-pill:hover{border-color:var(--blue-france);color:var(--blue-france)}
-.duty-week-pill-add{font-weight:600}
 .table-week-trigger{
   display:block;
   width:100%;
@@ -677,6 +678,7 @@ input[type='color']{
   color:inherit;
 }
 .table-week-trigger:hover .event-label{color:var(--blue-france)}
+.duty-week-slot .duty-week-pill{position:relative;z-index:1}
 .calendar-daynum{font-weight:700;margin-bottom:.35rem;color:var(--blue-france)}
 .calendar-tags{display:flex;flex-direction:column;gap:.35rem}
 .calendar-tag{display:block;padding:.25rem .35rem;background:var(--blue-soft);font-size:.75rem;color:var(--blue-france)}
