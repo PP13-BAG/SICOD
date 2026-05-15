@@ -13,9 +13,9 @@
   --warning:#b34000;
   --warning-bg:#ffe8d7;
   --shadow:0 6px 18px rgba(0,0,0,.08);
-  --radius-sm:0;
-  --radius-md:0;
-  --radius-lg:0;
+  --radius-sm:6px;
+  --radius-md:8px;
+  --radius-lg:10px;
   --space-1:.5rem;
   --space-2:.75rem;
   --space-3:1rem;
@@ -54,7 +54,7 @@ html,body{
 }
 body{display:flex;flex-direction:column;overflow:hidden}
 img{display:block;max-width:100%}
-button,input,select,textarea{font:inherit}
+button,input,select,textarea{font:inherit;line-height:1.35}
 code{
   font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
   font-size:.92em;
@@ -157,15 +157,18 @@ code{
   justify-content:center;
   gap:.5rem;
   min-height:var(--control-height);
+  height:var(--control-height);
   background:var(--blue-france);
   color:#fff;
   border:1px solid var(--blue-france);
-  padding:.7rem 1rem;
+  padding:0 .95rem;
   cursor:pointer;
   text-decoration:none;
   font-weight:600;
   line-height:1.2;
   white-space:nowrap;
+  border-radius:var(--radius-sm);
+  transition:background-color .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease;
 }
 .fr-btn.secondary,.settings-tab,.page-subtab{
   background:#fff;
@@ -173,7 +176,7 @@ code{
   border-color:var(--blue-france);
 }
 .fr-btn.danger{background:var(--red-marianne);border-color:var(--red-marianne)}
-.fr-btn.small{min-height:var(--control-height-sm);padding:.45rem .75rem;font-size:.875rem}
+.fr-btn.small{min-height:var(--control-height-sm);height:var(--control-height-sm);padding:0 .75rem;font-size:.875rem}
 .fr-btn img{width:1rem;height:1rem;filter:brightness(0) invert(1)}
 .fr-btn.secondary img{filter:none}
 
@@ -218,17 +221,23 @@ label{
 input,select,textarea{
   width:100%;
   min-height:var(--control-height);
-  padding:.7rem .75rem;
+  padding:.7rem .85rem;
   border:1px solid var(--border);
   background:#fff;
   color:var(--text);
-  border-radius:0;
+  border-radius:var(--radius-sm);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35);
 }
+input,select{height:var(--control-height)}
 textarea{min-height:7rem;resize:vertical;padding-top:.8rem;padding-bottom:.8rem}
 input:focus,select:focus,textarea:focus{
   outline:2px solid rgba(0,0,145,.18);
   outline-offset:1px;
   border-color:var(--blue-france);
+}
+.fr-btn:focus-visible,.settings-tab:focus-visible,.page-subtab:focus-visible{
+  outline:2px solid rgba(0,0,145,.18);
+  outline-offset:1px;
 }
 .help,.source-note,.chart-empty,.note,.rec-status{font-size:.875rem;color:var(--text-light)}
 .field-stack{margin-top:var(--space-3)}
@@ -383,22 +392,27 @@ input:focus,select:focus,textarea:focus{
 .table td .tool-actions,
 .table td .event-actions,
 .table td .directory-actions{
-  display:inline-flex;
+  display:flex;
   justify-content:flex-end;
   gap:.35rem;
-  width:auto;
-  max-width:100%;
+  width:max-content;
+  min-width:0;
+  max-width:none;
   flex-wrap:nowrap;
   vertical-align:middle;
+  margin-left:auto;
+  align-items:center;
 }
 .icon-action{
-  width:2rem;
-  min-width:2rem;
-  height:2rem;
-  min-height:2rem;
+  width:2.125rem;
+  min-width:2.125rem;
+  height:2.125rem;
+  min-height:2.125rem;
   padding:.25rem;
+  border-radius:var(--radius-sm);
+  flex:0 0 2.125rem;
 }
-.icon-action img{width:1.28rem;height:1.28rem}
+.icon-action img{width:1.18rem;height:1.18rem}
 .fr-btn.secondary.icon-action img{filter:none}
 .sortable-th{
   cursor:pointer;
@@ -416,20 +430,20 @@ input:focus,select:focus,textarea:focus{
 .card-header .fr-btn.small{
   min-width:0;
   max-width:100%;
-  white-space:normal;
+  white-space:nowrap;
 }
 .table td .fr-btn,
 .table td button{
-  width:100%;
+  width:auto;
   justify-content:center;
 }
 .table td .fr-btn.icon-action,
 .table td a.icon-action,
 .table td button.icon-action{
-  width:2rem;
-  min-width:2rem;
-  max-width:2rem;
-  flex:0 0 2rem;
+  width:2.125rem;
+  min-width:2.125rem;
+  max-width:2.125rem;
+  flex:0 0 2.125rem;
 }
 
 .fiche-layout{display:grid;grid-template-columns:20rem minmax(0,1fr);gap:1rem;min-height:0}
@@ -467,30 +481,6 @@ input:focus,select:focus,textarea:focus{
 .check{display:flex;align-items:center;gap:.5rem}
 .check input{width:auto;min-height:auto}
 .svc-row{display:grid;grid-template-columns:minmax(0,2fr) 1fr 1fr auto;gap:.75rem;align-items:center;margin-bottom:.75rem}
-
-.preview-stage{
-  background:var(--bg-alt);
-  padding:1.25rem;
-  overflow:auto;
-  display:flex;
-  justify-content:center;
-  align-items:flex-start;
-  min-height:20rem;
-}
-.preview-stage .document-page{width:min(210mm,100%);min-height:297mm;margin:0 auto}
-.preview-stage .ps-sheet,.preview-stage .command-sheet{flex:0 0 auto}
-.preview-stage.command{min-height:calc(100vh - 18rem)}
-.preview-stage.ps{min-height:calc(100vh - 20rem)}
-.template-preview-frame{
-  display:block;
-  width:100%;
-  min-height:297mm;
-  border:0;
-  background:#fff;
-}
-.template-preview-frame.is-command{min-height:calc(100vh - 18rem)}
-.template-preview-frame.is-ps{min-height:calc(100vh - 20rem)}
-.template-preview-frame.is-focus{min-height:210mm}
 
 .media-grid{margin-top:1rem}
 .upload-box{
@@ -708,10 +698,11 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .event-workspace-panel{display:none}
 .event-workspace-panel.active{display:block}
 .event-workspace .grid-2{align-items:start}
-.event-subcard{height:100%}
-.event-subcard .card-body{display:grid;gap:.75rem}
-.event-subcard .preview-stage,
-.event-subcard .template-preview-frame{min-height:58vh}
+.event-manager-card .card-body{display:grid;gap:1rem}
+.event-tab-toolbar{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.event-tab-toolbar .list-actions{overflow:visible;padding-bottom:0}
+.event-list-shell{display:grid;gap:1rem}
+.event-list-shell .table-wrap{overflow-x:auto}
 .event-title-block{display:flex;flex-direction:column;gap:.15rem}
 .event-title-block .event-label{font-weight:400;color:var(--text)}
 .event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
@@ -734,11 +725,16 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .event-context-empty{display:grid;gap:.5rem}
 .event-overview-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 .event-overview-grid-simple{grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr)}
+.event-overview-grid-rework{grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);align-items:start}
 .event-overview-list{display:grid;gap:.75rem}
 .event-overview-list div{display:flex;justify-content:space-between;gap:.75rem;padding:.75rem;border:1px solid var(--border);background:var(--bg-alt)}
 .event-overview-list strong{color:var(--blue-france)}
 .event-overview-note{margin-top:1rem;padding:.85rem;border-top:1px solid var(--border);color:var(--text)}
 .event-overview-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.event-activity-list{display:grid;gap:.65rem}
+.event-activity-item{padding:.75rem .85rem;border:1px solid var(--border);background:var(--bg-alt)}
+.event-activity-item strong{display:block;margin-bottom:.2rem;color:var(--text)}
+.event-activity-meta{font-size:.8125rem;color:var(--text-light);margin-bottom:.35rem}
 
 .directory-group{margin-bottom:1rem}
 .directory-group .card-body{overflow-x:auto}
@@ -751,9 +747,8 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .directory-group .table th:nth-child(6),
 .directory-group .table th:nth-child(7){width:13%}
 .directory-group .table th:nth-child(8){width:7%}
-.directory-group .table td:last-child{padding:.35rem .4rem}
+.directory-group .table td:last-child{padding:.35rem .45rem}
 .directory-group .table td:last-child .list-actions{gap:.25rem}
-.directory-group .table td:last-child .fr-btn{padding:.3rem .45rem;font-size:.78rem}
 #directorySearch{border-radius:.75rem}
 #page-directory .page-inner{max-width:92rem}
 .compact-list{margin:0;padding-left:1rem}
@@ -778,10 +773,15 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .duty-availability-table td:last-child,
 .user-admin-table th:last-child,
 .user-admin-table td:last-child{width:1%;white-space:nowrap}
+.planning-table td:last-child,
+.duty-availability-table td:last-child,
+.user-admin-table td:last-child,
+.directory-table td:last-child{padding:.35rem .45rem}
 .planning-table td:last-child .list-actions,
 .duty-availability-table td:last-child .list-actions,
 .user-admin-table td:last-child .list-actions,
 .directory-table td:last-child .list-actions{justify-content:flex-end}
+.plan-actions-single{gap:.3rem}
 
 html[data-theme='dark'] .app-topbar,
 html[data-theme='dark'] .card,

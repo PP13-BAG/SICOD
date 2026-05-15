@@ -1549,17 +1549,6 @@ function buildTemplateHtmlDocument(key, tokens, options = {}) {
 }
 
 
-function mountStoredHtmlTemplatePreview(container, key, tokens, options = {}) {
-  if (!container) return;
-  const iframe = document.createElement('iframe');
-  iframe.className = `template-preview-frame ${options.className || ''}`.trim();
-  iframe.setAttribute('title', options.title || 'Aperçu du document');
-  iframe.setAttribute('sandbox', 'allow-same-origin');
-  iframe.srcdoc = buildTemplateHtmlDocument(key, tokens || {}, options);
-  container.innerHTML = '';
-  container.appendChild(iframe);
-}
-
 async function waitForFrameAssets(frameDocument) {
   const fontPromise = frameDocument?.fonts?.ready
     ? frameDocument.fonts.ready.catch(() => undefined)
@@ -2215,15 +2204,45 @@ function ensureEventWorkspaceUI() {
       <div id="eventWorkspaceOverview" class="event-workspace-panel active"></div>
       <div id="eventWorkspaceTimeline" class="event-workspace-panel"></div>
       <div id="eventWorkspacePs" class="event-workspace-panel">
-        <div class="grid-2">
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter DOCX</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
+        <div class="card event-manager-card">
+          <div class="card-header">
+            <h2 class="card-title">Points de situation</h2>
+            <div class="list-actions">
+              <label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label>
+              <button class="fr-btn secondary" type="button" onclick="exportPSPDF()">Exporter DOCX</button>
+              <button class="fr-btn secondary" type="button" onclick="editSelectedPS()">Modifier</button>
+              <button class="fr-btn danger" type="button" onclick="deleteSelectedPS()">Supprimer</button>
+              <button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button>
+            </div>
+          </div>
+          <div class="card-body event-list-shell">
+            <div class="event-tab-toolbar">
+              <input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()">
+              <p class="help">Sélectionnez une ligne pour modifier, supprimer ou exporter le document.</p>
+            </div>
+            <div class="table-wrap" id="eventPsList"></div>
+          </div>
         </div>
       </div>
       <div id="eventWorkspaceCommand" class="event-workspace-panel">
-        <div class="grid-2">
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des messages</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button></div></div><div class="card-body"><input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()"><div id="eventCommandList"></div></div></div>
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="exportCommandPDF()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedCommand()">Supprimer</button></div></div><div class="card-body" id="eventCommandPreview"><p class="help">Sélectionnez un message de commandement.</p></div></div>
+        <div class="card event-manager-card">
+          <div class="card-header">
+            <h2 class="card-title">Messages de commandement</h2>
+            <div class="list-actions">
+              <label class="check"><input id="eventCmdApplySignature" type="checkbox"><span>Apposer une signature</span></label>
+              <button class="fr-btn secondary" type="button" onclick="exportCommandPDF()">Exporter PDF</button>
+              <button class="fr-btn secondary" type="button" onclick="openCommandForm(state.selectedCommandId)">Modifier</button>
+              <button class="fr-btn danger" type="button" onclick="deleteSelectedCommand()">Supprimer</button>
+              <button class="fr-btn" type="button" onclick="openCommandForm()">Nouveau message</button>
+            </div>
+          </div>
+          <div class="card-body event-list-shell">
+            <div class="event-tab-toolbar">
+              <input class="list-search" id="eventCommandListSearch" type="search" placeholder="Rechercher par numéro, événement, statut…" oninput="renderCommandList()">
+              <p class="help">La sélection courante pilote l’export et les actions d’édition.</p>
+            </div>
+            <div class="table-wrap" id="eventCommandList"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2249,11 +2268,9 @@ function showEventWorkspaceTab(tab) {
   document.getElementById(target)?.classList.add('active');
   if (state.currentEventWorkspaceTab === 'ps') {
     renderPSList();
-    renderPSPreview();
   }
   if (state.currentEventWorkspaceTab === 'command') {
     renderCommandList();
-    renderCommandPreview(state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
   }
   if (state.currentEventWorkspaceTab === 'overview') renderEventOverviewSummary();
   if (state.currentEventWorkspaceTab === 'timeline') renderEventTimeline(state.currentEventId);
@@ -2576,10 +2593,14 @@ function renderEventOverviewSummary() {
   }
   const psItems = getActiveItems(state.ps).filter((item) => item.eventId === event.id);
   const commandItems = getActiveItems(state.commandMessages).filter((item) => item.eventId === event.id);
-  const lastLog = getEventTimelineItems(event.id)[0];
+  const timelineItems = getEventTimelineItems(event.id);
+  const lastLog = timelineItems[0];
+  const recentLogs = timelineItems.slice(0, 4);
+  const recentPs = [...psItems].sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))).slice(0, 3);
+  const recentCommands = [...commandItems].sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''))).slice(0, 3);
   mount.innerHTML = `
-    <div class="event-overview-grid event-overview-grid-simple">
-      <div class="card event-subcard">
+    <div class="event-overview-grid event-overview-grid-rework">
+      <div class="card">
         <div class="card-header"><h2 class="card-title">Résumé opérationnel</h2></div>
         <div class="card-body">
           <div class="info-pairs">
@@ -2591,22 +2612,55 @@ function renderEventOverviewSummary() {
           <div class="event-overview-note">
             ${lastLog ? `<strong>Dernière activité</strong><br>${esc(formatDateTimeValueFR(lastLog.date || ''))} · ${esc(lastLog.title || '')}` : 'Aucune activité enregistrée pour le moment.'}
           </div>
+          <div class="event-overview-actions">
+            <button class="fr-btn small" type="button" onclick="openEventEntryForm()">Ajouter une entrée</button>
+            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('timeline')">Voir la main courante</button>
+          </div>
         </div>
       </div>
-      <div class="card event-subcard">
-        <div class="card-header"><h2 class="card-title">Documents et actions</h2></div>
+      <div class="settings-stack">
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Productions récentes</h2></div>
         <div class="card-body">
           <div class="event-overview-list">
             <div><strong>${psItems.length}</strong><span>Points de situation</span></div>
             <div><strong>${commandItems.length}</strong><span>Messages de commandement</span></div>
-            <div><strong>${getEventTimelineItems(event.id).length}</strong><span>Entrées de main courante</span></div>
+            <div><strong>${timelineItems.length}</strong><span>Entrées de main courante</span></div>
           </div>
           <div class="event-overview-actions">
-            <button class="fr-btn small" type="button" onclick="showEventWorkspaceTab('timeline')">Ouvrir la main courante</button>
-            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('ps')">Voir les points de situation</button>
-            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('command')">Voir les messages</button>
+            <button class="fr-btn small" type="button" onclick="showEventWorkspaceTab('ps')">Gérer les PS</button>
+            <button class="fr-btn secondary small" type="button" onclick="showEventWorkspaceTab('command')">Gérer les messages</button>
           </div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Derniers éléments</h2></div>
+        <div class="card-body">
+          <div class="event-activity-list">
+            ${recentLogs.length ? recentLogs.map((item) => `
+              <div class="event-activity-item">
+                <div class="event-activity-meta">${esc(formatDateTimeValueFR(item.date || item.createdAt || ''))} · ${esc(item.author || 'SIRACEDPC')}</div>
+                <strong>${esc(item.title || 'Entrée')}</strong>
+                <div>${esc(String(item.detail || '').trim() || 'Sans complément')}</div>
+              </div>
+            `).join('') : '<p class="help">Aucune entrée récente.</p>'}
+            ${recentPs.length ? recentPs.map((item) => `
+              <div class="event-activity-item">
+                <div class="event-activity-meta">PS ${esc(item.number || '')} · ${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</div>
+                <strong>${esc(item.title || getEventTitle(item.eventId) || 'Point de situation')}</strong>
+                <div>${esc(item.status || 'Brouillon')}</div>
+              </div>
+            `).join('') : ''}
+            ${recentCommands.length ? recentCommands.map((item) => `
+              <div class="event-activity-item">
+                <div class="event-activity-meta">Message ${esc(item.number || '')} · ${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</div>
+                <strong>${esc(item.typeLabel || 'Message de commandement')}</strong>
+                <div>${esc(item.status || 'Brouillon')}</div>
+              </div>
+            `).join('') : ''}
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   `;
@@ -2888,7 +2942,6 @@ async function deletePS(id) {
 function selectPS(id) {
   state.selectedPSId = state.selectedPSId === id ? null : id;
   persist();
-  renderPSPreview();
   renderPSList();
 }
 
@@ -2945,28 +2998,6 @@ function renderPSList() {
         </tr>`).join('')
       }</tbody></table>`
     : (window.SICODUI?.setEmptyState?.('Aucun point de situation. Créer un premier point de situation.', 'Ajouter un point de situation', 'openPSForm()') || '<p class="help">Aucun point de situation.</p>');
-  renderPSPreview();
-}
-
-function renderPSPreview() {
-  const psPreview = document.getElementById('eventPsPreview');
-  if (!psPreview) return;
-  if (!isEventWorkspaceActive('ps')) return;
-  const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
-  if (!ps) {
-    psPreview.innerHTML = '<p class="help">Sélectionnez un point de situation.</p>';
-  } else {
-    mountStoredHtmlTemplatePreview(
-      psPreview,
-      ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail',
-      buildPSHtmlTokens(ps),
-      {
-        title: `Point de situation ${ps.number || ''}`.trim(),
-        orientation: ps.format === 'focus' ? 'landscape' : 'portrait',
-        className: `is-ps${ps.format === 'focus' ? ' is-focus' : ''}`
-      }
-    );
-  }
 }
 
 function handlePSImageFile(file) {
@@ -3144,13 +3175,8 @@ function initCommandForm() {
   if (cmdType) cmdType.innerHTML = commandTypes.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join('');
   if (!isEventWorkspaceActive('command')) return;
   renderCommandList();
-  if (state.selectedCommandId && byId(getActiveItems(state.commandMessages), state.selectedCommandId)) {
-    renderCommandPreview(byId(state.commandMessages, state.selectedCommandId));
-  } else if (getActiveItems(state.commandMessages).length) {
+  if (!state.selectedCommandId && getActiveItems(state.commandMessages).length) {
     state.selectedCommandId = getActiveItems(state.commandMessages)[0].id;
-    renderCommandPreview(getActiveItems(state.commandMessages)[0]);
-  } else {
-    renderCommandPreview(null);
   }
 }
 
@@ -3254,7 +3280,6 @@ function openCommandForm(id) {
   document.getElementById('cmdOriginalSigned').checked = !!d.originalSigned;
   state.services = JSON.parse(JSON.stringify(d.services && d.services.length ? d.services : defaultServices));
   renderServiceRows();
-  renderCommandPreview(getCommandData());
   document.getElementById('commandDialog').showModal();
   ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdPlan','cmdSirenLabel','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdExercise','cmdOriginalSigned']
     .forEach((fieldId) => {
@@ -3298,7 +3323,6 @@ function saveCommandMessage() {
   persist();
   document.getElementById('commandDialog').close();
   renderAll();
-  renderCommandPreview(byId(state.commandMessages, id));
 }
 
 async function deleteSelectedCommand() {
@@ -3310,7 +3334,6 @@ async function deleteSelectedCommand() {
   state.selectedCommandId = getActiveItems(state.commandMessages)[0]?.id || null;
   persist();
   renderCommandList();
-  renderCommandPreview(state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
 }
 
 function toggleCommandPreview(id) {
@@ -3318,20 +3341,17 @@ function toggleCommandPreview(id) {
     state.selectedCommandId = '';
     persist();
     renderCommandList();
-    renderCommandPreview(null);
     return;
   }
   state.selectedCommandId = id;
   persist();
   renderCommandList();
-  renderCommandPreview(byId(state.commandMessages, id));
 }
 
 function selectCommand(id) {
   state.selectedCommandId = id;
   persist();
   renderCommandList();
-  renderCommandPreview(byId(state.commandMessages, id));
 }
 
 function renderCommandList() {
@@ -3386,29 +3406,26 @@ function duplicateCommand(id) {
   state.selectedCommandId = copy.id;
   persist();
   renderCommandList();
-  renderCommandPreview(copy);
   showToast('Message de commandement dupliqué.');
 }
 
 function addServiceRow(data) {
   state.services.push(data || { name: '', cod: false, pco: false });
   renderServiceRows();
-  renderCommandPreview(getCommandData());
 }
 
 function removeServiceRow(i) {
   state.services.splice(i, 1);
   renderServiceRows();
-  renderCommandPreview(getCommandData());
 }
 
 function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
   svcRows.innerHTML = state.services.map((svc, i) => `<div class="svc-row">
-    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value;renderCommandPreview(getCommandData())">
-    <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked;renderCommandPreview(getCommandData())"> COD</label>
-    <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked;renderCommandPreview(getCommandData())"> PCO</label>
+    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value">
+    <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked"> COD</label>
+    <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked"> PCO</label>
     <button class="fr-btn danger small" type="button" onclick="removeServiceRow(${i})">Retirer</button>
   </div>`).join('');
 }
@@ -3446,19 +3463,7 @@ function getCommandData() {
 }
 
 function renderCommandPreview(data) {
-  const commandPreview = document.getElementById('eventCommandPreview');
-  if (!commandPreview) return;
-  if (!isEventWorkspaceActive('command')) return;
-  const d = data || (state.selectedCommandId ? byId(state.commandMessages, state.selectedCommandId) : null);
-  if (!d) {
-    commandPreview.innerHTML = '<p class="help">Sélectionnez un message de commandement.</p>';
-    return;
-  }
-  mountStoredHtmlTemplatePreview(commandPreview, 'command_message', buildCommandHtmlTokens(d), {
-    title: `Message de commandement ${d.number || ''}`.trim(),
-    orientation: 'portrait',
-    className: 'is-command'
-  });
+  return data;
 }
 
 function exportCommandPDF() {
