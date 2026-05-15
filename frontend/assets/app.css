@@ -383,11 +383,13 @@ input:focus,select:focus,textarea:focus{
 .table td .tool-actions,
 .table td .event-actions,
 .table td .directory-actions{
-  display:flex;
+  display:inline-flex;
   justify-content:flex-end;
   gap:.35rem;
-  width:100%;
+  width:auto;
+  max-width:100%;
   flex-wrap:nowrap;
+  vertical-align:middle;
 }
 .icon-action{
   width:2rem;
@@ -778,7 +780,8 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .user-admin-table td:last-child{width:1%;white-space:nowrap}
 .planning-table td:last-child .list-actions,
 .duty-availability-table td:last-child .list-actions,
-.user-admin-table td:last-child .list-actions{justify-content:flex-end}
+.user-admin-table td:last-child .list-actions,
+.directory-table td:last-child .list-actions{justify-content:flex-end}
 
 html[data-theme='dark'] .app-topbar,
 html[data-theme='dark'] .card,

@@ -607,6 +607,210 @@ function downloadCSV(filename, rows) {
   downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
 }
 
+const DOCX_TEMPLATE_FILES = {
+  mainCourante: 'assets/templates/docx/main-courante.docx',
+  psDetail: 'assets/templates/docx/ps-detail.docx',
+  psFocus: 'assets/templates/docx/ps-focus.docx',
+  astreinte: 'assets/templates/docx/astreinte.docx',
+  astreinteStat: 'assets/templates/docx/astreinte-stat.docx',
+  ficheReflexe: 'assets/templates/docx/fiches-reflexes.docx'
+};
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ZIP_MIME = 'application/zip';
+const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+function ensureDocxEngine() {
+  if (!window.JSZip) {
+    throw new Error("Le moteur d'export DOCX n'est pas disponible.");
+  }
+  return window.JSZip;
+}
+
+async function loadDocxTemplateZip(key) {
+  const JSZip = ensureDocxEngine();
+  const path = DOCX_TEMPLATE_FILES[key];
+  if (!path) {
+    throw new Error(`Modèle DOCX inconnu : ${key}`);
+  }
+  const response = await fetch(path, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Modèle introuvable (${response.status})`);
+  }
+  const buffer = await response.arrayBuffer();
+  return JSZip.loadAsync(buffer);
+}
+
+async function loadDocxDocument(key) {
+  const zip = await loadDocxTemplateZip(key);
+  const entry = zip.file('word/document.xml');
+  if (!entry) {
+    throw new Error('Le modèle DOCX ne contient pas word/document.xml.');
+  }
+  const xml = await entry.async('string');
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) {
+    throw new Error('Le modèle DOCX contient un XML invalide.');
+  }
+  return { zip, doc };
+}
+
+function saveDocxDocument(zip, doc) {
+  const serializer = new XMLSerializer();
+  zip.file('word/document.xml', serializer.serializeToString(doc));
+  return zip;
+}
+
+function getWordTextNodes(root) {
+  return Array.from(root.getElementsByTagNameNS(WORD_NS, 't'));
+}
+
+function replacePlaceholderText(root, placeholder, replacement, replaceAll = true) {
+  const finalValue = String(replacement ?? '');
+  let didReplace = false;
+  while (true) {
+    const nodes = getWordTextNodes(root);
+    let fullText = '';
+    const ranges = nodes.map((node) => {
+      const start = fullText.length;
+      const value = node.textContent || '';
+      fullText += value;
+      return { node, start, end: fullText.length };
+    });
+    const matchIndex = fullText.indexOf(placeholder);
+    if (matchIndex === -1) break;
+    const matchEnd = matchIndex + placeholder.length;
+    let wroteReplacement = false;
+    ranges.forEach(({ node, start, end }) => {
+      if (end <= matchIndex || start >= matchEnd) return;
+      const original = node.textContent || '';
+      const localStart = Math.max(0, matchIndex - start);
+      const localEnd = Math.min(end, matchEnd) - start;
+      if (!wroteReplacement) {
+        node.textContent = original.slice(0, localStart) + finalValue + original.slice(localEnd);
+        wroteReplacement = true;
+      } else {
+        node.textContent = original.slice(0, localStart) + original.slice(localEnd);
+      }
+    });
+    didReplace = true;
+    if (!replaceAll) break;
+  }
+  return didReplace;
+}
+
+function replacePlaceholderSequence(root, placeholder, replacements) {
+  (replacements || []).forEach((value) => replacePlaceholderText(root, placeholder, value, false));
+}
+
+function findWordBody(root) {
+  return root.getElementsByTagNameNS(WORD_NS, 'body')[0] || root.documentElement;
+}
+
+function findWordParagraphs(root) {
+  return Array.from(root.getElementsByTagNameNS(WORD_NS, 'p'));
+}
+
+function findWordRows(root) {
+  return Array.from(root.getElementsByTagNameNS(WORD_NS, 'tr'));
+}
+
+function findWordTables(root) {
+  return Array.from(root.getElementsByTagNameNS(WORD_NS, 'tbl'));
+}
+
+function replaceRowsMatchingText(root, matchText, items, fillRow) {
+  const templateRows = findWordRows(root).filter((row) => (row.textContent || '').includes(matchText));
+  if (!templateRows.length) return false;
+  const parent = templateRows[0].parentNode;
+  const anchor = templateRows[0];
+  (items || []).forEach((item) => {
+    const clone = templateRows[0].cloneNode(true);
+    fillRow(clone, item);
+    parent.insertBefore(clone, anchor);
+  });
+  templateRows.forEach((row) => row.parentNode === parent && parent.removeChild(row));
+  return true;
+}
+
+function replaceRowsMatchingTextInTable(table, matchText, items, fillRow) {
+  const templateRows = findWordRows(table).filter((row) => (row.textContent || '').includes(matchText));
+  if (!templateRows.length) return false;
+  const parent = templateRows[0].parentNode;
+  const anchor = templateRows[0];
+  (items || []).forEach((item) => {
+    const clone = templateRows[0].cloneNode(true);
+    fillRow(clone, item);
+    parent.insertBefore(clone, anchor);
+  });
+  templateRows.forEach((row) => row.parentNode === parent && parent.removeChild(row));
+  return true;
+}
+
+function buildEventLogDocxRows(eventId) {
+  const items = getEventTimelineItems(eventId);
+  if (items.length) {
+    return items.map((item) => ({
+      dateTime: formatDateTimeValueFR(item.date || item.createdAt || ''),
+      author: item.author || 'SIRACEDPC',
+      title: item.title || '',
+      detail: String(item.detail || '').replace(/\s*\n+\s*/g, ' - ').trim()
+    }));
+  }
+  return [{
+    dateTime: buildDocumentIssueLine(new Date(), true),
+    author: 'SICOD',
+    title: 'Aucune entrée de main courante',
+    detail: 'Aucune activité enregistrée pour cet événement.'
+  }];
+}
+
+function buildPSDocxDetails(ps) {
+  const parts = [];
+  const push = (label, value) => {
+    const text = String(value || '').trim();
+    if (text) parts.push(`${label} : ${text}`);
+  };
+  push('Situation générale', ps.situation);
+  push('Points d attention', ps.attention ?? ps.points);
+  push('Moyens', ps.means ?? ps.moyens);
+  push('Mesures prises', ps.measures ?? ps.mesures);
+  push('Communication', ps.communication);
+  push('Visuel', ps.imageCaption || ps.image || '');
+  if (ps.transcript) push('Transcription', ps.transcript);
+  if (ps.bilan?.notes) push('Compléments bilan', ps.bilan.notes);
+  return parts;
+}
+
+function buildDutyDocxRows() {
+  const rows = state.dutySchedule || [];
+  if (rows.length) {
+    return rows.map((row) => ({
+      start: parseDateLocal(row.start) ? formatDateLocal(parseDateLocal(row.start)) : (row.start || ''),
+      end: parseDateLocal(row.end) ? formatDateLocal(parseDateLocal(row.end)) : (row.end || ''),
+      agent1: row.agent1?.name || 'Non attribué',
+      agent2: row.agent2?.name || 'Non attribué'
+    }));
+  }
+  return [{ start: 'Non défini', end: 'Non défini', agent1: 'Non attribué', agent2: 'Non attribué' }];
+}
+
+function buildDutyStatsDocxRows(year) {
+  const stats = getDutyStatsData(year);
+  const fallbackRow = [{ label: 'Aucune donnée', value: 0 }];
+  return {
+    stats,
+    role1Rows: (stats.a1.length ? stats.a1 : fallbackRow).map((row) => ({ name: row.label, days: row.value })),
+    role2Rows: (stats.a2.length ? stats.a2 : fallbackRow).map((row) => ({ name: row.label, days: row.value }))
+  };
+}
+
+async function exportDocxBlob(zip, fileName) {
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: DOCX_MIME });
+  downloadBlob(blob, fileName);
+}
+
 /** Retourne la source logo courante (personnalisée ou défaut) */
 const DEFAULT_BRAND_LOGO = 'assets/logo.png';
 const DEFAULT_FAVICON = 'assets/favicon.ico';
@@ -2013,7 +2217,7 @@ function ensureEventWorkspaceUI() {
       <div id="eventWorkspacePs" class="event-workspace-panel">
         <div class="grid-2">
           <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Liste des points de situation</h2><div class="list-actions"><button class="fr-btn" type="button" onclick="openPSForm()">Ajouter</button></div></div><div class="card-body"><input class="list-search" id="eventPsListSearch" type="search" placeholder="Rechercher par numéro, auteur, statut…" oninput="renderPSList()"><div id="eventPsList"></div></div></div>
-          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter PDF</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
+          <div class="card event-subcard"><div class="card-header"><h2 class="card-title">Aperçu</h2><div class="list-actions"><label class="check"><input id="eventPsApplySignature" type="checkbox"><span>Apposer une signature</span></label><button class="fr-btn small" type="button" onclick="openPrintWindow()">Exporter DOCX</button><button class="fr-btn secondary small" type="button" onclick="editSelectedPS()">Modifier</button><button class="fr-btn danger small" type="button" onclick="deleteSelectedPS()">Supprimer</button></div></div><div class="card-body" id="eventPsPreview"><p class="help">Sélectionnez un point de situation.</p></div></div>
         </div>
       </div>
       <div id="eventWorkspaceCommand" class="event-workspace-panel">
@@ -2408,19 +2612,34 @@ function renderEventOverviewSummary() {
   `;
 }
 
-function exportEventLogPDF() {
+async function exportEventLogDocx() {
   const eventId = state.currentEventId;
-  const e = byId(state.events, eventId);
-  if (!e) {
+  const event = byId(state.events, eventId);
+  if (!event) {
     showToast('Sélectionnez un événement.', 'error');
     return;
   }
-  return openHtmlTemplatePdf(
-    'main_courante',
-    buildEventLogHtmlTokens(eventId),
-    `main-courante-${(e.title || 'evenement').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}`,
-    { orientation: 'portrait' }
-  );
+  try {
+    const { zip, doc } = await loadDocxDocument('mainCourante');
+    const now = new Date();
+    replacePlaceholderText(doc, '[date de génération]', now.toLocaleDateString('fr-FR'));
+    replacePlaceholderText(doc, '[heure courante]', now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+    replacePlaceholderText(doc, '[Titre évènement]', event.title || '');
+    replaceRowsMatchingText(doc, '[Auteur]', buildEventLogDocxRows(eventId), (row, item) => {
+      replacePlaceholderText(row, '[Date] [heure]', item.dateTime, false);
+      replacePlaceholderText(row, '[Auteur]', item.author, false);
+      replacePlaceholderText(row, '[titre entrée]', item.title, false);
+      replacePlaceholderText(row, '[complément détail]', item.detail, false);
+    });
+    await exportDocxBlob(saveDocxDocument(zip, doc), `main-courante-${slugify(event.title || 'evenement')}.docx`);
+    showToast('Main courante exportée en DOCX.');
+  } catch (error) {
+    showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+  }
+}
+
+function exportEventLogPDF() {
+  return exportEventLogDocx();
 }
 
 function renderEvents() {
@@ -2842,19 +3061,54 @@ function bindPSMediaInputs() {
 // openPrintWindow : alias vers exportPSPDF
 function openPrintWindow() { exportPSPDF(); }
 
-function exportPSPDF() {
+async function exportPSDocx() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
   if (!ps) {
     showToast('Sélectionnez un point de situation.', 'error');
     return;
   }
-  const templateKey = ps.format === 'focus' ? 'point_situation_focus' : 'point_situation_detail';
-  return openHtmlTemplatePdf(
-    templateKey,
-    buildPSHtmlTokens(ps),
-    `PS_${ps.number || 'SICOD'}`,
-    { orientation: ps.format === 'focus' ? 'landscape' : 'portrait' }
-  );
+  try {
+    const event = byId(state.events, ps.eventId);
+    const { zip, doc } = await loadDocxDocument(ps.format === 'focus' ? 'psFocus' : 'psDetail');
+    const docDate = ps.updatedAt ? new Date(ps.updatedAt) : new Date();
+    const bilan = ps.bilan || {};
+    const details = buildPSDocxDetails(ps);
+    replacePlaceholderText(doc, '[num]', String(ps.number || ''), true);
+    replacePlaceholderText(doc, '[Titre évènement]', ps.title || getEventTitle(ps.eventId) || '', true);
+    if (ps.format === 'focus') {
+      replacePlaceholderText(doc, '[Date]', docDate.toLocaleDateString('fr-FR'), false);
+      replacePlaceholderText(doc, '[Heure]', docDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), false);
+      replacePlaceholderText(doc, '[Statut]', ps.status || '', false);
+      replacePlaceholderText(doc, '[Classification]', ps.classification || '', false);
+      replacePlaceholderText(doc, '[Auteur]', ps.author || 'SIRACEDPC', false);
+      replacePlaceholderText(doc, '[ID]', event?.synergi || '', false);
+      replacePlaceholderSequence(doc, '[Détail]', [
+        ps.situation || '',
+        ps.attention ?? ps.points ?? '',
+        ps.means ?? ps.moyens ?? '',
+        ps.measures ?? ps.mesures ?? '',
+        ps.communication || '',
+        ps.transcript || bilan.notes || ''
+      ]);
+      replacePlaceholderText(doc, '[Visuel]', ps.imageCaption || ps.image || 'Aucun visuel joint', false);
+    } else {
+      replacePlaceholderSequence(doc, '[Nbr]', [
+        bilan.dcd ?? '0',
+        bilan.ua ?? '0',
+        bilan.ur ?? '0',
+        bilan.impliques ?? '0'
+      ]);
+      replacePlaceholderText(doc, '[Détail]', details.join('\n\n') || 'Aucun détail renseigné.', true);
+    }
+    await exportDocxBlob(saveDocxDocument(zip, doc), `ps-${slugify(ps.title || getEventTitle(ps.eventId) || `ps-${ps.number || 'sicod'}`)}.docx`);
+    showToast('Point de situation exporté en DOCX.');
+  } catch (error) {
+    showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+  }
+}
+
+function exportPSPDF() {
+  return exportPSDocx();
 }
 
 
@@ -3379,7 +3633,53 @@ function selectFiche(code) {
 function exportAllFichesPDF() {
   const fiches = getReflexFiches();
   if (!fiches.length) { showToast('Aucune fiche à exporter.', 'error'); return; }
-  return openHtmlTemplatePdf('reflex_sheet', buildReflexSheetHtmlTokens(), 'fiches-reflexes', { orientation: 'portrait' });
+  return (async () => {
+    try {
+      const JSZip = ensureDocxEngine();
+      const response = await fetch(DOCX_TEMPLATE_FILES.ficheReflexe, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Modèle introuvable (${response.status})`);
+      }
+      const templateBuffer = await response.arrayBuffer();
+      const archive = new JSZip();
+      for (const fiche of fiches) {
+        const templateZip = await JSZip.loadAsync(templateBuffer.slice(0));
+        const xml = await templateZip.file('word/document.xml').async('string');
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        replacePlaceholderText(doc, '[date de génération]', new Date().toLocaleDateString('fr-FR'), true);
+        replacePlaceholderText(doc, '[Titre de la fiche]', `${fiche.code || ''} - ${fiche.title || ''}`.trim(), true);
+        const body = findWordBody(doc);
+        const paragraphs = findWordParagraphs(body);
+        const headingTemplate = paragraphs.find((p) => /\[Titre section/i.test(p.textContent || ''));
+        const itemTemplate = paragraphs.find((p) => /\[Element/i.test(p.textContent || ''));
+        if (headingTemplate && itemTemplate) {
+          const parent = headingTemplate.parentNode;
+          const anchor = headingTemplate;
+          (fiche.sections || []).forEach((section) => {
+            const headingClone = headingTemplate.cloneNode(true);
+            ['[Titre section A]', '[Titre section B]', '[Titre section X]'].forEach((placeholder) => replacePlaceholderText(headingClone, placeholder, section.heading || 'Contenu', false));
+            parent.insertBefore(headingClone, anchor);
+            (section.items || []).forEach((item) => {
+              const itemClone = itemTemplate.cloneNode(true);
+              ['[Element A]', '[Element B]', '[Element X]'].forEach((placeholder) => replacePlaceholderText(itemClone, placeholder, item || '', false));
+              parent.insertBefore(itemClone, anchor);
+            });
+          });
+          findWordParagraphs(body)
+            .filter((p) => /\[(Titre section|Element)/i.test(p.textContent || ''))
+            .forEach((p) => p.parentNode?.removeChild(p));
+        }
+        templateZip.file('word/document.xml', new XMLSerializer().serializeToString(doc));
+        const content = await templateZip.generateAsync({ type: 'uint8array', mimeType: DOCX_MIME });
+        archive.file(`${slugify(`${fiche.code || 'fiche'}-${fiche.title || 'reflexe'}`)}.docx`, content);
+      }
+      const archiveBlob = await archive.generateAsync({ type: 'blob', mimeType: ZIP_MIME });
+      downloadBlob(archiveBlob, 'fiches-reflexes-docx.zip');
+      showToast('Fiches réflexes exportées en archive ZIP.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -4090,9 +4390,35 @@ function updateDutyAssignment(index, key, value) {
   renderDutySchedule();
 }
 
+async function exportDutyDocx() {
+  if (!(state.dutySchedule || []).length) {
+    showToast("Générez d'abord le planning d'astreinte.", 'error');
+    return;
+  }
+  try {
+    const { zip, doc } = await loadDocxDocument('astreinte');
+    const now = new Date();
+    const startValue = document.getElementById('dutyPeriodStart')?.value || state.dutySchedule[0]?.start || '';
+    const endValue = document.getElementById('dutyPeriodEnd')?.value || state.dutySchedule[state.dutySchedule.length - 1]?.end || '';
+    const startDate = parseDateLocal(startValue);
+    const endDate = parseDateLocal(endValue);
+    replacePlaceholderText(doc, '[date de génération]', now.toLocaleDateString('fr-FR'), true);
+    replacePlaceholderText(doc, '[date début]', startDate ? formatDateLocal(startDate) : startValue, true);
+    replacePlaceholderText(doc, '[date fin]', endDate ? formatDateLocal(endDate) : endValue, true);
+    replaceRowsMatchingText(doc, '[Prénom NOM]', buildDutyDocxRows(), (row, item) => {
+      replacePlaceholderText(row, '[date début sem]', item.start, false);
+      replacePlaceholderText(row, '[date fin sem]', item.end, false);
+      replacePlaceholderSequence(row, '[Prénom NOM]', [item.agent1, item.agent2]);
+    });
+    await exportDocxBlob(saveDocxDocument(zip, doc), 'planning-astreinte.docx');
+    showToast('Planning d astreinte exporté en DOCX.');
+  } catch (error) {
+    showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+  }
+}
+
 function exportDutyPDF() {
-  if (!(state.dutySchedule || []).length) { showToast("Générez d'abord le planning d'astreinte.", 'error'); return; }
-  return openHtmlTemplatePdf('duty_schedule', buildDutyScheduleHtmlTokens(), 'planning-astreinte', { orientation: 'portrait' });
+  return exportDutyDocx();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -4132,8 +4458,36 @@ function exportDutyStatsCSV() {
 }
 
 function exportDutyStatsPDF() {
-  const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
-  return openHtmlTemplatePdf('duty_statistics', buildDutyStatisticsHtmlTokens(), `astreintes-statistiques-${year}`, { orientation: 'portrait' });
+  return (async () => {
+    try {
+      const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
+      const { zip, doc } = await loadDocxDocument('astreinteStat');
+      const now = new Date();
+      const { role1Rows, role2Rows } = buildDutyStatsDocxRows(year);
+      replacePlaceholderText(doc, '[date de génération]', now.toLocaleDateString('fr-FR'), true);
+      replacePlaceholderText(doc, '[anneée]', String(year), true);
+      replacePlaceholderText(doc, '[année]', String(year), true);
+      const tables = findWordTables(doc).filter((table) => (table.textContent || '').includes('[Prénom NOM]'));
+      if (tables[0]) {
+        replaceRowsMatchingTextInTable(tables[0], '[Prénom NOM]', role1Rows, (row, item) => {
+          replacePlaceholderText(row, '[Prénom NOM]', item.name, false);
+          replacePlaceholderText(row, '[nbr jours]', String(item.days), false);
+          replacePlaceholderText(row, '[nbr jours ]', String(item.days), false);
+        });
+      }
+      if (tables[1]) {
+        replaceRowsMatchingTextInTable(tables[1], '[Prénom NOM]', role2Rows, (row, item) => {
+          replacePlaceholderText(row, '[Prénom NOM]', item.name, false);
+          replacePlaceholderText(row, '[nbr jours]', String(item.days), false);
+          replacePlaceholderText(row, '[nbr jours ]', String(item.days), false);
+        });
+      }
+      await exportDocxBlob(saveDocxDocument(zip, doc), `astreintes-statistiques-${year}.docx`);
+      showToast('Statistiques astreintes exportées en DOCX.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 
 function ensureDutyStatsUI() {
@@ -4149,7 +4503,7 @@ function ensureDutyStatsUI() {
   const planner = document.createElement('div'); planner.id = 'dutyPlanner'; planner.className = 'page-subpanel active';
   grids.forEach(g => planner.appendChild(g));
   const stats = document.createElement('div'); stats.id = 'dutyStatsPanel'; stats.className = 'page-subpanel';
-  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">Année</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter PDF</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
+  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques annuelles des astreintes</h2><div class="stats-toolbar"><div><label style="margin:0 0 .25rem">Année</label><input id="dutyStatsYear" type="number" min="2020" max="2100" style="width:8rem" onchange="renderDutyStats()"></div><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportDutyStatsPDF()">Exporter DOCX</button></div></div><div class="card-body" id="dutyStatsBody"></div></div>`;
   inner.appendChild(planner); inner.appendChild(stats);
   const yearEl = document.getElementById('dutyStatsYear');
   if (yearEl && !yearEl.value) yearEl.value = String(new Date().getFullYear());
