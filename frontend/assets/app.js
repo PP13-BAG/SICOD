@@ -4227,16 +4227,31 @@ function generateDutySchedule() {
   }
 
   const assignmentCount = {}, lastAssignedWeek = {}, lastAssignedAnyWeek = {};
+  const weekCandidates = weeks.map((week) => {
+    const weekKey = toLocalISO(week.start);
+    return {
+      weekKey,
+      [role1]: availability.filter((a) => a.role === role1 && a.weekKey === weekKey).map((a) => a.agent),
+      [role2]: availability.filter((a) => a.role === role2 && a.weekKey === weekKey).map((a) => a.agent)
+    };
+  });
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
     const key = agentName => `${role}||${agentName}`;
     const exact = availability.filter(a => a.role === role && a.weekKey === toLocalISO(week.start) && !usedThisWeek.has(a.agent));
+    const nextWeekCandidates = weekCandidates[weekIndex + 1]?.[role] || [];
+    const nextWeekAnyCandidates = [
+      ...(weekCandidates[weekIndex + 1]?.[role1] || []),
+      ...(weekCandidates[weekIndex + 1]?.[role2] || [])
+    ];
     const pool = exact.map(a => ({
       a, key: key(a.agent),
       score:
         (assignmentCount[key(a.agent)] || 0) * 100 +
         ((lastAssignedWeek[key(a.agent)] === weekIndex - 1) ? 2400 : 0) +
-        ((lastAssignedAnyWeek[a.agent] === weekIndex - 1) ? 6400 : 0)
+        ((lastAssignedAnyWeek[a.agent] === weekIndex - 1) ? 6400 : 0) +
+        (nextWeekCandidates.includes(a.agent) ? 1800 : 0) +
+        (nextWeekAnyCandidates.includes(a.agent) ? 900 : 0)
     })).sort((x, y) => x.score - y.score || x.a.agent.localeCompare(y.a.agent));
     if (!pool.length) return null;
     const chosen = pool[0].a;
