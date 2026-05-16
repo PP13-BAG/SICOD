@@ -58,7 +58,25 @@ const reflexLibrary = {"fiches": [{"code": "2.A", "title": "Feux de forêt", "fa
 const DEFAULT_COMMAND_TYPES = [['Activation de la cellule de suivi',"J'active une cellule de suivi."],['Prise de direction des opérations',"Je prends la direction des opérations."],['Mise en oeuvre de certaines mesures d\'un dispositif ORSEC',"Je mets en oeuvre certaines mesures d'un dispositif ORSEC."],['Activation d\'un dispositif opérationnel ORSEC',"J'active un dispositif opérationnel ORSEC."],['Levée de certaines mesures d\'un dispositif ORSEC',"Je lève certaines mesures d'un dispositif ORSEC."],['Levée de l\'ensemble des mesures d\'un dispositif ORSEC',"Je lève l'ensemble des mesures des dispositions ORSEC mises en oeuvre."]];
 let commandTypes = DEFAULT_COMMAND_TYPES.map(x => x.slice());
 
-const defaultServices = ['SDIS','BMPM','SAMU','ARS','DDTM','DREAL','DZSI','DZPAF','GMAR','PP13','DDSP','GGD','CRS','DMD','MÉTROPOLE','SRCI','GPMM','DIPJ'].map(name => ({name, cod: false, pco: false}));
+const COMMAND_SERVICE_FIXED_LABELS = ['SDIS', 'PPD', 'BMPM', 'DIPN', 'SAMU', 'GGD', 'ARS', 'CRS', 'DDTM', 'DMD', 'DREAL', 'MÉTROPOLE'];
+const COMMAND_SERVICE_EXTRA_SLOTS = 4;
+
+function getDefaultCommandServices() {
+  return COMMAND_SERVICE_FIXED_LABELS.map((label) => ({
+    name: label,
+    fixedLabel: label,
+    cod: false,
+    pco: false
+  })).concat(Array.from({ length: COMMAND_SERVICE_EXTRA_SLOTS }, (_, index) => ({
+    name: '',
+    fixedLabel: '',
+    placeholder: `Autre service / entité ${index + 1}`,
+    cod: false,
+    pco: false
+  })));
+}
+
+const defaultServices = getDefaultCommandServices();
 
 // ────────────────────────────────────────────────────────────────────────────
 // 2. COUCHE STORAGE (isolée — synchro locale + Supabase)
@@ -3339,9 +3357,26 @@ function getDefaultCommandMessage() {
     endAlertSignal: false,
     frAlert: false,
     exercise: false,
-    originalSigned: false,
-    services: JSON.parse(JSON.stringify(defaultServices))
+    services: getDefaultCommandServices()
   };
+}
+
+function normalizeCommandServiceFormServices(services) {
+  const slots = buildCommandServiceSlots(services);
+  const fixedRows = slots.named.map((item) => ({
+    name: item.name || item.label,
+    fixedLabel: item.label,
+    cod: !!item.cod,
+    pco: !!item.pco
+  }));
+  const extraRows = slots.extra.map((item, index) => ({
+    name: item.name || '',
+    fixedLabel: '',
+    placeholder: `Autre service / entité ${index + 1}`,
+    cod: !!item.cod,
+    pco: !!item.pco
+  }));
+  return fixedRows.concat(extraRows);
 }
 
 function openCommandForm(id) {
@@ -3363,7 +3398,6 @@ function openCommandForm(id) {
   document.getElementById('cmdActivation').value = d.activation || '';
   document.getElementById('cmdPcoLocation').value = d.pcoLocation || '';
   document.getElementById('cmdHoldPerimeter').value = d.holdPerimeter || '';
-  document.getElementById('cmdPlan').value = d.plan || '';
   document.getElementById('cmdLimitedDetail').value = d.limitedDetail || '';
   document.getElementById('cmdSirenScenario').value = d.sirenScenario || '';
   document.getElementById('cmdDiffusionPerimeter').value = d.diffusionPerimeter || '';
@@ -3377,11 +3411,10 @@ function openCommandForm(id) {
   document.getElementById('cmdEndAlertSignal').checked = !!d.endAlertSignal;
   document.getElementById('cmdFrAlert').checked = !!d.frAlert;
   document.getElementById('cmdExercise').checked = !!d.exercise;
-  document.getElementById('cmdOriginalSigned').checked = !!d.originalSigned;
-  state.services = JSON.parse(JSON.stringify(d.services && d.services.length ? d.services : defaultServices));
+  state.services = normalizeCommandServiceFormServices(d.services && d.services.length ? d.services : defaultServices);
   renderServiceRows();
   document.getElementById('commandDialog').showModal();
-  ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdHoldPerimeter','cmdPlan','cmdLimitedDetail','cmdSirenScenario','cmdDiffusionPerimeter','cmdMessageDetail','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdEndAlertSignal','cmdFrAlert','cmdExercise','cmdOriginalSigned']
+  ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdHoldPerimeter','cmdLimitedDetail','cmdSirenScenario','cmdDiffusionPerimeter','cmdMessageDetail','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdEndAlertSignal','cmdFrAlert','cmdExercise']
     .forEach((fieldId) => {
       const el = document.getElementById(fieldId);
       if (!el) return;
@@ -3517,27 +3550,28 @@ async function deleteCommandById(id) {
   return deleteSelectedCommand();
 }
 
-function addServiceRow(data) {
-  state.services.push(data || { name: '', cod: false, pco: false });
-  renderServiceRows();
-  window.SICODCommand?.saveDraft?.(getCommandData());
-}
-
-function removeServiceRow(i) {
-  state.services.splice(i, 1);
-  renderServiceRows();
+function updateCommandServiceField(index, key, value) {
+  if (!Array.isArray(state.services) || !state.services[index]) return;
+  state.services[index][key] = value;
   window.SICODCommand?.saveDraft?.(getCommandData());
 }
 
 function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
-  svcRows.innerHTML = state.services.map((svc, i) => `<div class="svc-row">
-    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value;window.SICODCommand?.saveDraft?.(getCommandData())">
-    <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked;window.SICODCommand?.saveDraft?.(getCommandData())"> COD</label>
-    <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked;window.SICODCommand?.saveDraft?.(getCommandData())"> PCO</label>
-    <button class="fr-btn danger small" type="button" onclick="removeServiceRow(${i})">Retirer</button>
-  </div>`).join('');
+  svcRows.innerHTML = `<div class="svc-matrix">
+    <div class="svc-matrix-head">Service / entité</div>
+    <div class="svc-matrix-head svc-matrix-head--check">COD</div>
+    <div class="svc-matrix-head svc-matrix-head--check">PCO</div>
+    ${(state.services || []).map((svc, i) => {
+      const labelCell = svc.fixedLabel
+        ? `<div class="svc-matrix-label">${esc(svc.fixedLabel)}</div>`
+        : `<input value="${esc(svc.name || '')}" placeholder="${esc(svc.placeholder || 'Autre service / entité')}" oninput="updateCommandServiceField(${i}, 'name', this.value)">`;
+      return `${labelCell}
+        <label class="svc-matrix-check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'cod', this.checked)"></label>
+        <label class="svc-matrix-check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'pco', this.checked)"></label>`;
+    }).join('')}
+  </div>`;
 }
 
 function normalizeCommandServiceName(value) {
@@ -3583,9 +3617,25 @@ function buildCommandServiceSlots(services) {
   while (extras.length < 4) extras.push({ name: '', cod: false, pco: false });
   return {
     named: slots,
-    extraNames: extras.map((item) => item.name || ''),
-    checkboxMarks: slots.concat(extras).flatMap((item) => [mark(item.cod), mark(item.pco)])
+    extra: extras.map((item) => ({ name: item.name || '', cod: !!item.cod, pco: !!item.pco }))
   };
+}
+
+function normalizeCommandRowLabel(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function replaceCommandRowCheckboxes(root, label, replacements) {
+  const needle = normalizeCommandRowLabel(label);
+  const row = findWordRows(root).find((entry) => normalizeCommandRowLabel(entry.textContent || '').includes(needle));
+  if (!row) return false;
+  replacePlaceholderSequence(row, '[X]', replacements);
+  return true;
 }
 
 function getCommandData() {
@@ -3607,7 +3657,6 @@ function getCommandData() {
     activation: document.getElementById('cmdActivation')?.value || '',
     pcoLocation: document.getElementById('cmdPcoLocation')?.value || '',
     holdPerimeter: document.getElementById('cmdHoldPerimeter')?.value || '',
-    plan: document.getElementById('cmdPlan')?.value || '',
     limitedDetail: document.getElementById('cmdLimitedDetail')?.value || '',
     sirenScenario: document.getElementById('cmdSirenScenario')?.value || '',
     diffusionPerimeter: document.getElementById('cmdDiffusionPerimeter')?.value || '',
@@ -3621,8 +3670,13 @@ function getCommandData() {
     endAlertSignal: document.getElementById('cmdEndAlertSignal')?.checked || false,
     frAlert: document.getElementById('cmdFrAlert')?.checked || false,
     exercise: document.getElementById('cmdExercise')?.checked || false,
-    originalSigned: document.getElementById('cmdOriginalSigned')?.checked || false,
-    services: (state.services || []).filter(s => String(s.name || '').trim())
+    services: (state.services || [])
+      .map((service) => ({
+        name: String(service.fixedLabel || service.name || '').trim(),
+        cod: !!service.cod,
+        pco: !!service.pco
+      }))
+      .filter((service) => service.name)
   };
 }
 
@@ -3655,18 +3709,23 @@ function exportCommandPDF() {
       replacePlaceholderTextWithBreaks(doc, '[Détail du message]', d.messageDetail || '', true);
       replacePlaceholderText(doc, '[Périmètre de diffusion]', d.diffusionPerimeter || '', true);
       const serviceSlots = buildCommandServiceSlots(d.services || []);
-      replacePlaceholderSequence(doc, '[AUTRE]', serviceSlots.extraNames);
-      replacePlaceholderSequence(doc, '[X]', [
-        mark(d.suivi),
-        mark(d.cod),
-        mark(d.pco),
-        mark(d.planActive),
-        mark(d.limited),
-        mark(d.siren),
-        mark(d.endAlertSignal),
-        mark(d.frAlert),
-        ...serviceSlots.checkboxMarks
-      ]);
+      replaceCommandRowCheckboxes(doc, 'Activation d’une cellule de suivi', [mark(d.suivi)]);
+      replaceCommandRowCheckboxes(doc, 'Activation du COD', [mark(d.cod)]);
+      replaceCommandRowCheckboxes(doc, 'Activation du PCO', [mark(d.pco)]);
+      replaceCommandRowCheckboxes(doc, 'Activation de la disposition de référence', [mark(d.planActive)]);
+      replaceCommandRowCheckboxes(doc, 'Activation limitée à certaines mesures', [mark(d.limited)]);
+      replaceCommandRowCheckboxes(doc, 'Activation des sirènes d’alerte', [mark(d.siren)]);
+      replaceCommandRowCheckboxes(doc, 'Signal de fin d’alerte', [mark(d.endAlertSignal)]);
+      replaceCommandRowCheckboxes(doc, 'Diffusion d’un message FR-Alert', [mark(d.frAlert)]);
+      serviceSlots.named.forEach((service) => {
+        replaceCommandRowCheckboxes(doc, service.label, [mark(service.cod), mark(service.pco)]);
+      });
+      const extraRows = findWordRows(doc).filter((row) => String(row.textContent || '').includes('[AUTRE]'));
+      extraRows.forEach((row, index) => {
+        const extra = serviceSlots.extra[index] || { name: '', cod: false, pco: false };
+        replacePlaceholderText(row, '[AUTRE]', extra.name || '', false);
+        replacePlaceholderSequence(row, '[X]', [mark(extra.cod), mark(extra.pco)]);
+      });
 
       const exerciseToken = '[EXERCICE – EXERCICE – EXERCICE]';
       const headerDoc = await loadDocxXml(zip, 'word/header1.xml');

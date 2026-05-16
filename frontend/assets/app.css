@@ -480,7 +480,13 @@ input:focus,select:focus,textarea:focus{
 .inline-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
 .check{display:flex;align-items:center;gap:.5rem}
 .check input{width:auto;min-height:auto}
-.svc-row{display:grid;grid-template-columns:minmax(0,2fr) 1fr 1fr auto;gap:.75rem;align-items:center;margin-bottom:.75rem}
+.command-form-grid textarea{min-height:5.5rem}
+.svc-matrix{display:grid;grid-template-columns:minmax(0,1.8fr) 5rem 5rem;gap:.625rem;align-items:center}
+.svc-matrix-head{font-size:.875rem;font-weight:700;color:var(--blue-france)}
+.svc-matrix-head--check{text-align:center}
+.svc-matrix-label{min-height:2.75rem;display:flex;align-items:center;padding:.625rem .75rem;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+.svc-matrix-check{display:flex;align-items:center;justify-content:center;min-height:2.75rem;border:1px solid var(--border);background:var(--bg)}
+.svc-matrix-check input{width:auto;min-height:auto}
 
 .media-grid{margin-top:1rem}
 .upload-box{
@@ -887,7 +893,8 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
 }
 
 @media (max-width:900px){
-  .grid-2,.grid-3,.kpis,.inline-checks,.svc-row,.focus-grid,.dialog-grid,.settings-grid,.stats-grid,.media-grid,.tools-grid,.planning-grid,.dashboard-extra-grid,.cloud-admin-grid{grid-template-columns:1fr}
+  .grid-2,.grid-3,.kpis,.inline-checks,.focus-grid,.dialog-grid,.settings-grid,.stats-grid,.media-grid,.tools-grid,.planning-grid,.dashboard-extra-grid,.cloud-admin-grid{grid-template-columns:1fr}
+  .svc-matrix{grid-template-columns:minmax(0,1fr) 4.5rem 4.5rem}
   .focus-col,.focus-center,.focus-right{border:0;min-height:auto}
   .fiche-layout{grid-template-columns:1fr}
   .sidebar{width:4.5rem;flex-basis:4.5rem}
