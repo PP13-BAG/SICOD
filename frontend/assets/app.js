@@ -703,7 +703,8 @@ const DOCX_TEMPLATE_FILES = {
   ficheReflexe: 'assets/templates/docx/fiches-reflexes.docx',
   annuaire: 'assets/templates/docx/annuaire.docx',
   planification: 'assets/templates/docx/planification.docx',
-  planificationStat: 'assets/templates/docx/planification-stat.docx'
+  planificationStat: 'assets/templates/docx/planification-stat.docx',
+  commandMessage: 'assets/templates/docx/message-commandement.docx'
 };
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -733,22 +734,32 @@ async function loadDocxTemplateZip(key) {
 
 async function loadDocxDocument(key) {
   const zip = await loadDocxTemplateZip(key);
-  const entry = zip.file('word/document.xml');
+  const doc = await loadDocxXml(zip, 'word/document.xml');
+  return { zip, doc };
+}
+
+function saveDocxDocument(zip, doc) {
+  saveDocxXml(zip, 'word/document.xml', doc);
+  return zip;
+}
+
+async function loadDocxXml(zip, path) {
+  const entry = zip.file(path);
   if (!entry) {
-    throw new Error('Le modèle DOCX ne contient pas word/document.xml.');
+    throw new Error(`Le modèle DOCX ne contient pas ${path}.`);
   }
   const xml = await entry.async('string');
   const parser = new DOMParser();
   const doc = parser.parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length) {
-    throw new Error('Le modèle DOCX contient un XML invalide.');
+    throw new Error(`Le XML ${path} du modèle DOCX est invalide.`);
   }
-  return { zip, doc };
+  return doc;
 }
 
-function saveDocxDocument(zip, doc) {
+function saveDocxXml(zip, path, doc) {
   const serializer = new XMLSerializer();
-  zip.file('word/document.xml', serializer.serializeToString(doc));
+  zip.file(path, serializer.serializeToString(doc));
   return zip;
 }
 
@@ -2127,7 +2138,9 @@ function buildCommandHtmlTokens(d) {
     ['Activation du PCO', mark(d.pco)],
     ['Activation du plan de référence', mark(d.planActive) + (d.plan ? ` — ${esc(d.plan)}` : '')],
     ['Mise en oeuvre limitée à certaines mesures', mark(d.limited)],
-    ["Activation d'une alerte sirène", mark(d.siren) + (d.sirenLabel ? ` — ${esc(d.sirenLabel)}` : '')]
+    ["Activation d'une alerte sirène", mark(d.siren) + (d.sirenScenario ? ` — ${esc(d.sirenScenario)}` : '')],
+    ["Signal de fin d'alerte", mark(d.endAlertSignal)],
+    ["Diffusion d'un message FR-Alert", mark(d.frAlert) + (d.messageDetail ? ` — ${esc(d.messageDetail)}` : '')]
   ].map(([label, value]) => `<tr><td>${label}</td><td>${value}</td></tr>`).join('');
   const servicesRows = (d.services || []).map(s => `<tr><td>${esc(s.name)}</td><td>${mark(s.cod)}</td><td>${mark(s.pco)}</td></tr>`).join('');
   return {
@@ -3311,14 +3324,20 @@ function getDefaultCommandMessage() {
     reference: '',
     activation: '',
     pcoLocation: '',
+    holdPerimeter: '',
     plan: '',
-    sirenLabel: '',
+    limitedDetail: '',
+    sirenScenario: '',
+    diffusionPerimeter: '',
+    messageDetail: '',
     suivi: false,
     cod: false,
     pco: false,
     planActive: false,
     limited: false,
     siren: false,
+    endAlertSignal: false,
+    frAlert: false,
     exercise: false,
     originalSigned: false,
     services: JSON.parse(JSON.stringify(defaultServices))
@@ -3343,20 +3362,26 @@ function openCommandForm(id) {
   document.getElementById('cmdRef').value = d.reference || '';
   document.getElementById('cmdActivation').value = d.activation || '';
   document.getElementById('cmdPcoLocation').value = d.pcoLocation || '';
+  document.getElementById('cmdHoldPerimeter').value = d.holdPerimeter || '';
   document.getElementById('cmdPlan').value = d.plan || '';
-  document.getElementById('cmdSirenLabel').value = d.sirenLabel || '';
+  document.getElementById('cmdLimitedDetail').value = d.limitedDetail || '';
+  document.getElementById('cmdSirenScenario').value = d.sirenScenario || '';
+  document.getElementById('cmdDiffusionPerimeter').value = d.diffusionPerimeter || '';
+  document.getElementById('cmdMessageDetail').value = d.messageDetail || '';
   document.getElementById('cmdSuivi').checked = !!d.suivi;
   document.getElementById('cmdCOD').checked = !!d.cod;
   document.getElementById('cmdPCO').checked = !!d.pco;
   document.getElementById('cmdPlanActive').checked = !!d.planActive;
   document.getElementById('cmdLimited').checked = !!d.limited;
   document.getElementById('cmdSiren').checked = !!d.siren;
+  document.getElementById('cmdEndAlertSignal').checked = !!d.endAlertSignal;
+  document.getElementById('cmdFrAlert').checked = !!d.frAlert;
   document.getElementById('cmdExercise').checked = !!d.exercise;
   document.getElementById('cmdOriginalSigned').checked = !!d.originalSigned;
   state.services = JSON.parse(JSON.stringify(d.services && d.services.length ? d.services : defaultServices));
   renderServiceRows();
   document.getElementById('commandDialog').showModal();
-  ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdPlan','cmdSirenLabel','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdExercise','cmdOriginalSigned']
+  ['cmdDate','cmdTime','cmdType','cmdEvent','cmdStatus','cmdSite','cmdRef','cmdActivation','cmdPcoLocation','cmdHoldPerimeter','cmdPlan','cmdLimitedDetail','cmdSirenScenario','cmdDiffusionPerimeter','cmdMessageDetail','cmdSuivi','cmdCOD','cmdPCO','cmdPlanActive','cmdLimited','cmdSiren','cmdEndAlertSignal','cmdFrAlert','cmdExercise','cmdOriginalSigned']
     .forEach((fieldId) => {
       const el = document.getElementById(fieldId);
       if (!el) return;
@@ -3495,22 +3520,72 @@ async function deleteCommandById(id) {
 function addServiceRow(data) {
   state.services.push(data || { name: '', cod: false, pco: false });
   renderServiceRows();
+  window.SICODCommand?.saveDraft?.(getCommandData());
 }
 
 function removeServiceRow(i) {
   state.services.splice(i, 1);
   renderServiceRows();
+  window.SICODCommand?.saveDraft?.(getCommandData());
 }
 
 function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
   svcRows.innerHTML = state.services.map((svc, i) => `<div class="svc-row">
-    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value">
-    <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked"> COD</label>
-    <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked"> PCO</label>
+    <input value="${esc(svc.name)}" placeholder="Service / entité" oninput="state.services[${i}].name=this.value;window.SICODCommand?.saveDraft?.(getCommandData())">
+    <label class="check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="state.services[${i}].cod=this.checked;window.SICODCommand?.saveDraft?.(getCommandData())"> COD</label>
+    <label class="check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="state.services[${i}].pco=this.checked;window.SICODCommand?.saveDraft?.(getCommandData())"> PCO</label>
     <button class="fr-btn danger small" type="button" onclick="removeServiceRow(${i})">Retirer</button>
   </div>`).join('');
+}
+
+function normalizeCommandServiceName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+}
+
+function buildCommandServiceSlots(services) {
+  const source = Array.isArray(services) ? services.filter((item) => String(item?.name || '').trim()) : [];
+  const canonicalSlots = [
+    { label: 'SDIS', aliases: ['SDIS'] },
+    { label: 'PPD', aliases: ['PPD', 'PP13', 'PREFETDEPOLICE', 'PREFECTUREDEPOLICE'] },
+    { label: 'BMPM', aliases: ['BMPM'] },
+    { label: 'DIPN', aliases: ['DIPN', 'DDSP'] },
+    { label: 'SAMU', aliases: ['SAMU'] },
+    { label: 'GGD', aliases: ['GGD'] },
+    { label: 'ARS', aliases: ['ARS'] },
+    { label: 'CRS', aliases: ['CRS'] },
+    { label: 'DDTM', aliases: ['DDTM'] },
+    { label: 'DMD', aliases: ['DMD'] },
+    { label: 'DREAL', aliases: ['DREAL'] },
+    { label: 'METROPOLE', aliases: ['METROPOLE', 'METROPOLEAIXMARSEILLEPROVENCE'] }
+  ];
+  const consumed = new Set();
+  const slots = canonicalSlots.map((slot) => {
+    const match = source.find((item, index) => {
+      if (consumed.has(index)) return false;
+      const normalized = normalizeCommandServiceName(item.name);
+      return slot.aliases.includes(normalized);
+    });
+    if (match) consumed.add(source.indexOf(match));
+    return {
+      label: slot.label === 'METROPOLE' ? 'MÉTROPOLE' : slot.label,
+      name: match?.name || (slot.label === 'METROPOLE' ? 'MÉTROPOLE' : slot.label),
+      cod: !!match?.cod,
+      pco: !!match?.pco
+    };
+  });
+  const extras = source.filter((item, index) => !consumed.has(index)).slice(0, 4);
+  while (extras.length < 4) extras.push({ name: '', cod: false, pco: false });
+  return {
+    named: slots,
+    extraNames: extras.map((item) => item.name || ''),
+    checkboxMarks: slots.concat(extras).flatMap((item) => [mark(item.cod), mark(item.pco)])
+  };
 }
 
 function getCommandData() {
@@ -3531,14 +3606,20 @@ function getCommandData() {
     reference: document.getElementById('cmdRef')?.value || '',
     activation: document.getElementById('cmdActivation')?.value || '',
     pcoLocation: document.getElementById('cmdPcoLocation')?.value || '',
+    holdPerimeter: document.getElementById('cmdHoldPerimeter')?.value || '',
     plan: document.getElementById('cmdPlan')?.value || '',
-    sirenLabel: document.getElementById('cmdSirenLabel')?.value || '',
+    limitedDetail: document.getElementById('cmdLimitedDetail')?.value || '',
+    sirenScenario: document.getElementById('cmdSirenScenario')?.value || '',
+    diffusionPerimeter: document.getElementById('cmdDiffusionPerimeter')?.value || '',
+    messageDetail: document.getElementById('cmdMessageDetail')?.value || '',
     suivi: document.getElementById('cmdSuivi')?.checked || false,
     cod: document.getElementById('cmdCOD')?.checked || false,
     pco: document.getElementById('cmdPCO')?.checked || false,
     planActive: document.getElementById('cmdPlanActive')?.checked || false,
     limited: document.getElementById('cmdLimited')?.checked || false,
     siren: document.getElementById('cmdSiren')?.checked || false,
+    endAlertSignal: document.getElementById('cmdEndAlertSignal')?.checked || false,
+    frAlert: document.getElementById('cmdFrAlert')?.checked || false,
     exercise: document.getElementById('cmdExercise')?.checked || false,
     originalSigned: document.getElementById('cmdOriginalSigned')?.checked || false,
     services: (state.services || []).filter(s => String(s.name || '').trim())
@@ -3555,12 +3636,52 @@ function exportCommandPDF() {
     showToast('Sélectionnez un message de commandement.', 'error');
     return;
   }
-  return openHtmlTemplatePdf(
-    'command_message',
-    buildCommandHtmlTokens(d),
-    `message-commandement-${slugify(d.event || d.typeLabel || 'document')}`,
-    { orientation: 'portrait' }
-  );
+  (async () => {
+    try {
+      const { zip, doc } = await loadDocxDocument('commandMessage');
+      const now = new Date();
+      replacePlaceholderText(doc, '[date de génération]', now.toLocaleDateString('fr-FR'), true);
+      replacePlaceholderText(doc, '[heure de génération]', now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), true);
+      replacePlaceholderText(doc, '[Type de message]', d.typeLabel || '', true);
+      replacePlaceholderText(doc, '[Évènement]', d.event || getEventTitle(d.eventId) || '', true);
+      replacePlaceholderText(doc, '[Localisation]', d.site || '', true);
+      replacePlaceholderText(doc, '[Message automatique]', d.autoText || '', true);
+      replacePlaceholderText(doc, '[Disposition de référence]', d.reference || '', true);
+      replacePlaceholderText(doc, '[heure]', d.activation || '', true);
+      replacePlaceholderText(doc, '[Périmètre à tenir]', d.holdPerimeter || '', true);
+      replacePlaceholderText(doc, '[Localisation du PCO]', d.pcoLocation || '', true);
+      replacePlaceholderText(doc, '[Mesure]', d.limitedDetail || '', true);
+      replacePlaceholderText(doc, '[Scénario, groupe, sirène]', d.sirenScenario || '', true);
+      replacePlaceholderTextWithBreaks(doc, '[Détail du message]', d.messageDetail || '', true);
+      replacePlaceholderText(doc, '[Périmètre de diffusion]', d.diffusionPerimeter || '', true);
+      const serviceSlots = buildCommandServiceSlots(d.services || []);
+      replacePlaceholderSequence(doc, '[AUTRE]', serviceSlots.extraNames);
+      replacePlaceholderSequence(doc, '[X]', [
+        mark(d.suivi),
+        mark(d.cod),
+        mark(d.pco),
+        mark(d.planActive),
+        mark(d.limited),
+        mark(d.siren),
+        mark(d.endAlertSignal),
+        mark(d.frAlert),
+        ...serviceSlots.checkboxMarks
+      ]);
+
+      const exerciseToken = '[EXERCICE – EXERCICE – EXERCICE]';
+      const headerDoc = await loadDocxXml(zip, 'word/header1.xml');
+      replacePlaceholderText(headerDoc, exerciseToken, d.exercise ? exerciseToken : '', true);
+      saveDocxXml(zip, 'word/header1.xml', headerDoc);
+      const footerDoc = await loadDocxXml(zip, 'word/footer1.xml');
+      replacePlaceholderText(footerDoc, exerciseToken, d.exercise ? exerciseToken : '', true);
+      saveDocxXml(zip, 'word/footer1.xml', footerDoc);
+
+      await exportDocxBlob(saveDocxDocument(zip, doc), `message-commandement-${slugify(d.event || d.typeLabel || 'document')}.docx`);
+      showToast('Message de commandement exporté en DOCX.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
