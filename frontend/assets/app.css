@@ -782,15 +782,11 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .directory-group .card-body{overflow-x:auto}
 .directory-group .table{min-width:100%}
 .directory-group .table th:nth-child(1){width:14%}
-.directory-group .table th:nth-child(2){width:13%}
-.directory-group .table th:nth-child(3){width:15%}
-.directory-group .table th:nth-child(4),
-.directory-group .table th:nth-child(5){width:11%}
-.directory-group .table th:nth-child(6),
-.directory-group .table th:nth-child(7){width:14%}
-.directory-group .table th:nth-child(8){width:5rem}
-.directory-group .table td:last-child{padding:.35rem .45rem}
-.directory-group .table td:last-child .list-actions{gap:.25rem}
+.directory-group .table th:nth-child(1){width:18%}
+.directory-group .table th:nth-child(2){width:18%}
+.directory-group .table th:nth-child(3){width:24%}
+.directory-group .table th:nth-child(4){width:18%}
+.directory-group .table th:nth-child(5){width:22%}
 #directorySearch{border-radius:.75rem}
 #page-directory .page-inner{max-width:96rem}
 .compact-list{margin:0;padding-left:1rem}
@@ -817,17 +813,16 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .planning-table th:nth-child(7){width:16%}
 .event-workspace .table th:last-child,
 .event-workspace .table td:last-child{width:9rem;white-space:nowrap}
-.directory-table th:last-child,
 .duty-availability-table th:last-child,
 .duty-availability-table td:last-child,
 .user-admin-table th:last-child,
 .user-admin-table td:last-child{width:5rem;white-space:nowrap}
 .duty-availability-table td:last-child,
-.user-admin-table td:last-child,
-.directory-table td:last-child{padding:.35rem .45rem}
+.user-admin-table td:last-child{padding:.35rem .45rem}
 .duty-availability-table td:last-child .list-actions,
-.user-admin-table td:last-child .list-actions,
-.directory-table td:last-child .list-actions{justify-content:flex-end}
+.user-admin-table td:last-child .list-actions{justify-content:flex-end}
+.table-stack{display:grid;gap:.2rem}
+.table-stack span{display:block}
 #page-settings .table-wrap,
 #page-directory .table-wrap,
 #page-planning .table-wrap,

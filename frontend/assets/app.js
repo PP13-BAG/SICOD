@@ -3799,6 +3799,8 @@ function openContactForm(id) {
   document.getElementById('contactPhone2').value = c?.phone2 || '';
   document.getElementById('contactEmail1').value = c?.email1 || '';
   document.getElementById('contactEmail2').value = c?.email2 || '';
+  const deleteBtn = document.getElementById('contactDeleteBtn');
+  if (deleteBtn) deleteBtn.style.display = c?.id ? '' : 'none';
   document.getElementById('contactDialog').showModal();
 }
 
@@ -3837,6 +3839,13 @@ async function deleteContact(id) {
   renderDirectory();
 }
 
+async function deleteContactFromDialog() {
+  const id = document.getElementById('contactId')?.value || '';
+  if (!id) return;
+  await deleteContact(id);
+  document.getElementById('contactDialog')?.close();
+}
+
 function renderDirectory() {
   const directoryList = document.getElementById('directoryList');
   if (!directoryList) return;
@@ -3858,14 +3867,11 @@ function renderDirectory() {
     });
     return `<div class="card directory-group">
       <div class="card-header"><h2 class="card-title">${esc(group)}</h2></div>
-      <div class="card-body"><table class="table directory-table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphone 1','entity','asc')}<th>Téléphone 2</th>${sortableTh('directory','email1','e-mail 1','entity','asc')}<th>e-mail 2</th><th>Actions</th></tr></thead><tbody>${
-        sortedItems.map(c => `<tr>
-          <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td><td>${esc(c.phone1||'')}</td><td>${esc(c.phone2||'')}</td>
-          <td>${esc(c.email1||'')}</td><td>${esc(c.email2||'')}</td>
-          <td><div class="list-actions">
-            ${actionIconButton('edit', 'Modifier', `openContactForm('${c.id}')`)}
-            ${actionIconButton('delete', 'Supprimer', `deleteContact('${c.id}')`, { variant: 'danger' })}
-          </div></td>
+      <div class="card-body"><table class="table directory-table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphones','entity','asc')}${sortableTh('directory','email1','E-mails','entity','asc')}</tr></thead><tbody>${
+        sortedItems.map(c => `<tr class="table-row-clickable" tabindex="0" role="button" onclick="openContactForm('${c.id}')" onkeydown="handleTableRowKey(event, () => openContactForm('${c.id}'))">
+          <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td>
+          <td><div class="table-stack"><span>${esc(c.phone1||'—')}</span>${c.phone2 ? `<span>${esc(c.phone2)}</span>` : ''}</div></td>
+          <td><div class="table-stack"><span>${esc(c.email1||'—')}</span>${c.email2 ? `<span>${esc(c.email2)}</span>` : ''}</div></td>
         </tr>`).join('')
       }</tbody></table></div>
     </div>`;
