@@ -41,10 +41,10 @@ DS (Dispositions spécifiques) = 2"></textarea></div></div></div></div><div clas
       </div>
       <div class="grid-2 command-form-grid" style="margin-top:1rem">
         <div><label>Type de message</label><select id="cmdType"></select></div>
-        <div><label>Événement</label><select id="cmdEvent" onchange="syncCommandEventContext()"></select></div>
+        <div><label>Evènement</label><select id="cmdEvent" onchange="syncCommandEventContext()"></select></div>
       </div>
       <div class="grid-2 command-form-grid" style="margin-top:1rem">
-        <div><label>Site / lieu de l’événement</label><input id="cmdSite"></div>
+        <div><label>Site / lieu de l’évènement</label><input id="cmdSite"></div>
         <div><label>N° message</label><input id="cmdNumber" readonly></div>
       </div>
       <fieldset class="fr-fieldset">
@@ -61,7 +61,7 @@ DS (Dispositions spécifiques) = 2"></textarea></div></div></div></div><div clas
         <div class="inline-checks">
           <label class="check"><input id="cmdSuivi" type="checkbox"><span>Activation d’une cellule de suivi</span></label>
           <label class="check"><input id="cmdCOD" type="checkbox"><span>Activation du COD</span></label>
-          <label class="check"><input id="cmdPCO" type="checkbox"><span>Activation du PCO</span></label>
+          <label class="check"><input id="cmdPCO" type="checkbox"><span>Activation du PCO (Préciser localisation)</span></label>
           <label class="check"><input id="cmdPlanActive" type="checkbox"><span>Activation de la disposition de référence</span></label>
           <label class="check"><input id="cmdLimited" type="checkbox"><span>Activation limitée à certaines mesures</span></label>
           <label class="check"><input id="cmdSiren" type="checkbox"><span>Activation des sirènes d’alerte</span></label>
@@ -70,14 +70,14 @@ DS (Dispositions spécifiques) = 2"></textarea></div></div></div></div><div clas
           <label class="check"><input id="cmdExercise" type="checkbox"><span>Exercice</span></label>
         </div>
         <div class="grid-2 command-form-grid command-measures-grid" style="margin-top:1rem">
-          <div><label>Mesures activées de manière limitée</label><textarea id="cmdLimitedDetail" placeholder="Préciser les mesures concernées"></textarea></div>
-          <div><label>Scénario des sirènes</label><textarea id="cmdSirenScenario" placeholder="Préciser le scénario, le groupe et la sirène concernés"></textarea></div>
-          <div><label>Périmètre de diffusion</label><input id="cmdDiffusionPerimeter"></div>
-          <div><label>Message FR-Alert / message diffusé</label><textarea id="cmdMessageDetail"></textarea></div>
+          <div><label>Activation limitée à certaines mesures :</label><textarea id="cmdLimitedDetail" placeholder="Préciser les mesures concernées"></textarea></div>
+          <div><label>Scénario, groupe, sirène</label><textarea id="cmdSirenScenario" placeholder="Préciser le scénario, le groupe et la sirène concernés"></textarea></div>
+          <div><label>Périmètre / zone de diffusion du message FR-Alert</label><input id="cmdDiffusionPerimeter"></div>
+          <div><label>Message FR-Alert</label><textarea id="cmdMessageDetail"></textarea></div>
         </div>
       </fieldset>
       <fieldset class="fr-fieldset">
-        <legend>Services / entités destinataires</legend>
+        <legend>Les services ci-dessous doivent rejoindre le COD en préfecture et/ou le PCO</legend>
         <div id="svcRows"></div>
       </fieldset>
       <div class="list-actions">

@@ -3648,9 +3648,9 @@ function renderServiceRows() {
   if (!svcRows) return;
   const services = state.services || [];
   svcRows.innerHTML = `<div class="svc-matrix">
-    <div class="svc-matrix-head">Service / entité</div>
-    <div class="svc-matrix-head svc-matrix-head--check">COD</div>
-    <div class="svc-matrix-head svc-matrix-head--check">PCO</div>
+    <div class="svc-matrix-head">SERVICES/ ENTITES</div>
+    <div class="svc-matrix-head svc-matrix-head--check">Présence en COD</div>
+    <div class="svc-matrix-head svc-matrix-head--check">Présence au PCO</div>
     <div class="svc-matrix-head svc-matrix-head--action"></div>
     ${services.map((svc, i) => {
       const labelCell = `<input value="${esc(svc.name || '')}" placeholder="${esc(svc.placeholder || 'Service / entité')}" oninput="updateCommandServiceField(${i}, 'name', this.value)">`;
