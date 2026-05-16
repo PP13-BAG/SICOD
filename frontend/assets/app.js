@@ -4089,6 +4089,15 @@ function saveDutyAvailability() {
   if (!monday) { showToast("Définissez une semaine d'astreinte valide.", 'error'); return; }
   data.start = toLocalISO(monday);
   data.end = toLocalISO(weekEndInclusive(monday));
+  const duplicate = getValidDutyAvailabilities().find((item) =>
+    item.id !== id &&
+    String(item.agent || '').trim() === data.agent &&
+    String(item.start || '').trim() === data.start
+  );
+  if (duplicate) {
+    showToast("Cet agent a déjà une disponibilité enregistrée pour cette semaine.", 'error');
+    return;
+  }
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
@@ -4186,13 +4195,13 @@ function renderDutyCalendar() {
       .sort((a, b) => String(a.agent || '').localeCompare(String(b.agent || ''), 'fr'));
     const role1Entries = byRole(role1);
     const role2Entries = byRole(role2);
-    const renderEntries = (items) => items.length
-      ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="openDutyAvailabilityForm('${item.id}')">${esc(item.agent || '')}</button>`).join('')}</div>`
+    const renderEntries = (items, role) => items.length
+      ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="event.stopPropagation();openDutyAvailabilityForm('${item.id}')"><span class="duty-week-pill-name">${esc(item.agent || '')}</span><span class="duty-week-pill-role">${esc(role)}</span></button>`).join('')}</div>`
       : '<span class="table-meta">Aucune disponibilité</span>';
     weekRows.push(`<tr>
       <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${weekKey}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries)}</td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries, role1)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries, role2)}</td>
     </tr>`);
   }
   dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
