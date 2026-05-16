@@ -67,13 +67,7 @@ function getDefaultCommandServices() {
     fixedLabel: label,
     cod: false,
     pco: false
-  })).concat(Array.from({ length: COMMAND_SERVICE_EXTRA_SLOTS }, (_, index) => ({
-    name: '',
-    fixedLabel: '',
-    placeholder: `Autre service / entité ${index + 1}`,
-    cod: false,
-    pco: false
-  })));
+  }));
 }
 
 const defaultServices = getDefaultCommandServices();
@@ -2366,10 +2360,11 @@ function goPage(page) {
     state.currentEventWorkspaceTab = 'command';
     page = 'events';
   }
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page || (page === 'event-archives' && b.dataset.page === 'events')));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === page || ((page === 'event-archives' || page === 'event-detail') && b.dataset.page === 'events')));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + page));
   if (page === 'fiches') renderFiches();
   if (page === 'events') renderEvents();
+  if (page === 'event-detail') renderEventDetail();
   if (page === 'event-archives') renderEventArchives();
   populateEventTypeSelect(document.getElementById('eventType')?.value || '');
   populateCommuneDatalist();
@@ -2419,6 +2414,27 @@ function ensureEventArchivesPage() {
   `);
 }
 
+function ensureEventDetailPage() {
+  const main = document.querySelector('main.main');
+  if (!main || document.getElementById('page-event-detail')) return;
+  main.insertAdjacentHTML('beforeend', `
+    <section class="page" id="page-event-detail">
+      <div class="page-inner">
+        <div class="page-header">
+          <div>
+            <h1 id="eventDetailPageTitle">Conduite de l'événement</h1>
+            <p class="help" id="eventDetailPageMeta"></p>
+          </div>
+          <div class="event-page-actions">
+            <button class="fr-btn secondary" type="button" onclick="closeEventDetail()">Retour aux événements</button>
+          </div>
+        </div>
+        <div id="eventDetailWorkspaceHost"></div>
+      </div>
+    </section>
+  `);
+}
+
 function ensureEventPageEnhancements() {
   const pageHeader = document.querySelector('#page-events .page-header');
   if (pageHeader && !pageHeader.querySelector('.event-page-actions')) {
@@ -2445,27 +2461,31 @@ function ensureEventPageEnhancements() {
     card.querySelector('.card-title')?.textContent?.trim() === 'Événements archivés'
   );
   if (archivedCard) archivedCard.remove();
-  ensureEventWorkspaceUI();
   ensureEventArchivesPage();
+  ensureEventDetailPage();
+  ensureEventWorkspaceUI();
 }
 
 function ensureEventWorkspaceUI() {
   const pageInner = document.querySelector('#page-events .page-inner');
-  if (!pageInner || document.getElementById('eventWorkspaceTabs')) return;
+  const detailHost = document.getElementById('eventDetailWorkspaceHost');
+  if (!pageInner || !detailHost) return;
   const activeCard = pageInner.querySelector('#eventList')?.closest('.card');
   const timelineCard = document.getElementById('eventTimelineCard');
   if (!activeCard || !timelineCard) return;
   activeCard.classList.add('event-selector-card');
-  const workspace = document.createElement('div');
-  workspace.className = 'card';
-  workspace.id = 'eventWorkspaceCard';
-  workspace.innerHTML = `
+  let workspace = document.getElementById('eventWorkspaceCard');
+  if (!workspace) {
+    workspace = document.createElement('div');
+    workspace.className = 'card';
+    workspace.id = 'eventWorkspaceCard';
+    workspace.innerHTML = `
     <div class="card-header">
       <h2 class="card-title">Conduite de l'événement</h2>
       <div class="page-subtabs" id="eventWorkspaceTabs">
         <button class="page-subtab active" data-workspace-tab="timeline" type="button" onclick="showEventWorkspaceTab('timeline')">Main courante</button>
         <button class="page-subtab" data-workspace-tab="ps" type="button" onclick="showEventWorkspaceTab('ps')">Points de situation</button>
-        <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages</button>
+        <button class="page-subtab" data-workspace-tab="command" type="button" onclick="showEventWorkspaceTab('command')">Messages de commandement</button>
       </div>
     </div>
     <div class="card-body event-workspace">
@@ -2489,9 +2509,9 @@ function ensureEventWorkspaceUI() {
       <div id="eventWorkspaceCommand" class="event-workspace-panel">
         <div class="card event-manager-card">
           <div class="card-header">
-            <h2 class="card-title">Message de commandement</h2>
+            <h2 class="card-title">Messages de commandement</h2>
             <div class="list-actions">
-              <button class="fr-btn" type="button" onclick="openCommandForm()">Message de commandement</button>
+              <button class="fr-btn" type="button" onclick="openCommandForm()">Ajouter</button>
             </div>
           </div>
           <div class="card-body event-list-shell">
@@ -2504,8 +2524,16 @@ function ensureEventWorkspaceUI() {
       </div>
     </div>
   `;
-  activeCard.after(workspace);
+  }
+  detailHost.appendChild(workspace);
   document.getElementById('eventWorkspaceTimeline')?.appendChild(timelineCard);
+}
+
+function closeEventDetail() {
+  state.currentEventId = null;
+  state.currentEventWorkspaceTab = 'timeline';
+  persist();
+  goPage('events');
 }
 
 function showEventWorkspaceTab(tab) {
@@ -2690,16 +2718,12 @@ async function deleteEvent(id) {
 }
 
 function openEvent(id) {
-  if (state.currentEventId === id) {
-    state.currentEventId = null;
-    renderEvents();
-    return;
-  }
   const e = byId(state.events, id);
   if (!e) return;
   state.currentEventId = id;
   state.currentEventWorkspaceTab = 'timeline';
-  renderEvents();
+  persist();
+  goPage('event-detail');
 }
 
 function openEventEntryForm() {
@@ -2850,10 +2874,28 @@ function renderEvents() {
     </div>`;
   };
 
-  eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Nouvel événement', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
+  eventList.innerHTML = filteredActive.length ? filteredActive.map(tmpl).join('') : (window.SICODUI?.setEmptyState?.('Aucun événement actif. Créer un premier événement.', 'Ajouter', 'openEventForm()') || '<p class="help">Aucun événement actif.</p>');
   updatePSEventSelect();
   populateCommuneDatalist();
-  renderEventTimeline(state.currentEventId);
+  if (state.currentEventId && isPageActive('event-detail')) {
+    renderEventDetail();
+  }
+}
+
+function renderEventDetail() {
+  ensureEventPageEnhancements();
+  ensureEventDetailPage();
+  ensureEventWorkspaceUI();
+  const event = byId(state.events, state.currentEventId);
+  if (!event) {
+    goPage('events');
+    return;
+  }
+  const title = document.getElementById('eventDetailPageTitle');
+  const meta = document.getElementById('eventDetailPageMeta');
+  if (title) title.textContent = event.title || "Conduite de l'événement";
+  if (meta) meta.textContent = [event.type || '—', event.location || '—', event.level || '—', event.synergi ? `ID Synergi ${event.synergi}` : ''].filter(Boolean).join(' · ');
+  renderEventTimeline(event.id);
   showEventWorkspaceTab(state.currentEventWorkspaceTab || 'timeline');
 }
 
@@ -3372,13 +3414,15 @@ function normalizeCommandServiceFormServices(services) {
     cod: !!item.cod,
     pco: !!item.pco
   }));
-  const extraRows = slots.extra.map((item, index) => ({
-    name: item.name || '',
-    fixedLabel: '',
-    placeholder: `Autre service / entité ${index + 1}`,
-    cod: !!item.cod,
-    pco: !!item.pco
-  }));
+  const extraRows = slots.extra
+    .filter((item) => String(item.name || '').trim())
+    .map((item, index) => ({
+      name: item.name || '',
+      fixedLabel: '',
+      placeholder: `Autre service / entité ${index + 1}`,
+      cod: !!item.cod,
+      pco: !!item.pco
+    }));
   return fixedRows.concat(extraRows);
 }
 
@@ -3559,21 +3603,55 @@ function updateCommandServiceField(index, key, value) {
   window.SICODCommand?.saveDraft?.(getCommandData());
 }
 
+function addCommandServiceRow() {
+  const extraCount = (state.services || []).filter((service) => !service.fixedLabel).length;
+  if (extraCount >= COMMAND_SERVICE_EXTRA_SLOTS) {
+    showToast(`Le modèle permet ${COMMAND_SERVICE_EXTRA_SLOTS} services additionnels au maximum.`, 'info');
+    return;
+  }
+  state.services.push({
+    name: '',
+    fixedLabel: '',
+    placeholder: `Autre service / entité ${extraCount + 1}`,
+    cod: false,
+    pco: false
+  });
+  renderServiceRows();
+  window.SICODCommand?.saveDraft?.(getCommandData());
+}
+
+function removeCommandServiceRow(index) {
+  if (!Array.isArray(state.services) || !state.services[index] || state.services[index].fixedLabel) return;
+  state.services.splice(index, 1);
+  renderServiceRows();
+  window.SICODCommand?.saveDraft?.(getCommandData());
+}
+
 function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
+  const services = state.services || [];
+  const extraCount = services.filter((service) => !service.fixedLabel).length;
   svcRows.innerHTML = `<div class="svc-matrix">
     <div class="svc-matrix-head">Service / entité</div>
     <div class="svc-matrix-head svc-matrix-head--check">COD</div>
     <div class="svc-matrix-head svc-matrix-head--check">PCO</div>
-    ${(state.services || []).map((svc, i) => {
+    <div class="svc-matrix-head svc-matrix-head--action"></div>
+    ${services.map((svc, i) => {
       const labelCell = svc.fixedLabel
         ? `<div class="svc-matrix-label">${esc(svc.fixedLabel)}</div>`
         : `<input value="${esc(svc.name || '')}" placeholder="${esc(svc.placeholder || 'Autre service / entité')}" oninput="updateCommandServiceField(${i}, 'name', this.value)">`;
+      const actionCell = svc.fixedLabel
+        ? '<div class="svc-matrix-action"></div>'
+        : `<div class="svc-matrix-action"><button class="fr-btn secondary small" type="button" onclick="removeCommandServiceRow(${i})">Supprimer</button></div>`;
       return `${labelCell}
         <label class="svc-matrix-check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'cod', this.checked)"></label>
-        <label class="svc-matrix-check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'pco', this.checked)"></label>`;
+        <label class="svc-matrix-check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'pco', this.checked)"></label>
+        ${actionCell}`;
     }).join('')}
+  </div>
+  <div class="command-service-add">
+    <button class="fr-btn secondary small" type="button" onclick="addCommandServiceRow()" ${extraCount >= COMMAND_SERVICE_EXTRA_SLOTS ? 'disabled' : ''}>Ajouter un service</button>
   </div>`;
 }
 
@@ -3881,13 +3959,13 @@ function renderFiches() {
   ).join('') + (!q ? `<div class="group"><h3>Compléments</h3><button class="fiche-link ${state.selectedFiche === 'glossary' ? 'active' : ''}" onclick="selectFiche('glossary')">Glossaire</button></div>` : '');
 
   if (state.selectedFiche === 'glossary') {
-    ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter une fiche</button></div><h2>Glossaire</h2><div class="fiche-section"><ul>${glossary.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`;
+    ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter</button></div><h2>Glossaire</h2><div class="fiche-section"><ul>${glossary.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`;
     return;
   }
 
   const fiche = fiches.find(f => f.code === state.selectedFiche) || fiches[0];
   if (!fiche) {
-    ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter une fiche</button></div><p class="fiche-empty">Aucune fiche disponible.</p>`;
+    ficheContent.innerHTML = `<div class="fiche-toolbar"><button class="fr-btn small" type="button" onclick="openFicheForm()">Ajouter</button></div><p class="fiche-empty">Aucune fiche disponible.</p>`;
     return;
   }
   state.selectedFiche = fiche.code;
@@ -5117,10 +5195,12 @@ function ensureSettingsNavigatorUI() {
     tabs.parentNode.insertBefore(wrapper, tabs);
   }
   const select = wrapper.querySelector('select');
-  const options = Array.from(tabs.querySelectorAll('.settings-tab')).map(btn => ({
-    value: btn.dataset.settingsTab,
-    label: btn.textContent.trim()
-  }));
+  const options = Array.from(tabs.querySelectorAll('.settings-tab'))
+    .filter((btn) => !['ps', 'command'].includes(btn.dataset.settingsTab))
+    .map(btn => ({
+      value: btn.dataset.settingsTab,
+      label: btn.textContent.trim()
+    }));
   const admin = isCurrentUserAdmin();
   const filtered = options.filter((option) => admin || option.value === 'general');
   select.innerHTML = filtered.map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('');

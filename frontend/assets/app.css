@@ -712,7 +712,7 @@ dialog{
 }
 #eventDialog{max-width:calc(100vw - 2rem);width:min(56rem,calc(100vw - 2rem))}
 #psDialog{max-width:calc(100vw - 2rem);width:min(72rem,calc(100vw - 2rem))}
-#commandDialog{max-width:calc(100vw - 2rem);width:min(68rem,calc(100vw - 2rem))}
+#commandDialog{max-width:calc(100vw - 2rem);width:min(62rem,calc(100vw - 2rem))}
 #ficheDialog{max-width:calc(100vw - 2rem);width:min(64rem,calc(100vw - 2rem))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog form.card{
@@ -737,18 +737,38 @@ dialog .dialog-body,dialog .card-body{
   overflow-y:auto;
   max-height:calc(100vh - 8rem);
 }
-#commandDialog form.card{width:min(68rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem)}
+#commandDialog form.card{width:min(62rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem)}
+#commandDialog .card-body{padding:.9rem 1rem}
 #commandDialog .card-body > *,
 #commandDialog .fr-fieldset,
 #commandDialog .grid-2 > div,
 #commandDialog .grid-3 > div{min-width:0}
+#commandDialog .grid-2{grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}
+#commandDialog .grid-3{grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))}
+#commandDialog label{font-size:.8rem}
 #commandDialog textarea,
 #commandDialog input,
-#commandDialog select{max-width:100%}
-#commandDialog .inline-checks{grid-template-columns:repeat(2,minmax(0,1fr))}
-#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 4.5rem 4.5rem}
+#commandDialog select{max-width:100%;font-size:.92rem;padding:.55rem .7rem}
+#commandDialog textarea{min-height:5rem}
+#commandDialog .inline-checks{grid-template-columns:1fr;gap:.45rem}
+#commandDialog .check{align-items:flex-start;min-width:0}
+#commandDialog .check span{display:block;min-width:0;overflow-wrap:anywhere}
+#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem auto;gap:.45rem}
 #commandDialog .svc-matrix input{min-width:0}
+#commandDialog .svc-matrix-label,
+#commandDialog .svc-matrix-check{min-height:2.3rem}
+#commandDialog .svc-matrix-action{display:flex;justify-content:flex-end}
+#commandDialog .svc-matrix-head--action{visibility:hidden}
+#commandDialog .command-service-add{display:flex;justify-content:flex-end;margin-top:.6rem}
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
+dialog .tool-actions > .fr-btn,
+dialog .list-actions > .fr-btn{order:2}
+dialog .tool-actions > .fr-btn:not(.secondary):not(.danger),
+dialog .list-actions > .fr-btn:not(.secondary):not(.danger){order:1}
+dialog .tool-actions > .fr-btn.secondary,
+dialog .list-actions > .fr-btn.secondary{order:2}
+dialog .tool-actions > .fr-btn.danger,
+dialog .list-actions > .fr-btn.danger{order:3}
 
 .events-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin-bottom:1rem}
 .events-toolbar .list-search{margin:0;min-width:18rem;flex:1 1 20rem}
