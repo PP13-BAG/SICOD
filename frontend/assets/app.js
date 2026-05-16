@@ -2566,7 +2566,7 @@ function showEventWorkspaceTab(tab) {
 function renderDashboard() {
   refreshDashboardBanner();
   const kpiEvents = document.getElementById('kpiEvents');
-  const kpiPS = document.getElementById('kpiPS');
+  const kpiContacts = document.getElementById('kpiContacts');
   const kpiArchived = document.getElementById('kpiArchived');
   const kpiPlansTotal = document.getElementById('kpiPlansTotal');
   const kpiPlansUpToDate = document.getElementById('kpiPlansUpToDate');
@@ -2577,13 +2577,14 @@ function renderDashboard() {
   const activeEvents = getActiveItems(state.events).filter(e => e.status !== 'Archivé');
   const archivedEvents = (state.events || []).filter(e => e && !e.deletedAt && e.status === 'Archivé');
   const activePS = getActiveItems(state.ps);
+  const activeContacts = getActiveItems(state.contacts);
   const planStatusNorm = (value) => String(value || '').trim().toLowerCase();
   const isPlanUpToDate = (p) => planStatusNorm(p?.status) === 'a jour' || planStatusNorm(p?.status) === 'à jour';
   const isPlanTodo = (p) => planStatusNorm(p?.status) === 'a programmé' || planStatusNorm(p?.status) === 'à programmer' || planStatusNorm(p?.status) === 'a programmer';
   const isPlanInProgress = (p) => planStatusNorm(p?.status) === 'en cours';
 
   if (kpiEvents) kpiEvents.textContent = activeEvents.length;
-  if (kpiPS) kpiPS.textContent = activePS.length;
+  if (kpiContacts) kpiContacts.textContent = activeContacts.length;
   if (kpiArchived) kpiArchived.textContent = archivedEvents.length;
   if (kpiPlansTotal) kpiPlansTotal.textContent = planItems.length;
   if (kpiPlansUpToDate) kpiPlansUpToDate.textContent = planItems.filter(isPlanUpToDate).length;
@@ -2759,7 +2760,9 @@ function saveEventLogEntry() {
 function getEventTimelineItems(eventId) {
   const e = byId(state.events, eventId);
   if (!e) return [];
-  const manual = (Array.isArray(e.logEntries) ? e.logEntries : []).map(item => ({
+  const manual = (Array.isArray(e.logEntries) ? e.logEntries : [])
+    .filter((item) => !item?.commandMessageId)
+    .map(item => ({
     date: item.createdAt,
     author: item.author || 'SIRACEDPC',
     title: item.title || '',
@@ -2781,7 +2784,15 @@ function getEventTimelineItems(eventId) {
       title: `${cmd.typeLabel || 'Message de commandement'}${cmd.number ? ' n° ' + cmd.number : ''}`,
       detail: `Message de commandement ${cmd.status.toLowerCase()}`
     }));
-  return manual.concat(relatedPS, commandItems).sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')));
+  const seen = new Set();
+  return manual.concat(relatedPS, commandItems)
+    .filter((item) => {
+      const key = [item.date || '', item.author || '', item.title || '', item.detail || ''].join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a,b) => String(b.date||'').localeCompare(String(a.date||'')));
 }
 
 function renderEventTimeline(eventId) {
@@ -3111,44 +3122,72 @@ function duplicatePS(id) {
   showToast('Point de situation dupliqué.');
 }
 
-function renderPSList() {
-  const psList = document.getElementById('eventPsList');
-  if (!psList) return;
+function renderOperationalTable({
+  containerId,
+  emptyMessage,
+  emptyActionLabel,
+  emptyActionHandler,
+  searchValue,
+  items,
+  sortKey,
+  sortAccessors,
+  buildTitleCell,
+  buildRowActions,
+  selectedId
+}) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const q = String(searchValue || '').toLowerCase().trim();
+  const filtered = q
+    ? items.filter((item) => [item.number, item.author, item.status, item.title, item.typeLabel, item.event, getEventTitle(item.eventId)].join(' ').toLowerCase().includes(q))
+    : items;
+  const orderedItems = sortItems(filtered, sortKey, 'date', 'desc', sortAccessors);
+  if (!orderedItems.length) {
+    container.innerHTML = window.SICODUI?.setEmptyState?.(emptyMessage, emptyActionLabel, emptyActionHandler) || `<p class="help">${esc(emptyMessage)}</p>`;
+    return;
+  }
+  container.innerHTML = `<table class="table"><thead><tr>${sortableTh(sortKey,'date','Horodatage','date','desc')}${sortableTh(sortKey,'number','Numéro','date','desc')}${sortableTh(sortKey,'event','Évènement','date','desc')}${sortableTh(sortKey,'status','Statut','date','desc')}<th>Action</th></tr></thead><tbody>${
+    orderedItems.map((item) => `<tr class="${item.id === selectedId ? 'is-selected' : ''}">
+      <td>${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</td>
+      <td>${buildTitleCell(item)}</td>
+      <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
+      <td>${badge(item.status)}</td>
+      <td><div class="list-actions">${buildRowActions(item)}</div></td>
+    </tr>`).join('')
+  }</tbody></table>`;
+}
 
-  const q = (document.getElementById('eventPsListSearch')?.value || '').toLowerCase().trim();
+function renderPSList() {
   const source = getActiveItems(state.ps).filter(isLinkedToActiveEvent);
   if (state.selectedPSId && !source.some((item) => item.id === state.selectedPSId)) {
     state.selectedPSId = null;
   }
-  const list = state.currentEventId
+  const items = state.currentEventId
     ? source.filter(ps => ps.eventId === state.currentEventId)
     : source;
-  const filtered = q
-    ? list.filter(ps => [ps.number, ps.author, ps.status, ps.title, getEventTitle(ps.eventId)].join(' ').toLowerCase().includes(q))
-    : list;
-  const sorted = [...filtered].sort((a,b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
-  const rows = sortItems(sorted, 'ps', 'date', 'desc', {
-    date: (ps) => String(ps.updatedAt || ps.createdAt || ''),
-    number: (ps) => Number(ps.number || 0),
-    event: (ps) => getEventTitle(ps.eventId),
-    status: (ps) => ps.status || ''
+  renderOperationalTable({
+    containerId: 'eventPsList',
+    emptyMessage: 'Aucun point de situation. Créer un premier point de situation.',
+    emptyActionLabel: 'Ajouter',
+    emptyActionHandler: 'openPSForm()',
+    searchValue: document.getElementById('eventPsListSearch')?.value,
+    items,
+    sortKey: 'ps',
+    sortAccessors: {
+      date: (ps) => String(ps.updatedAt || ps.createdAt || ''),
+      number: (ps) => Number(ps.number || 0),
+      event: (ps) => getEventTitle(ps.eventId),
+      status: (ps) => ps.status || ''
+    },
+    buildTitleCell: (ps) => `PS ${esc(ps.number || '')}`,
+    buildRowActions: (ps) => `
+      ${actionIconButton('edit', 'Modifier', `openPSForm('${ps.id}')`)}
+      ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
+      ${actionIconButton('export', 'Exporter', `state.selectedPSId='${ps.id}';persist();exportPSPDF()`)}
+      ${actionIconButton('delete', 'Supprimer', `deletePS('${ps.id}')`, { variant: 'danger' })}
+    `,
+    selectedId: state.selectedPSId
   });
-  psList.innerHTML = rows.length
-    ? `<table class="table"><thead><tr>${sortableTh('ps','date','Horodatage','date','desc')}${sortableTh('ps','number','Numéro','date','desc')}${sortableTh('ps','event','Évènement','date','desc')}${sortableTh('ps','status','Statut','date','desc')}<th>Action</th></tr></thead><tbody>${
-        rows.map(ps => `<tr>
-          <td>${esc(formatDateTimeValueFR(ps.updatedAt || ps.createdAt || ''))}</td>
-          <td>PS ${esc(ps.number || '')}</td>
-          <td>${esc(getEventTitle(ps.eventId))}</td>
-          <td>${badge(ps.status)}</td>
-          <td><div class="list-actions">
-            ${actionIconButton('edit', 'Modifier', `openPSForm('${ps.id}')`)}
-            ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
-            ${actionIconButton('export', 'Exporter', `state.selectedPSId='${ps.id}';persist();exportPSPDF()`)}
-            ${actionIconButton('delete', 'Supprimer', `deletePS('${ps.id}')`, { variant: 'danger' })}
-          </div></td>
-        </tr>`).join('')
-      }</tbody></table>`
-    : (window.SICODUI?.setEmptyState?.('Aucun point de situation. Créer un premier point de situation.', 'Ajouter un point de situation', 'openPSForm()') || '<p class="help">Aucun point de situation.</p>');
 }
 
 function handlePSImageFile(file) {
@@ -3516,29 +3555,7 @@ async function deleteSelectedCommand() {
   renderCommandList();
 }
 
-function toggleCommandPreview(id) {
-  if (state.selectedCommandId === id) {
-    state.selectedCommandId = '';
-    persist();
-    renderCommandList();
-    return;
-  }
-  state.selectedCommandId = id;
-  persist();
-  renderCommandList();
-}
-
-function selectCommand(id) {
-  state.selectedCommandId = id;
-  persist();
-  renderCommandList();
-}
-
 function renderCommandList() {
-  const el = document.getElementById('eventCommandList');
-  if (!el) return;
-
-  const q = (document.getElementById('eventCommandListSearch')?.value || '').toLowerCase().trim();
   const eventFilter = state.currentEventId || null;
   let items = [...getActiveItems(state.commandMessages).filter(isLinkedToActiveEvent)]
     .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
@@ -3546,32 +3563,29 @@ function renderCommandList() {
     state.selectedCommandId = null;
   }
   if (eventFilter) items = items.filter(i => i.eventId === eventFilter);
-  if (q) items = items.filter(i => [i.number, i.typeLabel, i.status, i.event, getEventTitle(i.eventId)].join(' ').toLowerCase().includes(q));
-
-  if (!items.length) {
-    el.innerHTML = window.SICODUI?.setEmptyState?.('Aucun message de commandement. Créer un premier message.', 'Nouveau message', 'openCommandForm()') || '<p class="help">Aucun message de commandement enregistré.</p>';
-    return;
-  }
-  const orderedItems = sortItems(items, 'command', 'date', 'desc', {
-    date: (item) => String(item.updatedAt || item.createdAt || ''),
-    number: (item) => Number(item.number || 0),
-    event: (item) => item.event || getEventTitle(item.eventId),
-    status: (item) => item.status || ''
+  renderOperationalTable({
+    containerId: 'eventCommandList',
+    emptyMessage: 'Aucun message de commandement. Créer un premier message.',
+    emptyActionLabel: 'Ajouter',
+    emptyActionHandler: 'openCommandForm()',
+    searchValue: document.getElementById('eventCommandListSearch')?.value,
+    items,
+    sortKey: 'command',
+    sortAccessors: {
+      date: (item) => String(item.updatedAt || item.createdAt || ''),
+      number: (item) => Number(item.number || 0),
+      event: (item) => item.event || getEventTitle(item.eventId),
+      status: (item) => item.status || ''
+    },
+    buildTitleCell: (item) => `<div class="event-title-block"><span class="event-label">Message ${esc(item.number || '')}</span><span class="table-meta">${esc(item.typeLabel || '')}</span></div>`,
+    buildRowActions: (item) => `
+      ${actionIconButton('edit', 'Modifier', `openCommandForm('${item.id}')`)}
+      ${actionIconButton('duplicate', 'Dupliquer', `duplicateCommand('${item.id}')`)}
+      ${actionIconButton('export', 'Exporter', `state.selectedCommandId='${item.id}';persist();exportCommandPDF()`)}
+      ${actionIconButton('delete', 'Supprimer', `deleteCommandById('${item.id}')`, { variant: 'danger' })}
+    `,
+    selectedId: state.selectedCommandId
   });
-  el.innerHTML = `<table class="table"><thead><tr>${sortableTh('command','date','Horodatage','date','desc')}${sortableTh('command','number','Numéro','date','desc')}${sortableTh('command','event','Évènement','date','desc')}${sortableTh('command','status','Statut','date','desc')}<th>Action</th></tr></thead><tbody>${
-    orderedItems.map(item => `<tr class="${item.id === state.selectedCommandId ? 'is-selected' : ''}">
-      <td>${esc(formatDateTimeValueFR(item.updatedAt || item.createdAt || ''))}</td>
-      <td><div class="event-title-block"><span class="event-label">Message ${esc(item.number || '')}</span><span class="table-meta">${esc(item.typeLabel || '')}</span></div></td>
-      <td>${esc(item.event || getEventTitle(item.eventId) || 'Évènement supprimé')}</td>
-      <td>${badge(item.status)}</td>
-      <td><div class="list-actions">
-        ${actionIconButton('edit', 'Modifier', `openCommandForm('${item.id}')`)}
-        ${actionIconButton('duplicate', 'Dupliquer', `duplicateCommand('${item.id}')`)}
-        ${actionIconButton('export', 'Exporter', `state.selectedCommandId='${item.id}';persist();exportCommandPDF()`)}
-        ${actionIconButton('delete', 'Supprimer', `deleteCommandById('${item.id}')`, { variant: 'danger' })}
-      </div></td>
-    </tr>`).join('')
-  }</tbody></table>`;
 }
 
 function duplicateCommand(id) {
@@ -3759,10 +3773,6 @@ function getCommandData() {
       }))
       .filter((service) => service.name)
   };
-}
-
-function renderCommandPreview(data) {
-  return data;
 }
 
 function exportCommandPDF() {
@@ -5967,6 +5977,7 @@ function ensureManagedUserDialog() {
     <form method="dialog" class="card" style="width:min(32rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem);margin:0">
       <div class="card-header">
         <h2 class="card-title" id="managedUserDialogTitle">Compte utilisateur</h2>
+        <button class="fr-btn secondary small" type="button" onclick="closeManagedUserDialog()">Fermer</button>
       </div>
       <div class="card-body" style="overflow-x:hidden;overflow-y:auto;max-height:calc(100vh - 8rem)">
         <input id="managedUserId" type="hidden">
@@ -5977,7 +5988,6 @@ function ensureManagedUserDialog() {
           <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
         </div>
         <div class="tool-actions">
-          <button class="fr-btn secondary" type="button" onclick="closeManagedUserDialog()">Annuler</button>
           <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
         </div>
       </div>

@@ -788,9 +788,12 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .event-title-block .event-label{font-weight:400;color:var(--text)}
 .event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
 .event-card{padding:.9rem 1rem}
+.grid-2#eventList{align-items:stretch}
+.grid-2#eventList .event-card{height:100%;display:flex;flex-direction:column}
 .event-card + .event-card{margin-top:.75rem}
 .event-card-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}
 .event-card-main{min-width:0}
+.event-actions{margin-top:auto}
 .event-context-card{margin-bottom:1rem}
 .event-context-heading{display:grid;gap:.35rem}
 .event-context-card .card-body{display:grid;gap:1rem}
