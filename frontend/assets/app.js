@@ -458,6 +458,11 @@ function formatDateLocal(dt) {
   return dt.toLocaleDateString('fr-FR');
 }
 
+function formatIsoDateForDisplay(value) {
+  const date = parseDateLocal(value);
+  return date ? formatDateLocal(date) : (value || '—');
+}
+
 /** Retourne le lundi de la semaine contenant dt */
 function startOfMonday(dt) {
   const d = new Date(dt);
@@ -2231,7 +2236,7 @@ function buildPlanningFollowUpHtmlTokens() {
   const summary = [`${items.length} item(s)`, ...Object.entries(counts).map(([label, value]) => `${label} : ${value}`)].join(' - ');
   const rows = items.map(p => `<tr>
     <td>${esc(p.type || '')}</td><td>${esc(p.risk || '')}</td><td>${esc(p.item || '')}</td><td>${esc(p.priority || '')}</td>
-    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(p.approvalDate || '')}${resolvePlanExpiryDate(p) ? ` (exp. ${esc(resolvePlanExpiryDate(p))})` : ''}</td><td>${esc(p.observation || '')}</td>
+    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(formatIsoDateForDisplay(p.approvalDate || ''))}${resolvePlanExpiryDate(p) ? ` (exp. ${esc(formatIsoDateForDisplay(resolvePlanExpiryDate(p)))})` : ''}</td><td>${esc(p.observation || '')}</td>
   </tr>`).join('');
   return {
     logo: currentLogoSrc(),
@@ -4171,11 +4176,11 @@ function renderPlanning() {
           <td><div class="event-title-block"><span class="event-label">${esc(p.item || '')}</span><span class="table-meta">${p.url ? 'Lien Resana disponible' : ''}</span></div></td>
           <td>${esc(p.priority || '')}</td>
           <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
-          <td><div class="event-title-block"><span class="event-label">${esc(p.approvalDate || '')}</span><span class="table-meta">Expiration : ${esc(resolvePlanExpiryDate(p) || '—')}</span></div></td>
+          <td><div class="event-title-block"><span class="event-label">${esc(formatIsoDateForDisplay(p.approvalDate || ''))}</span><span class="table-meta">Expiration : ${esc(formatIsoDateForDisplay(resolvePlanExpiryDate(p) || ''))}</span></div></td>
           <td>${esc(p.observation || '')}</td>
         </tr>`).join('')
       }</tbody></table></div>`
-    : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter un plan', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
+    : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
 
   if (planningSummary) {
     const counts = {};
