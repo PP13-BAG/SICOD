@@ -788,6 +788,7 @@ function replacePlaceholderTextWithBreaks(root, placeholder, replacement, replac
     return replacePlaceholderText(root, placeholder, finalValue, replaceAll);
   }
   const XML_NS = 'http://www.w3.org/XML/1998/namespace';
+  const xmlDoc = root?.ownerDocument || root;
   const lines = finalValue.split('\n');
   let didReplace = false;
   while (true) {
@@ -818,17 +819,17 @@ function replacePlaceholderTextWithBreaks(root, placeholder, replacement, replac
     affected.slice(1).forEach(({ node }) => { node.textContent = ''; });
     let insertAfter = first.node;
     lines.slice(1).forEach((line) => {
-      const br = root.createElementNS(WORD_NS, 'w:br');
+      const br = xmlDoc.createElementNS(WORD_NS, 'w:br');
       run.insertBefore(br, insertAfter.nextSibling);
       insertAfter = br;
-      const textNode = root.createElementNS(WORD_NS, 'w:t');
+      const textNode = xmlDoc.createElementNS(WORD_NS, 'w:t');
       textNode.setAttributeNS(XML_NS, 'xml:space', 'preserve');
       textNode.textContent = line;
       run.insertBefore(textNode, insertAfter.nextSibling);
       insertAfter = textNode;
     });
     if (after) {
-      const tailNode = root.createElementNS(WORD_NS, 'w:t');
+      const tailNode = xmlDoc.createElementNS(WORD_NS, 'w:t');
       tailNode.setAttributeNS(XML_NS, 'xml:space', 'preserve');
       tailNode.textContent = after;
       run.insertBefore(tailNode, insertAfter.nextSibling);
@@ -931,7 +932,7 @@ function buildDutyDocxRows() {
         const displayEnd = row.end || '';
         const formatted = parseDateLocal(displayEnd) ? formatDateLocal(parseDateLocal(displayEnd)) : displayEnd;
         if (row.carryHoliday) {
-          return `${formatted}\n(prolongation jour férié)`;
+          return `${formatted}\n(Prolongation jour férié)`;
         }
         return formatted;
       })(),
@@ -4442,7 +4443,7 @@ function renderDutySchedule() {
         const agents2 = exactAgentsForRole(role2);
         return `<div class="week-card">
         <strong>Semaine du ${formatDateLocal(parseDateLocal(w.start))} au ${formatDateLocal(parseDateLocal(w.end))}</strong>
-        ${w.carryHoliday ? `<div class="table-meta">Prolongation jour férié le ${esc(formatDateLocal(parseDateLocal(w.end)))}</div>` : ''}
+        ${w.carryHoliday ? `<div class="table-meta">Prolongation jour férié</div>` : ''}
         <div class="grid-2" style="margin-top:.75rem">
           <div class="week-assignment"><div class="help">${esc(role1)}</div><select onchange="updateDutyAssignment(${i},'agent1',this.value)">${agents1.map(name => `<option value="${esc(name)}" ${(w.agent1?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
           <div class="week-assignment"><div class="help">${esc(role2)}</div><select onchange="updateDutyAssignment(${i},'agent2',this.value)">${agents2.map(name => `<option value="${esc(name)}" ${(w.agent2?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
