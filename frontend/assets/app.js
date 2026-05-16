@@ -4080,6 +4080,10 @@ function openPlanForm(id) {
   document.getElementById('planExpiry').value = p?.expiryDate || resolvePlanExpiryDate(p) || '';
   document.getElementById('planObservation').value = p?.observation || '';
   document.getElementById('planUrl').value = p?.url || '';
+  const deleteBtn = document.getElementById('planDeleteBtn');
+  const accessBtn = document.getElementById('planAccessBtn');
+  if (deleteBtn) deleteBtn.style.display = p?.id ? '' : 'none';
+  if (accessBtn) accessBtn.style.display = p?.url ? '' : 'none';
   if (!p) syncPlanExpiryFromApproval(true);
   document.getElementById('planningDialog').showModal();
 }
@@ -4125,6 +4129,20 @@ function deletePlanItem(id) {
   renderPlanning();
 }
 
+async function deletePlanItemFromDialog() {
+  const id = document.getElementById('planId')?.value || '';
+  if (!id) return;
+  if (!await confirmAsync('Supprimer cette planification ?')) return;
+  deletePlanItem(id);
+  document.getElementById('planningDialog')?.close();
+}
+
+function openPlanUrlFromDialog() {
+  const url = document.getElementById('planUrl')?.value?.trim() || '';
+  if (!url) return;
+  window.open(url, '_blank', 'noopener');
+}
+
 function renderPlanning() {
   applyPlanExpiryRules();
   const planningList = document.getElementById('planningList');
@@ -4146,8 +4164,8 @@ function renderPlanning() {
     observation: (p) => p.observation || ''
   });
   planningList.innerHTML = ordered.length
-    ? `<table class="table planning-table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}<th>Actions</th></tr></thead><tbody>${
-      ordered.map(p => `<tr>
+    ? `<div class="table-wrap"><table class="table planning-table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}</tr></thead><tbody>${
+      ordered.map(p => `<tr class="table-row-clickable" tabindex="0" role="button" onclick="openPlanForm('${p.id}')" onkeydown="handleTableRowKey(event, () => openPlanForm('${p.id}'))">
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(p.item || '')}</span><span class="table-meta">${p.url ? 'Lien Resana disponible' : ''}</span></div></td>
@@ -4155,12 +4173,8 @@ function renderPlanning() {
           <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(p.approvalDate || '')}</span><span class="table-meta">Expiration : ${esc(resolvePlanExpiryDate(p) || '—')}</span></div></td>
           <td>${esc(p.observation || '')}</td>
-          <td><div class="list-actions plan-actions-single">
-            ${actionIconButton('edit', 'Modifier', `openPlanForm('${p.id}')`)}
-            ${p.url ? actionIconLink('access', 'Accéder', p.url) : ''}
-          </div></td>
         </tr>`).join('')
-      }</tbody></table>`
+      }</tbody></table></div>`
     : (window.SICODUI?.setEmptyState?.('Aucune planification. Ajouter un premier item.', 'Ajouter un plan', 'openPlanForm()') || '<p class="help">Aucun item de planification.</p>');
 
   if (planningSummary) {
@@ -4349,8 +4363,16 @@ function ensurePlanningStatsUI() {
   const overview = document.createElement('div'); overview.id = 'planningOverview'; overview.className = 'page-subpanel active';
   cards.forEach(c => overview.appendChild(c));
   const stats = document.createElement('div'); stats.id = 'planningStats'; stats.className = 'page-subpanel';
-  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques</h2><div class="stats-toolbar"><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsPDF()">Exporter</button></div></div><div class="card-body" id="planningStatsBody"></div></div>`;
+  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques</h2><div class="stats-toolbar"><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsPDF()">Exporter</button></div></div><div class="card-body" id="planningStatsBody"></div></div>`;
   inner.appendChild(overview); inner.appendChild(stats);
+}
+
+function handleTableRowKey(event, callback) {
+  if (!event || typeof callback !== 'function') return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    callback();
+  }
 }
 
 function showPlanningSection(which) {

@@ -807,36 +807,34 @@ dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 .user-admin-table th:nth-child(2){width:18%}
 .user-admin-table th:nth-child(3){width:24%}
 .user-admin-table th:nth-child(4){width:5rem}
-.planning-table th:nth-child(1){width:11%}
-.planning-table th:nth-child(2){width:10%}
-.planning-table th:nth-child(3){width:25%}
+.planning-table th:nth-child(1){width:10%}
+.planning-table th:nth-child(2){width:12%}
+.planning-table th:nth-child(3){width:30%}
 .planning-table th:nth-child(4){width:8%}
-.planning-table th:nth-child(5){width:9%}
-.planning-table th:nth-child(6){width:12%}
-.planning-table th:nth-child(7){width:23%}
+.planning-table th:nth-child(5){width:10%}
+.planning-table th:nth-child(6){width:14%}
+.planning-table th:nth-child(7){width:16%}
 .event-workspace .table th:last-child,
 .event-workspace .table td:last-child{width:9rem;white-space:nowrap}
 .directory-table th:last-child,
-.planning-table th:last-child,
-.planning-table td:last-child,
 .duty-availability-table th:last-child,
 .duty-availability-table td:last-child,
 .user-admin-table th:last-child,
 .user-admin-table td:last-child{width:5rem;white-space:nowrap}
-.planning-table td:last-child,
 .duty-availability-table td:last-child,
 .user-admin-table td:last-child,
 .directory-table td:last-child{padding:.35rem .45rem}
-.planning-table td:last-child .list-actions,
 .duty-availability-table td:last-child .list-actions,
 .user-admin-table td:last-child .list-actions,
 .directory-table td:last-child .list-actions{justify-content:flex-end}
-.plan-actions-single{gap:.3rem}
 #page-settings .table-wrap,
 #page-directory .table-wrap,
 #page-planning .table-wrap,
 #page-duty .table-wrap,
 #page-events .table-wrap{overflow-x:auto}
+.table-row-clickable{cursor:pointer}
+.table-row-clickable:focus-visible{outline:2px solid var(--color-primary, #000091);outline-offset:-2px}
+.table-row-clickable:hover td{background:#f8f8ff}
 #managedUserDialog{max-width:calc(100vw - 2rem);width:min(32rem,calc(100vw - 2rem))}
 #managedUserDialog form.card{width:100%}
 #managedUserDialog .grid-2{grid-template-columns:1fr}
