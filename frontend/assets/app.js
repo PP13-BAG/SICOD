@@ -475,6 +475,57 @@ function weekEndInclusive(monday) {
   return d;
 }
 
+function nextWeekBoundary(monday) {
+  const d = new Date(monday);
+  d.setDate(d.getDate() + 7);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function getEasterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
+function isFrenchPublicHoliday(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return false;
+  const year = date.getFullYear();
+  const key = `${date.getMonth() + 1}-${date.getDate()}`;
+  const fixed = new Set(['1-1', '5-1', '5-8', '7-14', '8-15', '11-1', '11-11', '12-25']);
+  if (fixed.has(key)) return true;
+  const easter = getEasterSunday(year);
+  const movable = [1, 39, 50].map((offset) => toLocalISO(addDays(easter, offset)));
+  return movable.includes(toLocalISO(date));
+}
+
+function computeDutyCarryEnd(monday) {
+  const boundary = nextWeekBoundary(monday);
+  if (isFrenchPublicHoliday(boundary)) {
+    return addDays(boundary, 1);
+  }
+  return boundary;
+}
+
 /** Retourne la liste dynamique configurée pour une clé, avec fallback */
 function getDynamicList(key) {
   const labels = window.SICODDataModel?.getReferenceLabels(state, key, DEFAULT_DYNAMIC_LISTS);
@@ -4088,7 +4139,8 @@ function saveDutyAvailability() {
   const monday = startOfMonday(parseDateLocal(data.start));
   if (!monday) { showToast("Définissez une semaine d'astreinte valide.", 'error'); return; }
   data.start = toLocalISO(monday);
-  data.end = toLocalISO(weekEndInclusive(monday));
+  data.end = toLocalISO(nextWeekBoundary(monday));
+  data.effectiveEnd = toLocalISO(computeDutyCarryEnd(monday));
   const duplicate = getValidDutyAvailabilities().find((item) =>
     item.id !== id &&
     String(item.agent || '').trim() === data.agent &&
@@ -4172,7 +4224,7 @@ function renderDutyCalendar() {
   const first = new Date(year, month - 1, 1);
   const last = new Date(year, month, 0);
   const start = startOfMonday(first);
-  const end = weekEndInclusive(last);
+  const end = nextWeekBoundary(last);
 
   const filterRole = document.getElementById('dutyRoleFilter')?.value || '';
   const filterAgent = document.getElementById('dutyAgentFilter')?.value || '';
@@ -4183,7 +4235,7 @@ function renderDutyCalendar() {
   const weekRows = [];
   for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 7)) {
     const weekStart = new Date(cur);
-    const weekEnd = weekEndInclusive(weekStart);
+    const weekEnd = nextWeekBoundary(weekStart);
     const weekKey = toLocalISO(weekStart);
     const entries = availabilityItems.filter((a) => {
       return String(a.start || '').trim() === weekKey
@@ -4223,7 +4275,7 @@ function generateDutySchedule() {
   const weeks = [];
   for (let cur = new Date(start); cur <= endInput; cur.setDate(cur.getDate() + 7)) {
     const ws = new Date(cur);
-    weeks.push({ start: new Date(ws), end: weekEndInclusive(ws) });
+    weeks.push({ start: new Date(ws), end: nextWeekBoundary(ws) });
   }
 
   const assignmentCount = {}, lastAssignedWeek = {}, lastAssignedAnyWeek = {};
@@ -4268,7 +4320,8 @@ function generateDutySchedule() {
     return {
       id: uid('week'),
       start: toLocalISO(week.start),
-      end: toLocalISO(week.end),
+      end: toLocalISO(nextWeekBoundary(week.start)),
+      effectiveEnd: toLocalISO(computeDutyCarryEnd(week.start)),
       agent1: selectAgent(role1, week, idx, used),
       agent2: selectAgent(role2, week, idx, used)
     };
@@ -4297,6 +4350,7 @@ function renderDutySchedule() {
         const agents2 = exactAgentsForRole(role2);
         return `<div class="week-card">
         <strong>Semaine du ${formatDateLocal(parseDateLocal(w.start))} au ${formatDateLocal(parseDateLocal(w.end))}</strong>
+        ${(w.effectiveEnd && w.effectiveEnd !== w.end) ? `<div class="table-meta">Astreinte prolongée jusqu'au ${esc(formatDateLocal(parseDateLocal(w.effectiveEnd)))}</div>` : ''}
         <div class="grid-2" style="margin-top:.75rem">
           <div class="week-assignment"><div class="help">${esc(role1)}</div><select onchange="updateDutyAssignment(${i},'agent1',this.value)">${agents1.map(name => `<option value="${esc(name)}" ${(w.agent1?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
           <div class="week-assignment"><div class="help">${esc(role2)}</div><select onchange="updateDutyAssignment(${i},'agent2',this.value)">${agents2.map(name => `<option value="${esc(name)}" ${(w.agent2?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>

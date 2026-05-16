@@ -664,13 +664,13 @@ input[type='color']{
   padding:.35rem .6rem;
   border:1px solid var(--border);
   border-radius:0;
-  background:var(--blue-soft);
+  background:#fff;
   color:#000091;
   cursor:pointer;
   font:inherit;
   text-align:left;
 }
-.duty-week-pill:hover{border-color:#000091;color:#000091;background:#e8edff}
+.duty-week-pill:hover{border-color:#000091;color:#000091;background:#f5f5fe}
 .duty-week-pill-name{font-weight:400;line-height:1.1;color:#000091}
 .duty-week-pill-role{font-size:.78rem;color:#000091;line-height:1.1}
 .table-week-trigger{
