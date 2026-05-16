@@ -712,7 +712,7 @@ dialog{
 }
 #eventDialog{max-width:calc(100vw - 2rem);width:min(56rem,calc(100vw - 2rem))}
 #psDialog{max-width:calc(100vw - 2rem);width:min(72rem,calc(100vw - 2rem))}
-#commandDialog{max-width:calc(100vw - .75rem);width:min(50rem,calc(100vw - .75rem))}
+#commandDialog{max-width:calc(100vw - 2rem);width:min(68rem,calc(100vw - 2rem))}
 #ficheDialog{max-width:calc(100vw - 2rem);width:min(64rem,calc(100vw - 2rem))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog form.card{
@@ -737,24 +737,29 @@ dialog .dialog-body,dialog .card-body{
   overflow-y:auto;
   max-height:calc(100vh - 8rem);
 }
-#commandDialog form.card{width:min(50rem,calc(100vw - .75rem));max-width:calc(100vw - .75rem)}
-#commandDialog .card-body{padding:.75rem .8rem}
+#commandDialog form.card{width:min(68rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem)}
+#commandDialog .card-body{padding:.85rem 1rem}
 #commandDialog .card-body > *,
 #commandDialog .fr-fieldset,
 #commandDialog .grid-2 > div,
 #commandDialog .grid-3 > div{min-width:0}
-#commandDialog .grid-2{grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))}
-#commandDialog .grid-3{grid-template-columns:repeat(auto-fit,minmax(9rem,1fr))}
+#commandDialog .grid-2{grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
+#commandDialog .grid-3{grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))}
 #commandDialog label{font-size:.76rem}
 #commandDialog textarea,
 #commandDialog input,
-#commandDialog select{max-width:100%;font-size:.88rem;padding:.48rem .6rem}
+#commandDialog select{max-width:100%;font-size:.9rem;padding:.5rem .65rem}
 #commandDialog textarea{min-height:4rem}
-#commandDialog .inline-checks{grid-template-columns:1fr 1fr;gap:.4rem .7rem}
+#commandDialog .inline-checks{grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem .8rem}
 #commandDialog .check{align-items:flex-start;min-width:0}
 #commandDialog .check span{display:block;min-width:0;overflow-wrap:anywhere}
-#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 3rem 3rem 2.5rem;gap:.35rem}
+#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 7rem 7rem 2.5rem;gap:.45rem}
 #commandDialog .svc-matrix input{min-width:0}
+#commandDialog .svc-matrix-head{
+  white-space:normal;
+  line-height:1.15;
+  text-align:center;
+}
 #commandDialog .svc-matrix-label,
 #commandDialog .svc-matrix-check{min-height:2.2rem}
 #commandDialog .svc-matrix-action{display:flex;justify-content:center;align-items:center}
@@ -766,6 +771,13 @@ dialog .dialog-body,dialog .card-body{
 #commandDialog .command-measures-grid textarea{min-height:4rem}
 #commandDialog .fr-fieldset{padding:.65rem}
 #commandDialog .card-title{font-size:1.05rem}
+#commandDialog .fr-fieldset,
+#commandDialog .card-body > *,
+#commandDialog .inline-checks,
+#commandDialog .svc-matrix,
+#commandDialog .command-form-grid{
+  min-width:0;
+}
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 dialog .tool-actions > .fr-btn,
 dialog .list-actions > .fr-btn{order:2}
