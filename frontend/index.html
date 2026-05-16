@@ -69,16 +69,11 @@ DS (Dispositions spécifiques) = 2"></textarea></div></div></div></div><div clas
           <label class="check"><input id="cmdFrAlert" type="checkbox"><span>Diffusion d’un message FR-Alert</span></label>
           <label class="check"><input id="cmdExercise" type="checkbox"><span>Exercice</span></label>
         </div>
-        <div class="grid-2 command-form-grid" style="margin-top:1rem">
-          <div><label>Mesures limitées</label><textarea id="cmdLimitedDetail" placeholder="Préciser les mesures concernées"></textarea></div>
-          <div><label>Scénario, groupe, sirène</label><textarea id="cmdSirenScenario" placeholder="Préciser le scénario, le groupe et la sirène concernés"></textarea></div>
-        </div>
-      </fieldset>
-      <fieldset class="fr-fieldset">
-        <legend>Diffusion</legend>
-        <div class="grid-2 command-form-grid">
-          <div><label>Périmètre / zone de diffusion</label><input id="cmdDiffusionPerimeter"></div>
-          <div><label>Détail du message diffusé</label><textarea id="cmdMessageDetail"></textarea></div>
+        <div class="grid-2 command-form-grid command-measures-grid" style="margin-top:1rem">
+          <div><label>Mesures activées de manière limitée</label><textarea id="cmdLimitedDetail" placeholder="Préciser les mesures concernées"></textarea></div>
+          <div><label>Scénario des sirènes</label><textarea id="cmdSirenScenario" placeholder="Préciser le scénario, le groupe et la sirène concernés"></textarea></div>
+          <div><label>Périmètre de diffusion</label><input id="cmdDiffusionPerimeter"></div>
+          <div><label>Message FR-Alert / message diffusé</label><textarea id="cmdMessageDetail"></textarea></div>
         </div>
       </fieldset>
       <fieldset class="fr-fieldset">

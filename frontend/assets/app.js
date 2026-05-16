@@ -2713,8 +2713,15 @@ async function deleteEvent(id) {
   getActiveItems(state.ps).filter(ps => ps.eventId === id).forEach(ps => {
     window.SICODDataModel?.archiveRecord(state.ps, ps.id);
   });
-  if (state.currentEventId === id) state.currentEventId = null;
+  if (state.currentEventId === id) {
+    state.currentEventId = null;
+    state.currentEventWorkspaceTab = 'timeline';
+  }
   persist();
+  if (getActivePageName() === 'event-detail') {
+    goPage('events');
+    return;
+  }
   renderAll();
 }
 
@@ -2858,7 +2865,6 @@ function renderEvents() {
     : active;
 
   const tmpl = e => {
-    const isOpen = state.currentEventId === e.id;
     return `<div class="event-card">
       <div class="event-card-head">
         <div class="event-card-main">
@@ -2870,13 +2876,12 @@ function renderEvents() {
             ${e.synergi ? `<span>ID Synergi ${esc(e.synergi)}</span>` : ''}
           </div>
         </div>
-        <span class="badge ${isOpen ? 'success' : 'info'}">${isOpen ? 'Sélectionné' : 'Disponible'}</span>
       </div>
       <div class="event-actions">
         ${e.status === 'Archivé'
           ? `<button class="fr-btn secondary small" onclick="reactivateEvent('${e.id}')">Réactiver</button>
              <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
-          : `<button class="fr-btn small" onclick="openEvent('${e.id}')">${isOpen ? 'Fermer' : 'Ouvrir'}</button>
+          : `<button class="fr-btn small" onclick="openEvent('${e.id}')">Ouvrir</button>
              <button class="fr-btn secondary small" onclick="openEventForm('${e.id}')">Modifier</button>
              <button class="fr-btn secondary small" onclick="archiveEvent('${e.id}')">Archiver</button>
              <button class="fr-btn danger small" onclick="deleteEvent('${e.id}')">Supprimer</button>`
@@ -3179,7 +3184,7 @@ function renderPSList() {
       event: (ps) => getEventTitle(ps.eventId),
       status: (ps) => ps.status || ''
     },
-    buildTitleCell: (ps) => `PS ${esc(ps.number || '')}`,
+    buildTitleCell: (ps) => `<div class="event-title-block"><span class="event-label">PS ${esc(ps.number || '')}</span><span class="table-meta">${esc(ps.title || '')}</span></div>`,
     buildRowActions: (ps) => `
       ${actionIconButton('edit', 'Modifier', `openPSForm('${ps.id}')`)}
       ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
@@ -3446,23 +3451,21 @@ function getDefaultCommandMessage() {
 }
 
 function normalizeCommandServiceFormServices(services) {
-  const slots = buildCommandServiceSlots(services);
-  const fixedRows = slots.named.map((item) => ({
-    name: item.name || item.label,
-    fixedLabel: item.label,
-    cod: !!item.cod,
-    pco: !!item.pco
-  }));
-  const extraRows = slots.extra
-    .filter((item) => String(item.name || '').trim())
-    .map((item, index) => ({
+  const source = Array.isArray(services) ? services.filter((item) => String(item?.name || '').trim()) : [];
+  if (!source.length) {
+    return getDefaultCommandServices().map((item, index) => ({
       name: item.name || '',
-      fixedLabel: '',
-      placeholder: `Autre service / entité ${index + 1}`,
+      placeholder: `Service / entité ${index + 1}`,
       cod: !!item.cod,
       pco: !!item.pco
     }));
-  return fixedRows.concat(extraRows);
+  }
+  return source.slice(0, 16).map((item, index) => ({
+    name: item.name || '',
+    placeholder: `Service / entité ${index + 1}`,
+    cod: !!item.cod,
+    pco: !!item.pco
+  }));
 }
 
 function openCommandForm(id) {
@@ -3552,7 +3555,7 @@ async function deleteSelectedCommand() {
   window.SICODDataModel?.archiveRecord(state.commandMessages, state.selectedCommandId);
   state.selectedCommandId = getActiveItems(state.commandMessages)[0]?.id || null;
   persist();
-  renderCommandList();
+  renderAll();
 }
 
 function renderCommandList() {
@@ -3618,15 +3621,14 @@ function updateCommandServiceField(index, key, value) {
 }
 
 function addCommandServiceRow() {
-  const extraCount = (state.services || []).filter((service) => !service.fixedLabel).length;
-  if (extraCount >= COMMAND_SERVICE_EXTRA_SLOTS) {
-    showToast(`Le modèle permet ${COMMAND_SERVICE_EXTRA_SLOTS} services additionnels au maximum.`, 'info');
+  const currentCount = (state.services || []).length;
+  if (currentCount >= 16) {
+    showToast("Le modèle permet 16 services ou entités au maximum dans le formulaire.", 'info');
     return;
   }
   state.services.push({
     name: '',
-    fixedLabel: '',
-    placeholder: `Autre service / entité ${extraCount + 1}`,
+    placeholder: `Service / entité ${currentCount + 1}`,
     cod: false,
     pco: false
   });
@@ -3635,7 +3637,7 @@ function addCommandServiceRow() {
 }
 
 function removeCommandServiceRow(index) {
-  if (!Array.isArray(state.services) || !state.services[index] || state.services[index].fixedLabel) return;
+  if (!Array.isArray(state.services) || !state.services[index]) return;
   state.services.splice(index, 1);
   renderServiceRows();
   window.SICODCommand?.saveDraft?.(getCommandData());
@@ -3645,19 +3647,14 @@ function renderServiceRows() {
   const svcRows = document.getElementById('svcRows');
   if (!svcRows) return;
   const services = state.services || [];
-  const extraCount = services.filter((service) => !service.fixedLabel).length;
   svcRows.innerHTML = `<div class="svc-matrix">
     <div class="svc-matrix-head">Service / entité</div>
     <div class="svc-matrix-head svc-matrix-head--check">COD</div>
     <div class="svc-matrix-head svc-matrix-head--check">PCO</div>
     <div class="svc-matrix-head svc-matrix-head--action"></div>
     ${services.map((svc, i) => {
-      const labelCell = svc.fixedLabel
-        ? `<div class="svc-matrix-label">${esc(svc.fixedLabel)}</div>`
-        : `<input value="${esc(svc.name || '')}" placeholder="${esc(svc.placeholder || 'Autre service / entité')}" oninput="updateCommandServiceField(${i}, 'name', this.value)">`;
-      const actionCell = svc.fixedLabel
-        ? '<div class="svc-matrix-action"></div>'
-        : `<div class="svc-matrix-action"><button class="fr-btn secondary small" type="button" onclick="removeCommandServiceRow(${i})">Supprimer</button></div>`;
+      const labelCell = `<input value="${esc(svc.name || '')}" placeholder="${esc(svc.placeholder || 'Service / entité')}" oninput="updateCommandServiceField(${i}, 'name', this.value)">`;
+      const actionCell = `<div class="svc-matrix-action">${actionIconButton('delete', 'Supprimer ce service', `removeCommandServiceRow(${i})`, { variant: 'danger' })}</div>`;
       return `${labelCell}
         <label class="svc-matrix-check"><input type="checkbox" ${svc.cod ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'cod', this.checked)"></label>
         <label class="svc-matrix-check"><input type="checkbox" ${svc.pco ? 'checked' : ''} onchange="updateCommandServiceField(${i}, 'pco', this.checked)"></label>
@@ -3665,7 +3662,7 @@ function renderServiceRows() {
     }).join('')}
   </div>
   <div class="command-service-add">
-    <button class="fr-btn secondary small" type="button" onclick="addCommandServiceRow()" ${extraCount >= COMMAND_SERVICE_EXTRA_SLOTS ? 'disabled' : ''}>Ajouter un service</button>
+    <button class="fr-btn secondary small" type="button" onclick="addCommandServiceRow()" ${services.length >= 16 ? 'disabled' : ''}>Ajouter un service</button>
   </div>`;
 }
 
@@ -3767,7 +3764,7 @@ function getCommandData() {
     exercise: document.getElementById('cmdExercise')?.checked || false,
     services: (state.services || [])
       .map((service) => ({
-        name: String(service.fixedLabel || service.name || '').trim(),
+        name: String(service.name || '').trim(),
         cod: !!service.cod,
         pco: !!service.pco
       }))
@@ -6269,6 +6266,7 @@ function renderAll() {
   renderDashboard();
   const activePage = getActivePageName();
   if (activePage === 'events') renderEvents();
+  if (activePage === 'event-detail') renderEventDetail();
   if (activePage === 'event-archives') renderEventArchives();
   if (activePage === 'fiches') renderFiches();
   if (activePage === 'directory') renderDirectory();

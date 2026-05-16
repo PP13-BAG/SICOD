@@ -335,7 +335,7 @@ input:focus,select:focus,textarea:focus{
   background:#fff;
 }
 
-.event-card{padding:var(--space-4)}
+.event-card{padding:var(--space-4);height:100%}
 .event-card h3{margin:0 0 .5rem;font-size:1.125rem}
 .event-meta,.fiche-meta{
   display:flex;
@@ -712,7 +712,7 @@ dialog{
 }
 #eventDialog{max-width:calc(100vw - 2rem);width:min(56rem,calc(100vw - 2rem))}
 #psDialog{max-width:calc(100vw - 2rem);width:min(72rem,calc(100vw - 2rem))}
-#commandDialog{max-width:calc(100vw - 2rem);width:min(62rem,calc(100vw - 2rem))}
+#commandDialog{max-width:calc(100vw - 1rem);width:min(56rem,calc(100vw - 1rem))}
 #ficheDialog{max-width:calc(100vw - 2rem);width:min(64rem,calc(100vw - 2rem))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog form.card{
@@ -737,29 +737,34 @@ dialog .dialog-body,dialog .card-body{
   overflow-y:auto;
   max-height:calc(100vh - 8rem);
 }
-#commandDialog form.card{width:min(62rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem)}
-#commandDialog .card-body{padding:.9rem 1rem}
+#commandDialog form.card{width:min(56rem,calc(100vw - 1rem));max-width:calc(100vw - 1rem)}
+#commandDialog .card-body{padding:.8rem .85rem}
 #commandDialog .card-body > *,
 #commandDialog .fr-fieldset,
 #commandDialog .grid-2 > div,
 #commandDialog .grid-3 > div{min-width:0}
-#commandDialog .grid-2{grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}
-#commandDialog .grid-3{grid-template-columns:repeat(auto-fit,minmax(11rem,1fr))}
-#commandDialog label{font-size:.8rem}
+#commandDialog .grid-2{grid-template-columns:repeat(auto-fit,minmax(13.5rem,1fr))}
+#commandDialog .grid-3{grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))}
+#commandDialog label{font-size:.78rem}
 #commandDialog textarea,
 #commandDialog input,
-#commandDialog select{max-width:100%;font-size:.92rem;padding:.55rem .7rem}
-#commandDialog textarea{min-height:5rem}
-#commandDialog .inline-checks{grid-template-columns:1fr;gap:.45rem}
+#commandDialog select{max-width:100%;font-size:.9rem;padding:.5rem .65rem}
+#commandDialog textarea{min-height:4.4rem}
+#commandDialog .inline-checks{grid-template-columns:1fr 1fr;gap:.4rem .7rem}
 #commandDialog .check{align-items:flex-start;min-width:0}
 #commandDialog .check span{display:block;min-width:0;overflow-wrap:anywhere}
-#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 3.25rem 3.25rem auto;gap:.45rem}
+#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 3rem 3rem 2.5rem;gap:.35rem}
 #commandDialog .svc-matrix input{min-width:0}
 #commandDialog .svc-matrix-label,
-#commandDialog .svc-matrix-check{min-height:2.3rem}
-#commandDialog .svc-matrix-action{display:flex;justify-content:flex-end}
+#commandDialog .svc-matrix-check{min-height:2.2rem}
+#commandDialog .svc-matrix-action{display:flex;justify-content:center;align-items:center}
 #commandDialog .svc-matrix-head--action{visibility:hidden}
 #commandDialog .command-service-add{display:flex;justify-content:flex-end;margin-top:.6rem}
+#commandDialog .svc-matrix-action .icon-action{width:2rem;min-width:2rem;height:2rem;min-height:2rem;flex-basis:2rem}
+#commandDialog .svc-matrix-action .icon-action img{width:1.25rem;height:1.25rem}
+#commandDialog .command-form-grid{gap:.75rem}
+#commandDialog .command-measures-grid textarea{min-height:4rem}
+#commandDialog .fr-fieldset{padding:.75rem}
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 dialog .tool-actions > .fr-btn,
 dialog .list-actions > .fr-btn{order:2}
@@ -788,12 +793,12 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .event-title-block .event-label{font-weight:400;color:var(--text)}
 .event-title-block .table-meta{display:block;font-size:.8125rem;color:var(--text-light);margin-top:.2rem}
 .event-card{padding:.9rem 1rem}
-.grid-2#eventList{align-items:stretch}
+.grid-2#eventList{align-items:stretch;grid-auto-rows:1fr}
 .grid-2#eventList .event-card{height:100%;display:flex;flex-direction:column}
-.event-card + .event-card{margin-top:.75rem}
+#eventList .event-card + .event-card{margin-top:0}
 .event-card-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}
 .event-card-main{min-width:0}
-.event-actions{margin-top:auto}
+.event-actions{margin-top:auto;display:flex;flex-wrap:wrap;gap:.5rem}
 .event-context-card{margin-bottom:1rem}
 .event-context-heading{display:grid;gap:.35rem}
 .event-context-card .card-body{display:grid;gap:1rem}
@@ -943,6 +948,49 @@ html[data-theme='dark'] .branding-preview img{background:#0f1020}
   .event-context-updates{grid-template-columns:1fr}
   .event-card-head{flex-direction:column}
   #userAdminCard .grid-3{grid-template-columns:1fr}
+  #commandDialog{width:calc(100vw - .5rem);max-width:calc(100vw - .5rem)}
+  #commandDialog form.card{width:100%;max-width:100%}
+  #commandDialog .grid-2,
+  #commandDialog .grid-3,
+  #commandDialog .inline-checks{grid-template-columns:1fr}
+  #commandDialog .svc-matrix{
+    grid-template-columns:minmax(0,1fr) 3rem 3rem 2.5rem;
+  }
+  #eventList{grid-template-columns:1fr}
+  .page-header h1{font-size:1.6rem}
+  .page-subtabs-inline,
+  .page-header .list-actions,
+  .page-header .tool-actions,
+  .page-header .event-actions,
+  .page-header .directory-actions{
+    width:100%;
+  }
+  .page-header .list-actions .fr-btn,
+  .page-header .tool-actions .fr-btn,
+  .page-header .event-actions .fr-btn{
+    flex:1 1 auto;
+  }
+}
+
+@media (max-width:640px){
+  .app-topbar{padding:.75rem 1rem}
+  .brand-logo,.favicon-logo{width:40px;height:40px}
+  .brand-title{font-size:1.05rem}
+  .brand-subtitle{font-size:.8rem}
+  .page{padding:.75rem .6rem 1.2rem}
+  .page-inner{max-width:100%}
+  .card-header,
+  .card-body,
+  dialog .dialog-head,
+  dialog .dialog-body{padding:.8rem}
+  .kpi strong{font-size:1.55rem}
+  .fr-btn,.settings-tab,.page-subtab{padding:0 .75rem}
+  .table{min-width:42rem}
+  #commandDialog .card-body{padding:.7rem}
+  #commandDialog .svc-matrix{
+    grid-template-columns:minmax(0,1fr) 2.8rem 2.8rem 2.2rem;
+    gap:.3rem;
+  }
 }
 
 /* ── Toasts ─────────────────────────────────────────────── */
