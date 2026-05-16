@@ -839,7 +839,14 @@ function buildDutyDocxRows() {
   if (rows.length) {
     return rows.map((row) => ({
       start: parseDateLocal(row.start) ? formatDateLocal(parseDateLocal(row.start)) : (row.start || ''),
-      end: parseDateLocal(row.end) ? formatDateLocal(parseDateLocal(row.end)) : (row.end || ''),
+      end: (() => {
+        const displayEnd = row.effectiveEnd || row.end || '';
+        const formatted = parseDateLocal(displayEnd) ? formatDateLocal(parseDateLocal(displayEnd)) : displayEnd;
+        if (row.effectiveEnd && row.end && row.effectiveEnd !== row.end) {
+          return `${formatted} (prolongation jour ferie)`;
+        }
+        return formatted;
+      })(),
       agent1: row.agent1?.name || 'Non attribué',
       agent2: row.agent2?.name || 'Non attribué'
     }));
