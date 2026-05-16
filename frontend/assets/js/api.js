@@ -3,6 +3,14 @@
 
   const AUTH_SESSION_KEY = 'sicodSupabaseSessionV1';
   const USER_ROLE_VALUES = ['admin', 'redacteur', 'lecture'];
+  const ROLE_RANK = { lecture: 1, redacteur: 2, admin: 3 };
+  const PASSWORD_POLICY = Object.freeze({
+    minLength: 12,
+    requireUpper: true,
+    requireLower: true,
+    requireDigit: true,
+    requireSpecial: true
+  });
   const REFERENCE_TABLES = {
     eventTypes: 'reference_event_types',
     commandTypes: 'reference_command_types',
@@ -26,6 +34,7 @@
   let lastDirectoryTouchAt = 0;
   let authRolesLoaded = false;
   let lastRolesFetchFailureAt = 0;
+  let lastWriteDeniedAt = 0;
 
   function sanitizeRemoteConfig(input) {
     const value = input && typeof input === 'object' ? input : {};
@@ -101,10 +110,84 @@
     return '';
   }
 
+  function getRoleRank(role) {
+    return ROLE_RANK[String(role || '').trim().toLowerCase()] || 0;
+  }
+
+  function hasRequiredRole(requiredRole) {
+    return getRoleRank(getResolvedRole()) >= getRoleRank(requiredRole);
+  }
+
+  function ensureRequiredRole(requiredRole, message) {
+    if (!hasRequiredRole(requiredRole)) {
+      throw new Error(message || 'Droits insuffisants.');
+    }
+  }
+
   function normalizeRoleList(input) {
     return Array.from(new Set((Array.isArray(input) ? input : [])
       .map((item) => String(item || '').trim().toLowerCase())
       .filter((item) => USER_ROLE_VALUES.includes(item))));
+  }
+
+  function notifyWriteDenied(message = 'Votre compte est en lecture seule. Les modifications ne peuvent pas être enregistrées.') {
+    const now = Date.now();
+    if (now - lastWriteDeniedAt < 8000) return;
+    lastWriteDeniedAt = now;
+    try {
+      global.dispatchEvent(new CustomEvent('sicod-write-denied', {
+        detail: { message }
+      }));
+    } catch {}
+  }
+
+  function parseJwtClaims(token) {
+    const value = String(token || '').trim();
+    if (!value) return {};
+    const parts = value.split('.');
+    if (parts.length < 2) return {};
+    try {
+      const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padding = (4 - (normalized.length % 4 || 4)) % 4;
+      const payload = normalized + '='.repeat(padding);
+      return JSON.parse(atob(payload));
+    } catch {
+      return {};
+    }
+  }
+
+  function getSessionAal(session = authSession) {
+    const claims = parseJwtClaims(session?.accessToken);
+    const aal = String(claims?.aal || '').trim().toLowerCase();
+    if (aal) return aal;
+    const amr = Array.isArray(claims?.amr) ? claims.amr.map((item) => String(item || '').toLowerCase()) : [];
+    if (amr.includes('mfa')) return 'aal2';
+    if (amr.length) return 'aal1';
+    return '';
+  }
+
+  function validatePasswordStrength(password, options = {}) {
+    const value = String(password || '');
+    const requireValue = options.requireValue !== false;
+    if (!value) {
+      return requireValue ? 'Mot de passe requis.' : '';
+    }
+    if (value.length < PASSWORD_POLICY.minLength) {
+      return `Le mot de passe doit contenir au moins ${PASSWORD_POLICY.minLength} caractères.`;
+    }
+    if (PASSWORD_POLICY.requireUpper && !/[A-Z]/.test(value)) {
+      return 'Le mot de passe doit contenir au moins une majuscule.';
+    }
+    if (PASSWORD_POLICY.requireLower && !/[a-z]/.test(value)) {
+      return 'Le mot de passe doit contenir au moins une minuscule.';
+    }
+    if (PASSWORD_POLICY.requireDigit && !/[0-9]/.test(value)) {
+      return 'Le mot de passe doit contenir au moins un chiffre.';
+    }
+    if (PASSWORD_POLICY.requireSpecial && !/[^A-Za-z0-9]/.test(value)) {
+      return 'Le mot de passe doit contenir au moins un caractère spécial.';
+    }
+    return '';
   }
 
   function getCurrentUserLabel(user = authSession?.user) {
@@ -301,6 +384,8 @@
     const cleanEmail = String(email || '').trim();
     const cleanPassword = String(password || '');
     if (!cleanEmail || !cleanPassword) throw new Error('E-mail et mot de passe requis.');
+    const passwordError = validatePasswordStrength(cleanPassword, { requireValue: true });
+    if (passwordError) throw new Error(passwordError);
     const payload = await authRequest('/auth/v1/signup', {
       method: 'POST',
       headers: {
@@ -334,6 +419,8 @@
   async function updateSupabasePassword(password) {
     const nextPassword = String(password || '');
     if (!nextPassword) throw new Error('Mot de passe manquant.');
+    const passwordError = validatePasswordStrength(nextPassword, { requireValue: true });
+    if (passwordError) throw new Error(passwordError);
     const session = await ensureSupabaseSession();
     if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
     const payload = await fetchJson(`${runtimeConfig.supabaseUrl}/auth/v1/user`, {
@@ -367,6 +454,8 @@
     const configured = isSupabaseConfigured();
     const authenticated = configured && !!authSession?.accessToken && !isSessionExpired(authSession, 0);
     const role = getResolvedRole();
+    const resolvedRole = role || (authenticated ? 'lecture' : '');
+    const sessionAal = authenticated ? getSessionAal(authSession) : '';
     return {
       configured,
       enabled: configured,
@@ -376,8 +465,11 @@
       userId: authSession?.user?.id || '',
       expiresAt: authSession?.expiresAt || null,
       roles: authRoles.slice(),
-      role: role || (authenticated ? 'lecture' : ''),
-      isAdmin: role === 'admin'
+      role: resolvedRole,
+      isAdmin: resolvedRole === 'admin',
+      canWrite: getRoleRank(resolvedRole) >= getRoleRank('redacteur'),
+      sessionAal,
+      mfaRecommended: resolvedRole === 'admin' && sessionAal !== 'aal2'
     };
   }
 
@@ -385,21 +477,7 @@
     const userId = authSession?.user?.id;
     if (!userId) return [];
     const payload = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true, { skipSessionCheck: true });
-    let rows = Array.isArray(payload) ? payload : [];
-    if (!rows.length) {
-      try {
-        await supabaseRequest('/rest/v1/app_user_roles', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            Prefer: 'resolution=merge-duplicates,return=representation'
-          },
-          body: JSON.stringify([{ user_id: userId, role_key: 'admin' }])
-        }, true, { skipSessionCheck: true });
-        const retry = await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(userId)}&select=role_key`, {}, true, { skipSessionCheck: true });
-        rows = Array.isArray(retry) ? retry : [];
-      } catch {}
-    }
+    const rows = Array.isArray(payload) ? payload : [];
     return rows.map((row) => String(row?.role_key || '')).filter(Boolean);
   }
 
@@ -458,6 +536,7 @@
   }
 
   async function getSupabaseManagedUsers() {
+    ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const [directoryRows, roleRows] = await Promise.all([
       supabaseRequest('/rest/v1/app_user_directory?select=user_id,email,display_name,last_seen_at,created_at&order=email.asc', {}, true),
       supabaseRequest('/rest/v1/app_user_roles?select=user_id,role_key&order=user_id.asc,role_key.asc', {}, true)
@@ -481,6 +560,7 @@
   }
 
   async function saveSupabaseManagedUserRoles(userId, roles) {
+    ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const targetUserId = String(userId || '').trim();
     if (!targetUserId) throw new Error('Utilisateur cible manquant.');
     const nextRoles = normalizeRoleList(roles);
@@ -507,6 +587,7 @@
   }
 
   async function upsertSupabaseManagedUser(user) {
+    ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const value = user && typeof user === 'object' ? user : {};
     let userId = String(value.userId || '').trim();
     const email = String(value.email || '').trim();
@@ -543,6 +624,7 @@
   }
 
   async function deleteSupabaseManagedUser(userId) {
+    ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const targetUserId = String(userId || '').trim();
     if (!targetUserId) throw new Error('Utilisateur cible manquant.');
     await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(targetUserId)}`, {
@@ -568,6 +650,7 @@
   }
 
   async function upsertSupabaseAppState(state) {
+    ensureRequiredRole('redacteur', 'Votre compte est en lecture seule. Les modifications ne peuvent pas être enregistrées.');
     const payload = await supabaseRequest('/rest/v1/app_settings?on_conflict=key', {
       method: 'POST',
       headers: {
@@ -640,6 +723,7 @@
   }
 
   async function pushSupabaseReferenceCatalog(catalog) {
+    ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const source = catalog && typeof catalog === 'object' ? catalog : {};
     await Promise.all(Object.entries(REFERENCE_TABLES).map(async ([key, table]) => {
       const rows = Array.isArray(source[key]) ? source[key] : [];
@@ -663,6 +747,10 @@
 
   function scheduleRemoteSave(data) {
     if (!isSupabaseConfigured() || !authSession?.accessToken) return;
+    if (!hasRequiredRole('redacteur')) {
+      notifyWriteDenied();
+      return;
+    }
     const serialized = JSON.stringify(data || {});
     if (serialized === lastSerializedState) return;
     lastSerializedState = serialized;
@@ -745,6 +833,13 @@
       },
       async updatePassword(password) {
         return updateSupabasePassword(password);
+      },
+      validatePassword(password, options) {
+        const message = validatePasswordStrength(password, options);
+        return { ok: !message, message };
+      },
+      getPasswordPolicy() {
+        return { ...PASSWORD_POLICY };
       },
       async refreshRoles() {
         return loadCurrentUserRoles(true);

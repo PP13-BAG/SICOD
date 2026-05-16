@@ -5405,10 +5405,15 @@ async function submitSupabaseLogin(event) {
       15000,
       'La connexion Supabase a expiré. Vérifie le réseau, le compte utilisateur ou la confirmation de l e-mail.'
     );
+    markSecurityActivity();
     refreshAuthGate();
     refreshStorageStatus();
     updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
     updateAuthGateStatus('Connexion réussie', 'success');
+    const authState = window.SICODApi?.system?.getAuthState?.() || {};
+    if (authState.mfaRecommended) {
+      updateCloudStateStatus("Compte administrateur connecté sans MFA détectée. L'activation d'un second facteur est fortement recommandée.", 'warning');
+    }
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
@@ -5436,6 +5441,7 @@ async function logoutSupabaseSession() {
     updateCloudStateStatus(`Déconnexion Supabase impossible : ${esc(error.message || String(error))}`, 'warning');
   }
   clearLocalStateCache();
+  markSecurityActivity();
   resetStateToDefaults();
   userAdminState.loaded = false;
   userAdminState.items = [];
@@ -5791,6 +5797,7 @@ function ensureGeneralPasswordSettingsUI() {
   const generalGrid = document.querySelector('[data-settings-panel="general"] .settings-grid');
   if (!generalGrid || document.getElementById('passwordSettingsCard')) return;
   const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  const passwordPolicy = window.SICODApi?.auth?.getPasswordPolicy?.() || { minLength: 12 };
   const card = document.createElement('div');
   card.className = 'card';
   card.id = 'passwordSettingsCard';
@@ -5802,11 +5809,16 @@ function ensureGeneralPasswordSettingsUI() {
         <label>Rôle applicatif</label>
         <input id="currentUserRoleField" value="${esc(authState.role || 'lecture')}" readonly>
       </div>
+      <div style="margin-top:1rem">
+        <label>Niveau d'authentification</label>
+        <input id="currentUserMfaField" value="${authState.sessionAal === 'aal2' ? 'MFA activee' : 'Mot de passe seul'}" readonly>
+      </div>
       <div class="grid-2" style="margin-top:1rem">
         <div><label for="settingNewPassword">Nouveau mot de passe</label><input id="settingNewPassword" type="password" autocomplete="new-password"></div>
         <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
       </div>
-      <p class="help">Laissez ces champs vides pour conserver le mot de passe actuel.</p>
+      <p class="help">Laissez ces champs vides pour conserver le mot de passe actuel. Politique minimale : ${passwordPolicy.minLength} caractères, avec majuscule, minuscule, chiffre et caractère spécial.</p>
+      <p class="help" id="mfaSecurityHint">${authState.mfaRecommended ? "Compte administrateur : active la MFA dans Supabase Auth pour renforcer l'accès." : "Pour les comptes sensibles, l'activation de la MFA est recommandée."}</p>
     </div>
   `;
   generalGrid.appendChild(card);
@@ -5984,6 +5996,7 @@ function ensureManagedUserDialog() {
           <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
           <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
         </div>
+        <p class="help">Mot de passe minimal : 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.</p>
         <div class="tool-actions">
           <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
         </div>
@@ -6054,6 +6067,13 @@ async function saveManagedUserAccount() {
   if (!userId && !password) {
     showToast('Un mot de passe initial est requis pour créer un compte.', 'error');
     return;
+  }
+  if (!userId || password) {
+    const validation = window.SICODApi?.auth?.validatePassword?.(password, { requireValue: !userId });
+    if (validation && validation.ok === false) {
+      showToast(validation.message, 'error');
+      return;
+    }
   }
   updateUserAdminStatus(userId ? 'Mise à jour du compte...' : 'Création du compte...', 'info');
   try {
@@ -6153,6 +6173,11 @@ function loadSettingsForm() {
   const accountField = document.querySelector('#passwordSettingsCard input[readonly]');
   if (accountField) accountField.value = authState.email || '';
   if (get('currentUserRoleField')) get('currentUserRoleField').value = authState.role || 'lecture';
+  if (get('currentUserMfaField')) get('currentUserMfaField').value = authState.sessionAal === 'aal2' ? 'MFA activee' : 'Mot de passe seul';
+  const mfaHint = document.getElementById('mfaSecurityHint');
+  if (mfaHint) mfaHint.textContent = authState.mfaRecommended
+    ? "Compte administrateur : active la MFA dans Supabase Auth pour renforcer l'accès."
+    : "Pour les comptes sensibles, l'activation de la MFA est recommandée.";
   if (get('settingNewPassword')) get('settingNewPassword').value = '';
   if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
@@ -6179,9 +6204,10 @@ async function saveSettings() {
   const nextPassword = (get('settingNewPassword')?.value || '').trim();
   const confirmPassword = (get('settingConfirmPassword')?.value || '').trim();
   if (nextPassword || confirmPassword) {
-    if (nextPassword.length < 8) {
+    const validation = window.SICODApi?.auth?.validatePassword?.(nextPassword, { requireValue: true });
+    if (validation && validation.ok === false) {
       showSettingsTab('general');
-      showToast('Le mot de passe doit contenir au moins 8 caracteres.', 'error');
+      showToast(validation.message, 'error');
       return;
     }
     if (nextPassword !== confirmPassword) {
@@ -6289,6 +6315,54 @@ function renderAll() {
 let appHiddenAt = 0;
 let appResumePromise = null;
 let lastAppResumeAt = 0;
+const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const SESSION_IDLE_WARNING_MS = 25 * 60 * 1000;
+const SESSION_HEARTBEAT_MS = 5 * 60 * 1000;
+let lastSecurityActivityAt = Date.now();
+let lastIdleWarningAt = 0;
+let lastSessionHeartbeatAt = 0;
+let sessionSecurityMonitorStarted = false;
+
+function markSecurityActivity() {
+  lastSecurityActivityAt = Date.now();
+  lastIdleWarningAt = 0;
+}
+
+async function runSessionSecurityTick() {
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  if (!authState.authenticated) {
+    lastIdleWarningAt = 0;
+    return;
+  }
+  const now = Date.now();
+  const idleMs = now - lastSecurityActivityAt;
+  if (!lastIdleWarningAt && idleMs >= SESSION_IDLE_WARNING_MS && idleMs < SESSION_IDLE_TIMEOUT_MS) {
+    lastIdleWarningAt = now;
+    showToast("Session bientôt fermée pour inactivité. Enregistrez vos actions en cours.", 'info');
+  }
+  if (idleMs >= SESSION_IDLE_TIMEOUT_MS) {
+    showToast("Session fermée après 30 minutes d'inactivité.", 'info');
+    await logoutSupabaseSession();
+    return;
+  }
+  if (document.visibilityState === 'visible' && now - lastSessionHeartbeatAt >= SESSION_HEARTBEAT_MS) {
+    lastSessionHeartbeatAt = now;
+    try {
+      await Promise.resolve(window.SICODApi?.auth?.restoreSession?.());
+    } catch {}
+  }
+}
+
+function ensureSessionSecurityMonitor() {
+  if (sessionSecurityMonitorStarted) return;
+  sessionSecurityMonitorStarted = true;
+  ['pointerdown', 'keydown', 'touchstart', 'mousedown', 'scroll'].forEach((eventName) => {
+    window.addEventListener(eventName, markSecurityActivity, { passive: true });
+  });
+  setInterval(() => {
+    runSessionSecurityTick().catch(() => null);
+  }, 30000);
+}
 
 async function resumeApplicationAfterInactivity(force = false) {
   const now = Date.now();
@@ -6333,6 +6407,11 @@ async function resumeApplicationAfterInactivity(force = false) {
 
 // Initialisation
 applyTheme(state.settings.theme);
+ensureSessionSecurityMonitor();
+window.addEventListener('sicod-write-denied', (event) => {
+  showToast(event?.detail?.message || "Votre compte est en lecture seule. Les modifications ne peuvent pas être enregistrées.", 'error');
+});
+markSecurityActivity();
 
 const dutyMonthEl = document.getElementById('dutyMonth');
 if (dutyMonthEl && !dutyMonthEl.value) dutyMonthEl.value = todayISO().slice(0, 7);
