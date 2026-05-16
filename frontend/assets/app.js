@@ -722,6 +722,10 @@ const DOCX_TEMPLATE_FILES = {
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const ZIP_MIME = 'application/zip';
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const DOC_REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const XML_NS = 'http://www.w3.org/XML/1998/namespace';
+const PX_TO_EMU = 9525;
 
 function ensureDocxEngine() {
   if (!window.JSZip) {
@@ -821,7 +825,6 @@ function replacePlaceholderTextWithBreaks(root, placeholder, replacement, replac
   if (!finalValue.includes('\n')) {
     return replacePlaceholderText(root, placeholder, finalValue, replaceAll);
   }
-  const XML_NS = 'http://www.w3.org/XML/1998/namespace';
   const xmlDoc = root?.ownerDocument || root;
   const lines = finalValue.split('\n');
   let didReplace = false;
@@ -922,6 +925,261 @@ function replaceRowsMatchingTextInTable(table, matchText, items, fillRow) {
   return true;
 }
 
+function createWordXmlFragment(ownerDoc, xml) {
+  const parser = new DOMParser();
+  const wrapped = parser.parseFromString(`
+    <root
+      xmlns:w="${WORD_NS}"
+      xmlns:r="${DOC_REL_NS}"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+      xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+      xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+      xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+    >${xml}</root>
+  `, 'application/xml');
+  if (wrapped.getElementsByTagName('parsererror').length) {
+    throw new Error("Impossible de générer le fragment XML DOCX.");
+  }
+  return ownerDoc.importNode(wrapped.documentElement.firstElementChild, true);
+}
+
+function guessImageExtension(mime = '', src = '') {
+  const cleanMime = String(mime || '').toLowerCase();
+  if (cleanMime.includes('png')) return 'png';
+  if (cleanMime.includes('jpeg') || cleanMime.includes('jpg')) return 'jpg';
+  if (cleanMime.includes('webp')) return 'webp';
+  if (cleanMime.includes('gif')) return 'gif';
+  if (cleanMime.includes('svg')) return 'svg';
+  const cleanSrc = String(src || '').toLowerCase();
+  const match = cleanSrc.match(/\.([a-z0-9]+)(?:[?#].*)?$/i);
+  return match?.[1] || 'png';
+}
+
+function decodeDataUrl(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.*)$/i);
+  if (!match) return null;
+  const mime = match[1] || 'application/octet-stream';
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3] || '';
+  let bytes;
+  if (isBase64) {
+    const binary = atob(payload);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  } else {
+    const decoded = decodeURIComponent(payload);
+    bytes = new TextEncoder().encode(decoded);
+  }
+  return { mime, bytes };
+}
+
+async function measureImageDimensions(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({
+      width: img.naturalWidth || img.width || 1,
+      height: img.naturalHeight || img.height || 1
+    });
+    img.onerror = () => reject(new Error("Impossible de lire les dimensions du visuel."));
+    img.src = src;
+  });
+}
+
+async function loadDocxImageAsset(src) {
+  const value = String(src || '').trim();
+  if (!value) return null;
+  if (value.startsWith('data:')) {
+    const decoded = decodeDataUrl(value);
+    if (!decoded?.bytes?.length) throw new Error("Le visuel importé est invalide.");
+    const dims = await measureImageDimensions(value);
+    return {
+      bytes: decoded.bytes,
+      mime: decoded.mime,
+      extension: guessImageExtension(decoded.mime, value),
+      ...dims
+    };
+  }
+  const response = await fetch(value, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Le visuel distant est inaccessible (${response.status}).`);
+  }
+  const blob = await response.blob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const dims = await measureImageDimensions(objectUrl);
+    return {
+      bytes,
+      mime: blob.type || '',
+      extension: guessImageExtension(blob.type, value),
+      ...dims
+    };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function scaleDocxImage(width, height, maxWidthPx = 360, maxHeightPx = 280) {
+  const safeWidth = Math.max(1, Number(width) || 1);
+  const safeHeight = Math.max(1, Number(height) || 1);
+  const ratio = Math.min(maxWidthPx / safeWidth, maxHeightPx / safeHeight, 1);
+  return {
+    widthPx: Math.max(1, Math.round(safeWidth * ratio)),
+    heightPx: Math.max(1, Math.round(safeHeight * ratio))
+  };
+}
+
+function nextDocxImageTarget(zip, extension) {
+  const files = Object.keys(zip.files || {});
+  let index = 1;
+  while (files.includes(`word/media/sicod-image-${index}.${extension}`)) index += 1;
+  return `word/media/sicod-image-${index}.${extension}`;
+}
+
+async function addDocxImageToPackage(zip, src) {
+  const asset = await loadDocxImageAsset(src);
+  if (!asset) return null;
+  const mediaTarget = nextDocxImageTarget(zip, asset.extension);
+  zip.file(mediaTarget, asset.bytes);
+  const relsDoc = await loadDocxXml(zip, 'word/_rels/document.xml.rels');
+  const relRoot = relsDoc.documentElement;
+  const existingIds = Array.from(relRoot.getElementsByTagNameNS(REL_NS, 'Relationship'))
+    .map((node) => Number(String(node.getAttribute('Id') || '').replace(/^rId/i, '')))
+    .filter((value) => Number.isFinite(value));
+  const relId = `rId${(existingIds.length ? Math.max(...existingIds) : 0) + 1}`;
+  const rel = relsDoc.createElementNS(REL_NS, 'Relationship');
+  rel.setAttribute('Id', relId);
+  rel.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image');
+  rel.setAttribute('Target', mediaTarget.replace(/^word\//, ''));
+  relRoot.appendChild(rel);
+  saveDocxXml(zip, 'word/_rels/document.xml.rels', relsDoc);
+  return {
+    relId,
+    width: asset.width,
+    height: asset.height
+  };
+}
+
+function clearWordParagraphContent(paragraph) {
+  if (!paragraph) return;
+  Array.from(paragraph.childNodes).forEach((child) => {
+    if (!(child.namespaceURI === WORD_NS && child.localName === 'pPr')) {
+      paragraph.removeChild(child);
+    }
+  });
+}
+
+function buildDocxImageRun(ownerDoc, relId, widthPx, heightPx, name = 'Visuel') {
+  const widthEmu = Math.max(1, Math.round(widthPx * PX_TO_EMU));
+  const heightEmu = Math.max(1, Math.round(heightPx * PX_TO_EMU));
+  const docPrId = Date.now() % 1000000;
+  return createWordXmlFragment(ownerDoc, `
+    <w:r>
+      <w:drawing>
+        <wp:inline distT="0" distB="0" distL="0" distR="0">
+          <wp:extent cx="${widthEmu}" cy="${heightEmu}"/>
+          <wp:effectExtent l="0" t="0" r="0" b="0"/>
+          <wp:docPr id="${docPrId}" name="${escapeHtml(name)}"/>
+          <wp:cNvGraphicFramePr>
+            <a:graphicFrameLocks noChangeAspect="1"/>
+          </wp:cNvGraphicFramePr>
+          <a:graphic>
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:pic>
+                <pic:nvPicPr>
+                  <pic:cNvPr id="0" name="${escapeHtml(name)}"/>
+                  <pic:cNvPicPr/>
+                </pic:nvPicPr>
+                <pic:blipFill>
+                  <a:blip r:embed="${relId}"/>
+                  <a:stretch><a:fillRect/></a:stretch>
+                </pic:blipFill>
+                <pic:spPr>
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="${widthEmu}" cy="${heightEmu}"/>
+                  </a:xfrm>
+                  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                </pic:spPr>
+              </pic:pic>
+            </a:graphicData>
+          </a:graphic>
+        </wp:inline>
+      </w:drawing>
+    </w:r>
+  `);
+}
+
+function setParagraphText(paragraph, text) {
+  clearWordParagraphContent(paragraph);
+  const run = paragraph.ownerDocument.createElementNS(WORD_NS, 'w:r');
+  const textNode = paragraph.ownerDocument.createElementNS(WORD_NS, 'w:t');
+  textNode.setAttributeNS(XML_NS, 'xml:space', 'preserve');
+  textNode.textContent = String(text || '');
+  run.appendChild(textNode);
+  paragraph.appendChild(run);
+}
+
+async function replacePlaceholderWithDocxImage(zip, doc, placeholder, src, options = {}) {
+  const paragraph = findWordParagraphs(doc).find((node) => (node.textContent || '').includes(placeholder));
+  if (!paragraph) return false;
+  const label = options.label || 'Visuel';
+  if (!src) {
+    setParagraphText(paragraph, options.emptyText || 'Aucun visuel joint');
+    return false;
+  }
+  const imageRef = await addDocxImageToPackage(zip, src);
+  if (!imageRef) {
+    setParagraphText(paragraph, options.emptyText || 'Aucun visuel joint');
+    return false;
+  }
+  const scaled = scaleDocxImage(imageRef.width, imageRef.height, options.maxWidthPx || 300, options.maxHeightPx || 220);
+  clearWordParagraphContent(paragraph);
+  paragraph.appendChild(buildDocxImageRun(paragraph.ownerDocument, imageRef.relId, scaled.widthPx, scaled.heightPx, label));
+  if (options.caption) {
+    const captionParagraph = paragraph.cloneNode(true);
+    setParagraphText(captionParagraph, options.caption);
+    paragraph.parentNode.insertBefore(captionParagraph, paragraph.nextSibling);
+  }
+  return true;
+}
+
+async function appendDocxImageSection(zip, doc, src, options = {}) {
+  if (!src) return false;
+  const imageRef = await addDocxImageToPackage(zip, src);
+  if (!imageRef) return false;
+  const body = findWordBody(doc);
+  if (!body) return false;
+  const sectPr = body.getElementsByTagNameNS(WORD_NS, 'sectPr')[0];
+  const insertBefore = sectPr || null;
+  if (options.title) {
+    const titleParagraph = createWordXmlFragment(doc, `
+      <w:p>
+        <w:r><w:t>${escapeHtml(options.title)}</w:t></w:r>
+      </w:p>
+    `);
+    body.insertBefore(titleParagraph, insertBefore);
+  }
+  const scaled = scaleDocxImage(imageRef.width, imageRef.height, options.maxWidthPx || 420, options.maxHeightPx || 280);
+  const imageParagraph = createWordXmlFragment(doc, `
+    <w:p>
+      <w:pPr><w:jc w:val="center"/></w:pPr>
+    </w:p>
+  `);
+  imageParagraph.appendChild(buildDocxImageRun(doc, imageRef.relId, scaled.widthPx, scaled.heightPx, options.label || 'Visuel'));
+  body.insertBefore(imageParagraph, insertBefore);
+  if (options.caption) {
+    const captionParagraph = createWordXmlFragment(doc, `
+      <w:p>
+        <w:pPr><w:jc w:val="center"/></w:pPr>
+        <w:r><w:t>${escapeHtml(options.caption)}</w:t></w:r>
+      </w:p>
+    `);
+    body.insertBefore(captionParagraph, insertBefore);
+  }
+  return true;
+}
+
 function buildEventLogDocxRows(eventId) {
   const items = getEventTimelineItems(eventId);
   if (items.length) {
@@ -951,7 +1209,6 @@ function buildPSDocxDetails(ps) {
   push('Moyens', ps.means ?? ps.moyens);
   push('Mesures prises', ps.measures ?? ps.mesures);
   push('Communication', ps.communication);
-  push('Visuel', ps.imageCaption || ps.image || '');
   if (ps.transcript) push('Transcription', ps.transcript);
   if (ps.bilan?.notes) push('Compléments bilan', ps.bilan.notes);
   return parts;
@@ -3361,7 +3618,21 @@ async function exportPSDocx() {
         ps.communication || '',
         ps.transcript || bilan.notes || ''
       ]);
-      replacePlaceholderText(doc, '[Visuel]', ps.imageCaption || ps.image || 'Aucun visuel joint', false);
+      try {
+        const inserted = await replacePlaceholderWithDocxImage(zip, doc, '[Visuel]', ps.image, {
+          label: 'Visuel PS',
+          caption: ps.imageCaption || '',
+          emptyText: 'Aucun visuel joint',
+          maxWidthPx: 290,
+          maxHeightPx: 210
+        });
+        if (!inserted && !ps.image) {
+          replacePlaceholderText(doc, '[Visuel]', 'Aucun visuel joint', false);
+        }
+      } catch (imageError) {
+        replacePlaceholderText(doc, '[Visuel]', ps.imageCaption || 'Visuel non intégré', false);
+        console.warn('Insertion du visuel PS impossible :', imageError);
+      }
     } else {
       replacePlaceholderSequence(doc, '[Nbr]', [
         bilan.dcd ?? '0',
@@ -3370,6 +3641,17 @@ async function exportPSDocx() {
         bilan.impliques ?? '0'
       ]);
       replacePlaceholderText(doc, '[Détail]', details.join('\n\n') || 'Aucun détail renseigné.', true);
+      try {
+        await appendDocxImageSection(zip, doc, ps.image, {
+          title: 'Visuel associé',
+          label: 'Visuel PS',
+          caption: ps.imageCaption || '',
+          maxWidthPx: 420,
+          maxHeightPx: 260
+        });
+      } catch (imageError) {
+        console.warn('Ajout du visuel PS détaillé impossible :', imageError);
+      }
     }
     await exportDocxBlob(saveDocxDocument(zip, doc), `ps-${slugify(ps.title || getEventTitle(ps.eventId) || `ps-${ps.number || 'sicod'}`)}.docx`);
     showToast('Point de situation exporté en DOCX.');
