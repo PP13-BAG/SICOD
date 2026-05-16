@@ -501,10 +501,8 @@ input:focus,select:focus,textarea:focus{
 .settings-tabs{display:none}
 .page-subtabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
 .page-header-stack{display:grid;gap:.35rem;min-width:0}
-.page-header-stack-inline{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
-.page-header-stack-inline > div:first-child{flex:0 0 auto}
-.page-header-stack-inline .page-subtabs-inline{flex:1 1 auto;min-width:16rem}
 .page-subtabs-inline{margin:0}
+.page-header > .page-subtabs-inline{margin-left:auto;justify-content:flex-end}
 .settings-selector-row{
   display:grid;
   gap:.35rem;

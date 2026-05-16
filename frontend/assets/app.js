@@ -1217,12 +1217,17 @@ function syncPlanExpiryFromApproval(force = false) {
 }
 
 function applyPlanExpiryRules() {
+  let changed = false;
   getActiveItems(state.planItems).forEach(item => {
     if (normalizePlanStatus(item.status) !== 'a jour') return;
     const limit = parseDateLocal(resolvePlanExpiryDate(item));
     if (!limit) return;
-    if (new Date() > limit) item.status = 'A programmer';
+    if (new Date() > limit) {
+      item.status = 'A programmer';
+      changed = true;
+    }
   });
+  if (changed) persist();
 }
 
 function isPlanExpired(item) {
@@ -2236,7 +2241,7 @@ function buildPlanningFollowUpHtmlTokens() {
   const summary = [`${items.length} item(s)`, ...Object.entries(counts).map(([label, value]) => `${label} : ${value}`)].join(' - ');
   const rows = items.map(p => `<tr>
     <td>${esc(p.type || '')}</td><td>${esc(p.risk || '')}</td><td>${esc(p.item || '')}</td><td>${esc(p.priority || '')}</td>
-    <td>${esc(p.status || '')}${isPlanExpired(p) ? ' - Expiré' : ''}</td><td>${esc(formatIsoDateForDisplay(p.approvalDate || ''))}${resolvePlanExpiryDate(p) ? ` (exp. ${esc(formatIsoDateForDisplay(resolvePlanExpiryDate(p)))})` : ''}</td><td>${esc(p.observation || '')}</td>
+    <td>${esc(p.status || '')}</td><td>${esc(formatIsoDateForDisplay(p.approvalDate || ''))}${resolvePlanExpiryDate(p) ? ` (exp. ${esc(formatIsoDateForDisplay(resolvePlanExpiryDate(p)))})` : ''}</td><td>${esc(p.observation || '')}</td>
   </tr>`).join('');
   return {
     logo: currentLogoSrc(),
@@ -4175,7 +4180,7 @@ function renderPlanning() {
           <td>${esc(p.risk || '')}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(p.item || '')}</span><span class="table-meta">${p.url ? 'Lien Resana disponible' : ''}</span></div></td>
           <td>${esc(p.priority || '')}</td>
-          <td>${badge(p.status || '')}${isPlanExpired(p) ? ' <span class="badge expired">Expiré</span>' : ''}</td>
+          <td>${badge(p.status || '')}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(formatIsoDateForDisplay(p.approvalDate || ''))}</span><span class="table-meta">Expiration : ${esc(formatIsoDateForDisplay(resolvePlanExpiryDate(p) || ''))}</span></div></td>
           <td>${esc(p.observation || '')}</td>
         </tr>`).join('')
