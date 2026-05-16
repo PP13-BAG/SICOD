@@ -2975,7 +2975,15 @@ function openPSForm(id) {
   document.getElementById('psMeans').value = ps?.means ?? ps?.moyens ?? draft?.means ?? '';
   document.getElementById('psMeasures').value = ps?.measures ?? ps?.mesures ?? draft?.measures ?? '';
   document.getElementById('psCommunication').value = ps?.communication || draft?.communication || '';
-  document.getElementById('psImage').value = ps?.image || draft?.image || '';
+  const initialImage = ps?.image || draft?.image || '';
+  const psImageInput = document.getElementById('psImage');
+  const psImageDataInput = document.getElementById('psImageData');
+  const psImageMeta = document.getElementById('psImageMeta');
+  if (psImageInput) psImageInput.value = initialImage && !String(initialImage).startsWith('data:') ? initialImage : '';
+  if (psImageDataInput) psImageDataInput.value = initialImage && String(initialImage).startsWith('data:') ? initialImage : '';
+  if (psImageMeta) psImageMeta.textContent = initialImage
+    ? (String(initialImage).startsWith('data:') ? 'Visuel importé' : 'Visuel lié par URL')
+    : 'Aucun visuel importé';
   document.getElementById('psImageCaption').value = ps?.imageCaption || draft?.imageCaption || '';
   document.getElementById('psTranscript').value = ps?.transcript || draft?.transcript || '';
   document.getElementById('psDcd').value = ps?.bilan?.dcd ?? draft?.bilan?.dcd ?? 0;
@@ -2984,7 +2992,7 @@ function openPSForm(id) {
   document.getElementById('psImpliques').value = ps?.bilan?.impliques ?? draft?.bilan?.impliques ?? 0;
   document.getElementById('psBilanNotes').value = ps?.bilan?.notes || draft?.bilan?.notes || '';
 
-  updatePSImageThumb(ps?.image || '');
+  updatePSImageThumb(initialImage || '');
 
   const audioPrev = document.getElementById('psAudioPreview');
   const audioMeta = document.getElementById('psAudioMeta');
@@ -3019,7 +3027,7 @@ function openPSForm(id) {
           means: document.getElementById('psMeans')?.value || '',
           measures: document.getElementById('psMeasures')?.value || '',
           communication: document.getElementById('psCommunication')?.value || '',
-          image: document.getElementById('psImage')?.value || '',
+          image: resolvePSImageValue(),
           imageCaption: document.getElementById('psImageCaption')?.value || '',
           transcript: document.getElementById('psTranscript')?.value || '',
           bilan: {
@@ -3067,7 +3075,7 @@ function savePS() {
     means: (document.getElementById('psMeans').value || '').trim(),
     measures: (document.getElementById('psMeasures').value || '').trim(),
     communication: (document.getElementById('psCommunication').value || '').trim(),
-    image: (document.getElementById('psImage').value || '').trim(),
+    image: resolvePSImageValue(),
     imageCaption: (document.getElementById('psImageCaption').value || '').trim(),
     transcript: (document.getElementById('psTranscript').value || '').trim(),
     audioData,
@@ -3200,7 +3208,11 @@ function handlePSImageFile(file) {
   const r = new FileReader();
   r.onload = () => {
     const imgEl = document.getElementById('psImage');
-    if (imgEl) imgEl.value = r.result;
+    const imgDataEl = document.getElementById('psImageData');
+    const imgMeta = document.getElementById('psImageMeta');
+    if (imgEl) imgEl.value = '';
+    if (imgDataEl) imgDataEl.value = r.result;
+    if (imgMeta) imgMeta.textContent = file.name || 'Visuel importé';
     updatePSImageThumb(r.result);
   };
   r.readAsDataURL(file);
@@ -3208,9 +3220,42 @@ function handlePSImageFile(file) {
 
 function updatePSImageThumb(src) {
   const thumb = document.getElementById('psImageThumb');
+  const meta = document.getElementById('psImageMeta');
   if (!thumb) return;
-  if (src) { thumb.src = src; thumb.style.display = 'block'; }
-  else { thumb.removeAttribute('src'); thumb.style.display = 'none'; }
+  if (src) {
+    thumb.src = src;
+    thumb.style.display = 'block';
+    if (meta && !meta.textContent.trim()) meta.textContent = String(src).startsWith('data:') ? 'Visuel importé' : 'Visuel lié par URL';
+  }
+  else {
+    thumb.removeAttribute('src');
+    thumb.style.display = 'none';
+    if (meta) meta.textContent = 'Aucun visuel importé';
+  }
+}
+
+function resolvePSImageValue() {
+  const imgData = (document.getElementById('psImageData')?.value || '').trim();
+  if (imgData) return imgData;
+  return (document.getElementById('psImage')?.value || '').trim();
+}
+
+function syncPSImageInputValue() {
+  const imgEl = document.getElementById('psImage');
+  const imgDataEl = document.getElementById('psImageData');
+  const imgMeta = document.getElementById('psImageMeta');
+  if (!imgEl || !imgDataEl) return;
+  const value = (imgEl.value || '').trim();
+  if (value.startsWith('data:')) {
+    imgDataEl.value = value;
+    imgEl.value = '';
+    if (imgMeta) imgMeta.textContent = 'Visuel importé';
+    updatePSImageThumb(value);
+    return;
+  }
+  imgDataEl.value = '';
+  if (imgMeta) imgMeta.textContent = value ? 'Visuel lié par URL' : 'Aucun visuel importé';
+  updatePSImageThumb(value);
 }
 
 function handlePSAudioFile(file) {
@@ -3277,7 +3322,7 @@ function bindPSMediaInputs() {
   const toolLogoEl = document.getElementById('toolLogo');
   if (psImageFile) psImageFile.onchange = () => handlePSImageFile(psImageFile.files[0]);
   if (psAudioFile) psAudioFile.onchange = () => handlePSAudioFile(psAudioFile.files[0]);
-  if (psImageEl) psImageEl.oninput = () => updatePSImageThumb(psImageEl.value.trim());
+  if (psImageEl) psImageEl.oninput = () => syncPSImageInputValue();
   if (toolLogoFile) toolLogoFile.onchange = () => handleToolLogoFile(toolLogoFile.files[0]);
   if (toolLogoEl) toolLogoEl.oninput = () => updateToolThumb(toolLogoEl.value.trim());
 }
