@@ -695,7 +695,10 @@ const DOCX_TEMPLATE_FILES = {
   psFocus: 'assets/templates/docx/ps-focus.docx',
   astreinte: 'assets/templates/docx/astreinte.docx',
   astreinteStat: 'assets/templates/docx/astreinte-stat.docx',
-  ficheReflexe: 'assets/templates/docx/fiches-reflexes.docx'
+  ficheReflexe: 'assets/templates/docx/fiches-reflexes.docx',
+  annuaire: 'assets/templates/docx/annuaire.docx',
+  planification: 'assets/templates/docx/planification.docx',
+  planificationStat: 'assets/templates/docx/planification-stat.docx'
 };
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -951,6 +954,89 @@ function buildDutyStatsDocxRows(year) {
     role1Rows: (stats.a1.length ? stats.a1 : fallbackRow).map((row) => ({ name: row.label, days: row.value })),
     role2Rows: (stats.a2.length ? stats.a2 : fallbackRow).map((row) => ({ name: row.label, days: row.value }))
   };
+}
+
+function buildPlanningDocxRows() {
+  const items = sortItems(getActiveItems(state.planItems), 'planning', 'approvalDate', 'desc', {
+    type: (p) => p.type || '',
+    risk: (p) => p.risk || '',
+    item: (p) => p.item || '',
+    priority: (p) => p.priority || '',
+    status: (p) => p.status || '',
+    approvalDate: (p) => p.approvalDate || '',
+    observation: (p) => p.observation || ''
+  });
+  if (!items.length) {
+    return [{
+      type: '—',
+      risk: '—',
+      item: 'Aucun item de planification',
+      priority: '—',
+      status: '—',
+      approvalDate: '—',
+      expiryDate: '—',
+      observation: '—'
+    }];
+  }
+  return items.map((item) => ({
+    type: item.type || '',
+    risk: item.risk || '',
+    item: item.item || '',
+    priority: item.priority || '',
+    status: item.status || '',
+    approvalDate: item.approvalDate || '',
+    expiryDate: resolvePlanExpiryDate(item) || '',
+    observation: item.observation || ''
+  }));
+}
+
+function buildDirectoryDocxSections() {
+  const contacts = getActiveItems(state.contacts);
+  if (!contacts.length) {
+    return [{
+      group: 'Annuaire',
+      entities: [{
+        name: 'Aucune entité',
+        contacts: [{
+          fonction: 'Aucun contact',
+          identity: '—',
+          tel1: '—',
+          tel2: '',
+          email1: '—',
+          email2: ''
+        }]
+      }]
+    }];
+  }
+  const groupMap = new Map();
+  contacts.forEach((contact) => {
+    const groupName = String(contact.group || 'Autres').trim() || 'Autres';
+    const entityName = String(contact.entity || 'Sans entité').trim() || 'Sans entité';
+    if (!groupMap.has(groupName)) groupMap.set(groupName, new Map());
+    const entityMap = groupMap.get(groupName);
+    if (!entityMap.has(entityName)) entityMap.set(entityName, []);
+    entityMap.get(entityName).push({
+      fonction: contact.function || '',
+      identity: contact.name || '',
+      tel1: contact.phone1 || '',
+      tel2: contact.phone2 || '',
+      email1: contact.email1 || '',
+      email2: contact.email2 || ''
+    });
+  });
+  return Array.from(groupMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'fr'))
+    .map(([group, entities]) => ({
+      group,
+      entities: Array.from(entities.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], 'fr'))
+        .map(([name, rows]) => ({
+          name,
+          contacts: rows.sort((a, b) =>
+            (a.fonction || '').localeCompare(b.fonction || '', 'fr')
+            || (a.identity || '').localeCompare(b.identity || '', 'fr'))
+        }))
+    }));
 }
 
 async function exportDocxBlob(zip, fileName) {
@@ -3814,7 +3900,51 @@ function importContactsCSV(file) {
 }
 
 function exportContactsPDF() {
-  return openHtmlTemplatePdf('directory', buildDirectoryHtmlTokens(), 'annuaire', { orientation: 'landscape' });
+  return (async () => {
+    try {
+      const { zip, doc } = await loadDocxDocument('annuaire');
+      const body = findWordBody(doc);
+      const allTables = findWordTables(body);
+      const groupTableTemplate = allTables.find((table) => (table.textContent || '').includes('[GROUPE]'));
+      const contactTableTemplate = allTables.find((table) => (table.textContent || '').includes('[Fonction]') && (table.textContent || '').includes('[Prénom NOM]'));
+      const entityParagraphTemplate = findWordParagraphs(body).find((paragraph) => (paragraph.textContent || '').includes('[Entité]'));
+      const sectPr = body.getElementsByTagNameNS(WORD_NS, 'sectPr')[0];
+      if (!groupTableTemplate || !contactTableTemplate || !entityParagraphTemplate || !sectPr) {
+        throw new Error("La maquette d'annuaire est incomplète.");
+      }
+      let cursor = groupTableTemplate;
+      while (cursor && cursor !== sectPr) {
+        const next = cursor.nextSibling;
+        body.removeChild(cursor);
+        cursor = next;
+      }
+      const sections = buildDirectoryDocxSections();
+      sections.forEach((section) => {
+        const groupTable = groupTableTemplate.cloneNode(true);
+        replacePlaceholderText(groupTable, '[GROUPE]', section.group, true);
+        body.insertBefore(groupTable, sectPr);
+        section.entities.forEach((entity) => {
+          const entityParagraph = entityParagraphTemplate.cloneNode(true);
+          replacePlaceholderText(entityParagraph, '[Entité]', entity.name, true);
+          body.insertBefore(entityParagraph, sectPr);
+          const contactTable = contactTableTemplate.cloneNode(true);
+          replaceRowsMatchingTextInTable(contactTable, '[Fonction]', entity.contacts, (row, item) => {
+            replacePlaceholderText(row, '[Fonction]', item.fonction || '—', false);
+            replacePlaceholderText(row, '[Prénom NOM]', item.identity || '—', false);
+            replacePlaceholderText(row, '[tel1]', item.tel1 || '—', false);
+            replacePlaceholderText(row, '[tel2]', item.tel2 || '', false);
+            replacePlaceholderText(row, '[e-mail1]', item.email1 || '—', false);
+            replacePlaceholderText(row, '[e-mail2]', item.email2 || '', false);
+          });
+          body.insertBefore(contactTable, sectPr);
+        });
+      });
+      await exportDocxBlob(saveDocxDocument(zip, doc), 'annuaire.docx');
+      showToast('Annuaire exporté en DOCX.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 // ────────────────────────────────────────────────────────────────────────────
 // 12. MODULE OUTILS
@@ -4050,7 +4180,24 @@ function exportPlanningCSV() {
 }
 
 function exportPlanningPDF() {
-  return openHtmlTemplatePdf('planning_follow_up', buildPlanningFollowUpHtmlTokens(), 'planification', { orientation: 'landscape' });
+  return (async () => {
+    try {
+      const { zip, doc } = await loadDocxDocument('planification');
+      replaceRowsMatchingText(doc, '[Type]', buildPlanningDocxRows(), (row, item) => {
+        replacePlaceholderText(row, '[Type]', item.type, false);
+        replacePlaceholderText(row, '[Risque]', item.risk, false);
+        replacePlaceholderText(row, '[Item]', item.item, false);
+        replacePlaceholderText(row, '[P]', item.priority, false);
+        replacePlaceholderText(row, '[Statut]', item.status, false);
+        replacePlaceholderSequence(row, '[Date]', [item.approvalDate, item.expiryDate]);
+        replacePlaceholderText(row, '[Detail]', item.observation, false);
+      });
+      await exportDocxBlob(saveDocxDocument(zip, doc), 'planification.docx');
+      showToast('Planification exportée en DOCX.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -4125,7 +4272,45 @@ function exportPlanningStatsCSV() {
 }
 
 function exportPlanningStatsPDF() {
-  return openHtmlTemplatePdf('planning_statistics', buildPlanningStatisticsHtmlTokens(), 'planification-statistiques', { orientation: 'portrait' });
+  return (async () => {
+    try {
+      const { zip, doc } = await loadDocxDocument('planificationStat');
+      const now = new Date();
+      const stats = getPlanningStatsData();
+      replacePlaceholderText(doc, '[date de génération]', now.toLocaleDateString('fr-FR'), true);
+      const tables = findWordTables(doc);
+      const fillSimpleTable = (title, rows, labelPlaceholder) => {
+        const table = tables.find((entry) => (entry.textContent || '').includes(title));
+        if (!table) return;
+        const data = rows.length ? rows : [{ label: 'Aucune donnée', value: 0 }];
+        replaceRowsMatchingTextInTable(table, labelPlaceholder, data, (row, item) => {
+          replacePlaceholderText(row, labelPlaceholder, item.label, false);
+          replacePlaceholderText(row, '[nbr]', String(item.value), false);
+        });
+      };
+      fillSimpleTable('Plans par type', stats.types, '[Type]');
+      fillSimpleTable('Plans par statut', stats.statuses, '[Statut]');
+      fillSimpleTable('Plans par typologie de risque', stats.risks, '[Risque]');
+      fillSimpleTable("Plans par année d’approbation", stats.years, '[Année]');
+      const priorityTable = tables.find((entry) => (entry.textContent || '').includes('Plans par priorité'));
+      if (priorityTable) {
+        const priorities = stats.priorities.length ? stats.priorities : [{ label: 'Aucune donnée', value: 0 }];
+        const placeholders = ['[P1]', '[P2]', '[P3]', '[P4]'];
+        priorities.slice(0, placeholders.length).forEach((item, index) => {
+          replacePlaceholderText(priorityTable, placeholders[index], item.label, false);
+          replacePlaceholderText(priorityTable, '[nbr]', String(item.value), false);
+        });
+        placeholders.slice(priorities.length).forEach((placeholder) => {
+          replacePlaceholderText(priorityTable, placeholder, '', false);
+          replacePlaceholderText(priorityTable, '[nbr]', '', false);
+        });
+      }
+      await exportDocxBlob(saveDocxDocument(zip, doc), 'planification-statistiques.docx');
+      showToast('Statistiques de planification exportées en DOCX.');
+    } catch (error) {
+      showToast(`Export DOCX impossible : ${error.message || String(error)}`, 'error');
+    }
+  })();
 }
 
 function addPdfHeader(doc, title) {
@@ -4164,7 +4349,7 @@ function ensurePlanningStatsUI() {
   const overview = document.createElement('div'); overview.id = 'planningOverview'; overview.className = 'page-subpanel active';
   cards.forEach(c => overview.appendChild(c));
   const stats = document.createElement('div'); stats.id = 'planningStats'; stats.className = 'page-subpanel';
-  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques</h2><div class="stats-toolbar"><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsPDF()">Exporter PDF</button></div></div><div class="card-body" id="planningStatsBody"></div></div>`;
+  stats.innerHTML = `<div class="card"><div class="card-header"><h2 class="card-title">Statistiques</h2><div class="stats-toolbar"><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsCSV()">Exporter CSV</button><button class="fr-btn secondary small" type="button" onclick="exportPlanningStatsPDF()">Exporter</button></div></div><div class="card-body" id="planningStatsBody"></div></div>`;
   inner.appendChild(overview); inner.appendChild(stats);
 }
 
@@ -4499,12 +4684,31 @@ function exportDutyPDF() {
 // ────────────────────────────────────────────────────────────────────────────
 
 function getDutyStatsData(year) {
-  const rows = (state.dutySchedule || []).filter(w => (w.start || '').slice(0, 4) === String(year));
+  const yearStart = new Date(year, 0, 1, 12, 0, 0, 0);
+  const yearEnd = new Date(year + 1, 0, 1, 12, 0, 0, 0);
+  const rows = (state.dutySchedule || []).filter((w) => {
+    const start = parseDateLocal(w.start || '');
+    const end = parseDateLocal(w.end || '');
+    return start && end && end > yearStart && start < yearEnd;
+  });
   const roles = getDynamicList('dutyRoles');
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
+  const getDaysWithinYear = (row) => {
+    const start = parseDateLocal(row.start || '');
+    const end = parseDateLocal(row.end || '');
+    if (!start || !end || end <= start) return 0;
+    const overlapStart = start > yearStart ? start : yearStart;
+    const overlapEnd = end < yearEnd ? end : yearEnd;
+    if (overlapEnd <= overlapStart) return 0;
+    return Math.round((overlapEnd.getTime() - overlapStart.getTime()) / 86400000);
+  };
   const count = getter => {
     const m = {};
-    rows.forEach(w => { const name = getter(w); if (name) m[name] = (m[name] || 0) + 1; });
+    rows.forEach((w) => {
+      const name = getter(w);
+      const days = getDaysWithinYear(w);
+      if (name && days > 0) m[name] = (m[name] || 0) + days;
+    });
     return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label, value]) => ({ label, value }));
   };
   return { year, role1, role2, a1: count(w => w.agent1?.name || ''), a2: count(w => w.agent2?.name || '') };
@@ -4524,7 +4728,7 @@ function renderDutyStats() {
 function exportDutyStatsCSV() {
   const year = Number(document.getElementById('dutyStatsYear')?.value || new Date().getFullYear());
   const s = getDutyStatsData(year);
-  const rows = [['Année','Rôle','Agent','Semaines']];
+  const rows = [['Année','Rôle','Agent','Jours']];
   s.a1.forEach(r => rows.push([s.year, s.role1, r.label, r.value]));
   s.a2.forEach(r => rows.push([s.year, s.role2, r.label, r.value]));
   downloadCSV(`astreintes-statistiques-${s.year}.csv`, rows);
