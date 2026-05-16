@@ -787,6 +787,9 @@ function getWordTextNodes(root) {
 
 function replacePlaceholderText(root, placeholder, replacement, replaceAll = true) {
   const finalValue = String(replacement ?? '');
+  if (replaceAll && placeholder && finalValue.includes(placeholder)) {
+    throw new Error(`Remplacement circulaire détecté pour ${placeholder}.`);
+  }
   let didReplace = false;
   while (true) {
     const nodes = getWordTextNodes(root);
@@ -3728,11 +3731,12 @@ function exportCommandPDF() {
       });
 
       const exerciseToken = '[EXERCICE – EXERCICE – EXERCICE]';
+      const exerciseBanner = d.exercise ? 'EXERCICE - EXERCICE - EXERCICE' : '';
       const headerDoc = await loadDocxXml(zip, 'word/header1.xml');
-      replacePlaceholderText(headerDoc, exerciseToken, d.exercise ? exerciseToken : '', true);
+      replacePlaceholderText(headerDoc, exerciseToken, exerciseBanner, true);
       saveDocxXml(zip, 'word/header1.xml', headerDoc);
       const footerDoc = await loadDocxXml(zip, 'word/footer1.xml');
-      replacePlaceholderText(footerDoc, exerciseToken, d.exercise ? exerciseToken : '', true);
+      replacePlaceholderText(footerDoc, exerciseToken, exerciseBanner, true);
       saveDocxXml(zip, 'word/footer1.xml', footerDoc);
 
       await exportDocxBlob(saveDocxDocument(zip, doc), `message-commandement-${slugify(d.event || d.typeLabel || 'document')}.docx`);

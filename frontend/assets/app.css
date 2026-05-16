@@ -712,7 +712,7 @@ dialog{
 }
 #eventDialog{max-width:calc(100vw - 2rem);width:min(56rem,calc(100vw - 2rem))}
 #psDialog{max-width:calc(100vw - 2rem);width:min(72rem,calc(100vw - 2rem))}
-#commandDialog{max-width:calc(100vw - 2rem);width:min(72rem,calc(100vw - 2rem))}
+#commandDialog{max-width:calc(100vw - 2rem);width:min(68rem,calc(100vw - 2rem))}
 #ficheDialog{max-width:calc(100vw - 2rem);width:min(64rem,calc(100vw - 2rem))}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog form.card{
@@ -737,6 +737,17 @@ dialog .dialog-body,dialog .card-body{
   overflow-y:auto;
   max-height:calc(100vh - 8rem);
 }
+#commandDialog form.card{width:min(68rem,calc(100vw - 2rem));max-width:calc(100vw - 2rem)}
+#commandDialog .card-body > *,
+#commandDialog .fr-fieldset,
+#commandDialog .grid-2 > div,
+#commandDialog .grid-3 > div{min-width:0}
+#commandDialog textarea,
+#commandDialog input,
+#commandDialog select{max-width:100%}
+#commandDialog .inline-checks{grid-template-columns:repeat(2,minmax(0,1fr))}
+#commandDialog .svc-matrix{grid-template-columns:minmax(0,1fr) 4.5rem 4.5rem}
+#commandDialog .svc-matrix input{min-width:0}
 dialog .tool-actions,dialog .list-actions{justify-content:flex-end}
 
 .events-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-start;margin-bottom:1rem}
