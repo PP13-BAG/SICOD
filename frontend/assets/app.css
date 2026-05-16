@@ -672,7 +672,6 @@ input[type='color']{
 }
 .duty-week-pill:hover{border-color:#000091;color:#000091;background:#f5f5fe}
 .duty-week-pill-name{font-weight:400;line-height:1.1;color:#000091}
-.duty-week-pill-role{font-size:.78rem;color:#000091;line-height:1.1}
 .table-week-trigger{
   display:block;
   width:100%;
@@ -686,8 +685,7 @@ input[type='color']{
 .table-week-trigger:hover .event-label{color:var(--blue-france)}
 .duty-week-slot .duty-week-pill{position:relative;z-index:1}
 html[data-theme='dark'] .duty-week-pill{background:transparent;color:#f5f5fe;border-color:#4a4a78}
-html[data-theme='dark'] .duty-week-pill-name,
-html[data-theme='dark'] .duty-week-pill-role{color:#f5f5fe}
+html[data-theme='dark'] .duty-week-pill-name{color:#f5f5fe}
 .calendar-daynum{font-weight:700;margin-bottom:.35rem;color:var(--blue-france)}
 .calendar-tags{display:flex;flex-direction:column;gap:.35rem}
 .calendar-tag{display:block;padding:.25rem .35rem;background:var(--blue-soft);font-size:.75rem;color:var(--blue-france)}

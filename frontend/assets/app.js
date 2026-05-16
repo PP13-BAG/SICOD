@@ -526,6 +526,37 @@ function computeDutyCarryEnd(monday) {
   return boundary;
 }
 
+function getDutyActualStart(anchorDate) {
+  if (isFrenchPublicHoliday(anchorDate)) return addDays(anchorDate, 1);
+  return new Date(anchorDate);
+}
+
+function buildDutyPeriods(rangeStart, rangeEnd) {
+  const firstAnchor = startOfMonday(rangeStart);
+  const lastAnchor = nextWeekBoundary(rangeEnd);
+  const anchors = [];
+  for (let cur = new Date(firstAnchor); cur <= lastAnchor; cur.setDate(cur.getDate() + 7)) {
+    anchors.push(new Date(cur));
+  }
+  anchors.push(nextWeekBoundary(lastAnchor));
+  const actualStarts = anchors.map((anchor) => getDutyActualStart(anchor));
+  const periods = [];
+  for (let i = 0; i < actualStarts.length - 1; i += 1) {
+    const start = actualStarts[i];
+    const end = actualStarts[i + 1];
+    if (start > rangeEnd && i > 0) break;
+    periods.push({
+      anchor: anchors[i],
+      start,
+      end,
+      startKey: toLocalISO(start),
+      endKey: toLocalISO(end),
+      carryHoliday: isFrenchPublicHoliday(anchors[i + 1])
+    });
+  }
+  return periods;
+}
+
 /** Retourne la liste dynamique configurée pour une clé, avec fallback */
 function getDynamicList(key) {
   const labels = window.SICODDataModel?.getReferenceLabels(state, key, DEFAULT_DYNAMIC_LISTS);
@@ -751,6 +782,63 @@ function replacePlaceholderText(root, placeholder, replacement, replaceAll = tru
   return didReplace;
 }
 
+function replacePlaceholderTextWithBreaks(root, placeholder, replacement, replaceAll = true) {
+  const finalValue = String(replacement ?? '');
+  if (!finalValue.includes('\n')) {
+    return replacePlaceholderText(root, placeholder, finalValue, replaceAll);
+  }
+  const XML_NS = 'http://www.w3.org/XML/1998/namespace';
+  const lines = finalValue.split('\n');
+  let didReplace = false;
+  while (true) {
+    const nodes = getWordTextNodes(root);
+    let fullText = '';
+    const ranges = nodes.map((node) => {
+      const start = fullText.length;
+      const value = node.textContent || '';
+      fullText += value;
+      return { node, start, end: fullText.length };
+    });
+    const matchIndex = fullText.indexOf(placeholder);
+    if (matchIndex === -1) break;
+    const matchEnd = matchIndex + placeholder.length;
+    const affected = ranges.filter(({ start, end }) => end > matchIndex && start < matchEnd);
+    const first = affected[0];
+    const last = affected[affected.length - 1];
+    if (!first?.node) break;
+    const firstText = first.node.textContent || '';
+    const lastText = last?.node?.textContent || '';
+    const firstLocalStart = Math.max(0, matchIndex - first.start);
+    const lastLocalEnd = Math.min(last.end, matchEnd) - last.start;
+    const before = firstText.slice(0, firstLocalStart);
+    const after = lastText.slice(lastLocalEnd);
+    const run = first.node.parentNode;
+    if (!run) break;
+    first.node.textContent = before + lines[0];
+    affected.slice(1).forEach(({ node }) => { node.textContent = ''; });
+    let insertAfter = first.node;
+    lines.slice(1).forEach((line) => {
+      const br = root.createElementNS(WORD_NS, 'w:br');
+      run.insertBefore(br, insertAfter.nextSibling);
+      insertAfter = br;
+      const textNode = root.createElementNS(WORD_NS, 'w:t');
+      textNode.setAttributeNS(XML_NS, 'xml:space', 'preserve');
+      textNode.textContent = line;
+      run.insertBefore(textNode, insertAfter.nextSibling);
+      insertAfter = textNode;
+    });
+    if (after) {
+      const tailNode = root.createElementNS(WORD_NS, 'w:t');
+      tailNode.setAttributeNS(XML_NS, 'xml:space', 'preserve');
+      tailNode.textContent = after;
+      run.insertBefore(tailNode, insertAfter.nextSibling);
+    }
+    didReplace = true;
+    if (!replaceAll) break;
+  }
+  return didReplace;
+}
+
 function replacePlaceholderSequence(root, placeholder, replacements) {
   (replacements || []).forEach((value) => replacePlaceholderText(root, placeholder, value, false));
 }
@@ -840,10 +928,10 @@ function buildDutyDocxRows() {
     return rows.map((row) => ({
       start: parseDateLocal(row.start) ? formatDateLocal(parseDateLocal(row.start)) : (row.start || ''),
       end: (() => {
-        const displayEnd = row.effectiveEnd || row.end || '';
+        const displayEnd = row.end || '';
         const formatted = parseDateLocal(displayEnd) ? formatDateLocal(parseDateLocal(displayEnd)) : displayEnd;
-        if (row.effectiveEnd && row.end && row.effectiveEnd !== row.end) {
-          return `${formatted} (prolongation jour ferie)`;
+        if (row.carryHoliday) {
+          return `${formatted}\n(prolongation jour férié)`;
         }
         return formatted;
       })(),
@@ -4113,7 +4201,9 @@ function openDutyAvailabilityForm(id) {
   document.getElementById('dutyId').value = a?.id || '';
   setSelectOptions(document.getElementById('dutyRole'), roles, a?.role || presetRole || roles[0] || '');
   setSelectOptions(document.getElementById('dutyAgent'), agents, a?.agent || agents[0] || '');
-  document.getElementById('dutyStart').value = a?.start || presetWeek || toLocalISO(startOfMonday(new Date()));
+  const today = new Date();
+  const defaultPeriod = buildDutyPeriods(today, today)[0];
+  document.getElementById('dutyStart').value = a?.start || presetWeek || defaultPeriod?.startKey || toLocalISO(startOfMonday(today));
   document.getElementById('dutyNote').value = a?.note || '';
   const deleteBtn = document.getElementById('dutyDeleteBtn');
   if (deleteBtn) deleteBtn.style.display = a?.id ? '' : 'none';
@@ -4142,12 +4232,14 @@ function saveDutyAvailability() {
     note: document.getElementById('dutyNote').value.trim()
   };
   if (!data.agent || !data.role) { showToast("Sélectionnez un agent et un rôle d'astreinte.", 'error'); return; }
-  if (!data.start) { showToast("Définissez le lundi de la semaine d'astreinte.", 'error'); return; }
-  const monday = startOfMonday(parseDateLocal(data.start));
-  if (!monday) { showToast("Définissez une semaine d'astreinte valide.", 'error'); return; }
-  data.start = toLocalISO(monday);
-  data.end = toLocalISO(nextWeekBoundary(monday));
-  data.effectiveEnd = toLocalISO(computeDutyCarryEnd(monday));
+  if (!data.start) { showToast("Définissez le début de la période d'astreinte.", 'error'); return; }
+  const startDate = parseDateLocal(data.start);
+  if (!startDate) { showToast("Définissez une période d'astreinte valide.", 'error'); return; }
+  const periods = buildDutyPeriods(startDate, startDate);
+  const period = periods.find((entry) => toLocalISO(entry.start) === toLocalISO(startDate)) || periods[0];
+  data.start = period?.startKey || toLocalISO(startDate);
+  data.end = period?.endKey || toLocalISO(nextWeekBoundary(startOfMonday(startDate)));
+  data.carryHoliday = !!period?.carryHoliday;
   const duplicate = getValidDutyAvailabilities().find((item) =>
     item.id !== id &&
     String(item.agent || '').trim() === data.agent &&
@@ -4230,8 +4322,7 @@ function renderDutyCalendar() {
   if (!year || !month) return;
   const first = new Date(year, month - 1, 1);
   const last = new Date(year, month, 0);
-  const start = startOfMonday(first);
-  const end = nextWeekBoundary(last);
+  const periods = buildDutyPeriods(first, last);
 
   const filterRole = document.getElementById('dutyRoleFilter')?.value || '';
   const filterAgent = document.getElementById('dutyAgentFilter')?.value || '';
@@ -4240,10 +4331,10 @@ function renderDutyCalendar() {
   const role1 = roles[0] || 'Astreinte 1';
   const role2 = roles[1] || 'Astreinte 2';
   const weekRows = [];
-  for (let cur = new Date(start); cur <= end; cur.setDate(cur.getDate() + 7)) {
-    const weekStart = new Date(cur);
-    const weekEnd = nextWeekBoundary(weekStart);
-    const weekKey = toLocalISO(weekStart);
+  periods.forEach((period) => {
+    const weekStart = period.start;
+    const weekEnd = period.end;
+    const weekKey = period.startKey;
     const entries = availabilityItems.filter((a) => {
       return String(a.start || '').trim() === weekKey
         && (!filterRole || a.role === filterRole)
@@ -4254,15 +4345,15 @@ function renderDutyCalendar() {
       .sort((a, b) => String(a.agent || '').localeCompare(String(b.agent || ''), 'fr'));
     const role1Entries = byRole(role1);
     const role2Entries = byRole(role2);
-    const renderEntries = (items, role) => items.length
-      ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="event.stopPropagation();openDutyAvailabilityForm('${item.id}')"><span class="duty-week-pill-name">${esc(item.agent || '')}</span><span class="duty-week-pill-role">${esc(role)}</span></button>`).join('')}</div>`
+    const renderEntries = (items) => items.length
+      ? `<div class="duty-week-list">${items.map((item) => `<button class="duty-week-pill" type="button" onclick="event.stopPropagation();openDutyAvailabilityForm('${item.id}')"><span class="duty-week-pill-name">${esc(item.agent || '')}</span></button>`).join('')}</div>`
       : '<span class="table-meta">Aucune disponibilité</span>';
     weekRows.push(`<tr>
       <td><button class="table-week-trigger" type="button" onclick="openDutyAvailabilityPreset('${weekKey}', '')"><div class="event-title-block"><span class="event-label">Semaine du ${esc(formatDateLocal(weekStart))}</span><span class="table-meta">au ${esc(formatDateLocal(weekEnd))}</span></div></button></td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries, role1)}</td>
-      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries, role2)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role1)}')">${renderEntries(role1Entries)}</td>
+      <td class="duty-week-slot" onclick="openDutyAvailabilityPreset('${weekKey}', '${encodeURIComponent(role2)}')">${renderEntries(role2Entries)}</td>
     </tr>`);
-  }
+  });
   dutyCalendar.innerHTML = `<div class="table-wrap"><table class="table duty-week-table"><thead><tr><th>Semaine</th><th>${esc(role1)}</th><th>${esc(role2)}</th></tr></thead><tbody>${weekRows.join('')}</tbody></table></div>`;
   document.getElementById('dutyAvailabilityCard')?.remove();
 }
@@ -4276,18 +4367,12 @@ function generateDutySchedule() {
   cleanupInvalidDutyAvailabilities();
   const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
-  const start = startOfMonday(startInput);
   const availability = getValidDutyAvailabilities().map(a => ({ ...a, weekKey: String(a.start || '').trim() }));
-
-  const weeks = [];
-  for (let cur = new Date(start); cur <= endInput; cur.setDate(cur.getDate() + 7)) {
-    const ws = new Date(cur);
-    weeks.push({ start: new Date(ws), end: nextWeekBoundary(ws) });
-  }
+  const periods = buildDutyPeriods(startInput, endInput);
 
   const assignmentCount = {}, lastAssignedWeek = {}, lastAssignedAnyWeek = {};
-  const weekCandidates = weeks.map((week) => {
-    const weekKey = toLocalISO(week.start);
+  const weekCandidates = periods.map((period) => {
+    const weekKey = period.startKey;
     return {
       weekKey,
       [role1]: availability.filter((a) => a.role === role1 && a.weekKey === weekKey).map((a) => a.agent),
@@ -4297,7 +4382,7 @@ function generateDutySchedule() {
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
     const key = agentName => `${role}||${agentName}`;
-    const exact = availability.filter(a => a.role === role && a.weekKey === toLocalISO(week.start) && !usedThisWeek.has(a.agent));
+    const exact = availability.filter(a => a.role === role && a.weekKey === week.startKey && !usedThisWeek.has(a.agent));
     const nextWeekCandidates = weekCandidates[weekIndex + 1]?.[role] || [];
     const nextWeekAnyCandidates = [
       ...(weekCandidates[weekIndex + 1]?.[role1] || []),
@@ -4322,13 +4407,13 @@ function generateDutySchedule() {
     return { name: chosen.agent };
   };
 
-  state.dutySchedule = weeks.map((week, idx) => {
+  state.dutySchedule = periods.map((week, idx) => {
     const used = new Set();
     return {
       id: uid('week'),
-      start: toLocalISO(week.start),
-      end: toLocalISO(nextWeekBoundary(week.start)),
-      effectiveEnd: toLocalISO(computeDutyCarryEnd(week.start)),
+      start: week.startKey,
+      end: week.endKey,
+      carryHoliday: !!week.carryHoliday,
       agent1: selectAgent(role1, week, idx, used),
       agent2: selectAgent(role2, week, idx, used)
     };
@@ -4357,7 +4442,7 @@ function renderDutySchedule() {
         const agents2 = exactAgentsForRole(role2);
         return `<div class="week-card">
         <strong>Semaine du ${formatDateLocal(parseDateLocal(w.start))} au ${formatDateLocal(parseDateLocal(w.end))}</strong>
-        ${(w.effectiveEnd && w.effectiveEnd !== w.end) ? `<div class="table-meta">Astreinte prolongée jusqu'au ${esc(formatDateLocal(parseDateLocal(w.effectiveEnd)))}</div>` : ''}
+        ${w.carryHoliday ? `<div class="table-meta">Prolongation jour férié le ${esc(formatDateLocal(parseDateLocal(w.end)))}</div>` : ''}
         <div class="grid-2" style="margin-top:.75rem">
           <div class="week-assignment"><div class="help">${esc(role1)}</div><select onchange="updateDutyAssignment(${i},'agent1',this.value)">${agents1.map(name => `<option value="${esc(name)}" ${(w.agent1?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
           <div class="week-assignment"><div class="help">${esc(role2)}</div><select onchange="updateDutyAssignment(${i},'agent2',this.value)">${agents2.map(name => `<option value="${esc(name)}" ${(w.agent2?.name||'')===name?'selected':''}>${esc(name||'Aucun agent disponible')}</option>`).join('')}</select></div>
@@ -4394,7 +4479,7 @@ async function exportDutyDocx() {
     replacePlaceholderText(doc, '[date fin]', endDate ? formatDateLocal(endDate) : endValue, true);
     replaceRowsMatchingText(doc, '[Prénom NOM]', buildDutyDocxRows(), (row, item) => {
       replacePlaceholderText(row, '[date début sem]', item.start, false);
-      replacePlaceholderText(row, '[date fin sem]', item.end, false);
+      replacePlaceholderTextWithBreaks(row, '[date fin sem]', item.end, false);
       replacePlaceholderSequence(row, '[Prénom NOM]', [item.agent1, item.agent2]);
     });
     await exportDocxBlob(saveDocxDocument(zip, doc), 'planning-astreinte.docx');
