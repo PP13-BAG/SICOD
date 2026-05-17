@@ -150,6 +150,8 @@ grant select, insert, update, delete on table public.document_templates to authe
 revoke update, delete on table public.app_user_roles from authenticated;
 grant select, insert, delete on table public.app_user_roles to authenticated;
 
+grant select, insert, update, delete on table public.app_user_directory to authenticated;
+
 revoke delete on table public.app_settings from authenticated;
 revoke delete on table public.app_config from authenticated;
 revoke delete on table public.audit_log from authenticated;

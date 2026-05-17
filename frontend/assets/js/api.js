@@ -141,31 +141,6 @@
     } catch {}
   }
 
-  function parseJwtClaims(token) {
-    const value = String(token || '').trim();
-    if (!value) return {};
-    const parts = value.split('.');
-    if (parts.length < 2) return {};
-    try {
-      const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padding = (4 - (normalized.length % 4 || 4)) % 4;
-      const payload = normalized + '='.repeat(padding);
-      return JSON.parse(atob(payload));
-    } catch {
-      return {};
-    }
-  }
-
-  function getSessionAal(session = authSession) {
-    const claims = parseJwtClaims(session?.accessToken);
-    const aal = String(claims?.aal || '').trim().toLowerCase();
-    if (aal) return aal;
-    const amr = Array.isArray(claims?.amr) ? claims.amr.map((item) => String(item || '').toLowerCase()) : [];
-    if (amr.includes('mfa')) return 'aal2';
-    if (amr.length) return 'aal1';
-    return '';
-  }
-
   function validatePasswordStrength(password, options = {}) {
     const value = String(password || '');
     const requireValue = options.requireValue !== false;
@@ -399,7 +374,7 @@
         }
       })
     });
-    return payload?.user || payload;
+    return payload?.user || payload || null;
   }
 
   async function signOutSupabase() {
@@ -455,7 +430,6 @@
     const authenticated = configured && !!authSession?.accessToken && !isSessionExpired(authSession, 0);
     const role = getResolvedRole();
     const resolvedRole = role || (authenticated ? 'lecture' : '');
-    const sessionAal = authenticated ? getSessionAal(authSession) : '';
     return {
       configured,
       enabled: configured,
@@ -467,9 +441,7 @@
       roles: authRoles.slice(),
       role: resolvedRole,
       isAdmin: resolvedRole === 'admin',
-      canWrite: getRoleRank(resolvedRole) >= getRoleRank('redacteur'),
-      sessionAal,
-      mfaRecommended: resolvedRole === 'admin' && sessionAal !== 'aal2'
+      canWrite: getRoleRank(resolvedRole) >= getRoleRank('redacteur')
     };
   }
 

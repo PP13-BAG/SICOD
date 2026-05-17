@@ -5730,17 +5730,13 @@ async function submitSupabaseLogin(event) {
     await withTimeout(
       window.SICODApi?.auth?.signInWithPassword?.(email, password),
       15000,
-      'La connexion Supabase a expiré. Vérifie le réseau, le compte utilisateur ou la confirmation de l e-mail.'
+      'La connexion Supabase a expiré. Vérifie le réseau, le compte utilisateur ou le mot de passe.'
     );
     markSecurityActivity();
     refreshAuthGate();
     refreshStorageStatus();
     updateCloudStateStatus(`Connexion Supabase ouverte pour ${esc(email)}. Chargement de l état distant...`, 'success');
     updateAuthGateStatus('Connexion réussie', 'success');
-    const authState = window.SICODApi?.system?.getAuthState?.() || {};
-    if (authState.mfaRecommended) {
-      updateCloudStateStatus("Compte administrateur connecté sans MFA détectée. L'activation d'un second facteur est fortement recommandée.", 'warning');
-    }
     try {
       await withTimeout(
         restoreRemoteStateAfterLogin(),
@@ -6136,16 +6132,12 @@ function ensureGeneralPasswordSettingsUI() {
         <label>Rôle applicatif</label>
         <input id="currentUserRoleField" value="${esc(authState.role || 'lecture')}" readonly>
       </div>
-      <div style="margin-top:1rem">
-        <label>Niveau d'authentification</label>
-        <input id="currentUserMfaField" value="${authState.sessionAal === 'aal2' ? 'MFA activee' : 'Mot de passe seul'}" readonly>
-      </div>
       <div class="grid-2" style="margin-top:1rem">
         <div><label for="settingNewPassword">Nouveau mot de passe</label><input id="settingNewPassword" type="password" autocomplete="new-password"></div>
         <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
       </div>
       <p class="help">Laissez ces champs vides pour conserver le mot de passe actuel. Politique minimale : ${passwordPolicy.minLength} caractères, avec majuscule, minuscule, chiffre et caractère spécial.</p>
-      <p class="help" id="mfaSecurityHint">${authState.mfaRecommended ? "Compte administrateur : active la MFA dans Supabase Auth pour renforcer l'accès." : "Pour les comptes sensibles, l'activation de la MFA est recommandée."}</p>
+      <p class="help">La sécurité repose sur des comptes nominatifs, des mots de passe robustes et une gestion des accès strictement réservée aux administrateurs.</p>
     </div>
   `;
   generalGrid.appendChild(card);
@@ -6323,7 +6315,7 @@ function ensureManagedUserDialog() {
           <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
           <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
         </div>
-        <p class="help">Mot de passe minimal : 12 caractères avec majuscule, minuscule, chiffre et caractère spécial.</p>
+        <p class="help">Mot de passe minimal : 12 caractères avec majuscule, minuscule, chiffre et caractère spécial. Les comptes sont créés par un administrateur et le mot de passe oublié doit être géré manuellement par réinitialisation administrative.</p>
         <div class="tool-actions">
           <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
         </div>
@@ -6500,11 +6492,6 @@ function loadSettingsForm() {
   const accountField = document.querySelector('#passwordSettingsCard input[readonly]');
   if (accountField) accountField.value = authState.email || '';
   if (get('currentUserRoleField')) get('currentUserRoleField').value = authState.role || 'lecture';
-  if (get('currentUserMfaField')) get('currentUserMfaField').value = authState.sessionAal === 'aal2' ? 'MFA activee' : 'Mot de passe seul';
-  const mfaHint = document.getElementById('mfaSecurityHint');
-  if (mfaHint) mfaHint.textContent = authState.mfaRecommended
-    ? "Compte administrateur : active la MFA dans Supabase Auth pour renforcer l'accès."
-    : "Pour les comptes sensibles, l'activation de la MFA est recommandée.";
   if (get('settingNewPassword')) get('settingNewPassword').value = '';
   if (get('settingConfirmPassword')) get('settingConfirmPassword').value = '';
   if (get('settingPsFormat')) get('settingPsFormat').value = state.settings.psFormat || 'detail';
