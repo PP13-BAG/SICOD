@@ -126,6 +126,7 @@ const DEFAULT_SETTINGS = {
     supabaseAnonKey: '',
     projectRef: ''
   },
+  dutyRoleAgents: {},
   planExpiryYears: {},
   dynamicLists: {}
 };
@@ -5017,10 +5018,12 @@ function openDutyAvailabilityForm(id) {
   const presetWeek = arguments[1] || '';
   const presetRole = arguments[2] ? decodeURIComponent(arguments[2]) : '';
   const roles = getCurrentDutyRoles();
-  const agents = getCurrentDutyAgents();
+  const initialRole = a?.role || presetRole || roles[0] || '';
+  const roleSelect = document.getElementById('dutyRole');
   document.getElementById('dutyId').value = a?.id || '';
-  setSelectOptions(document.getElementById('dutyRole'), roles, a?.role || presetRole || roles[0] || '');
-  setSelectOptions(document.getElementById('dutyAgent'), agents, a?.agent || agents[0] || '');
+  setSelectOptions(roleSelect, roles, initialRole);
+  if (roleSelect) roleSelect.onchange = () => syncDutyAgentOptions();
+  syncDutyAgentOptions(a?.agent || '');
   const today = new Date();
   const defaultPeriod = buildDutyPeriods(today, today)[0];
   document.getElementById('dutyStart').value = a?.start || presetWeek || defaultPeriod?.startKey || toLocalISO(startOfMonday(today));
@@ -5052,6 +5055,7 @@ function saveDutyAvailability() {
     note: document.getElementById('dutyNote').value.trim()
   };
   if (!data.agent || !data.role) { showToast("Sélectionnez un agent et un rôle d'astreinte.", 'error'); return; }
+  if (!getEligibleDutyAgents(data.role).includes(data.agent)) { showToast("Cet agent n'est pas habilité pour ce rôle d'astreinte.", 'error'); return; }
   if (!data.start) { showToast("Définissez le début de la période d'astreinte.", 'error'); return; }
   const startDate = parseDateLocal(data.start);
   if (!startDate) { showToast("Définissez une période d'astreinte valide.", 'error'); return; }
@@ -5098,20 +5102,47 @@ function getCurrentDutyAgents() {
   return getDynamicList('dutyAgents').filter(Boolean);
 }
 
+function getDutyRoleAgentMap() {
+  const allAgents = getCurrentDutyAgents();
+  const allowedAgents = new Set(allAgents);
+  const raw = state.settings?.dutyRoleAgents && typeof state.settings.dutyRoleAgents === 'object'
+    ? state.settings.dutyRoleAgents
+    : {};
+  const map = {};
+  getCurrentDutyRoles().forEach((role) => {
+    const configured = Array.isArray(raw[role]) ? raw[role].map((item) => String(item || '').trim()).filter(Boolean) : [];
+    const filtered = configured.filter((agent, index) => allowedAgents.has(agent) && configured.indexOf(agent) === index);
+    map[role] = filtered.length ? filtered : allAgents.slice();
+  });
+  return map;
+}
+
+function getEligibleDutyAgents(role) {
+  const map = getDutyRoleAgentMap();
+  return Array.isArray(map[role]) ? map[role].slice() : getCurrentDutyAgents();
+}
+
+function syncDutyAgentOptions(selectedAgent = '') {
+  const role = document.getElementById('dutyRole')?.value || getCurrentDutyRoles()[0] || '';
+  const eligibleAgents = getEligibleDutyAgents(role);
+  const fallback = eligibleAgents.includes(selectedAgent) ? selectedAgent : (eligibleAgents[0] || '');
+  setSelectOptions(document.getElementById('dutyAgent'), eligibleAgents, fallback);
+}
+
 function getValidDutyAvailabilities() {
   const allowedRoles = new Set(getCurrentDutyRoles());
-  const allowedAgents = new Set(getCurrentDutyAgents());
   return getActiveItems(state.dutyAvailabilities).filter((item) =>
-    item && allowedRoles.has(String(item.role || '').trim()) && allowedAgents.has(String(item.agent || '').trim())
+    item
+      && allowedRoles.has(String(item.role || '').trim())
+      && getEligibleDutyAgents(String(item.role || '').trim()).includes(String(item.agent || '').trim())
   );
 }
 
 function cleanupInvalidDutyAvailabilities() {
   const allowedRoles = new Set(getCurrentDutyRoles());
-  const allowedAgents = new Set(getCurrentDutyAgents());
   let changed = false;
   getActiveItems(state.dutyAvailabilities).forEach((item) => {
-    if (!item || allowedRoles.has(item.role) && allowedAgents.has(item.agent)) return;
+    if (!item || (allowedRoles.has(item.role) && getEligibleDutyAgents(String(item.role || '').trim()).includes(String(item.agent || '').trim()))) return;
     window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, item.id);
     changed = true;
   });
@@ -5178,6 +5209,30 @@ function renderDutyCalendar() {
   document.getElementById('dutyAvailabilityCard')?.remove();
 }
 
+function ensureDutySettingsUI() {
+  const panel = document.querySelector('[data-settings-panel="duty"] .card-body');
+  if (!panel) return;
+  let block = document.getElementById('dutyRoleAgentSettings');
+  if (!block) {
+    block = document.createElement('div');
+    block.id = 'dutyRoleAgentSettings';
+    block.className = 'grid-2';
+    block.style.marginTop = '1rem';
+    panel.appendChild(block);
+  }
+  const roles = getCurrentDutyRoles();
+  block.innerHTML = `
+    <div>
+      <label>${esc(`Agents habilités pour ${roles[0] || 'l’astreinte 1'}`)}</label>
+      <textarea id="settingDutyRole1Agents" placeholder="Une ligne = un agent"></textarea>
+    </div>
+    <div>
+      <label>${esc(`Agents habilités pour ${roles[1] || 'l’astreinte 2'}`)}</label>
+      <textarea id="settingDutyRole2Agents" placeholder="Une ligne = un agent"></textarea>
+    </div>
+  `;
+}
+
 function generateDutySchedule() {
   const startVal = document.getElementById('dutyPeriodStart')?.value || todayISO();
   const endVal = document.getElementById('dutyPeriodEnd')?.value || startVal;
@@ -5189,8 +5244,9 @@ function generateDutySchedule() {
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
   const availability = getValidDutyAvailabilities().map(a => ({ ...a, weekKey: String(a.start || '').trim() }));
   const periods = buildDutyPeriods(startInput, endInput);
-
-  const assignmentCount = {}, lastAssignedWeek = {}, lastAssignedAnyWeek = {};
+  const roleAssignmentCount = {};
+  const anyAssignmentCount = {};
+  const lastAssignedWeek = {};
   const weekCandidates = periods.map((period) => {
     const weekKey = period.startKey;
     return {
@@ -5199,44 +5255,77 @@ function generateDutySchedule() {
       [role2]: availability.filter((a) => a.role === role2 && a.weekKey === weekKey).map((a) => a.agent)
     };
   });
+  const roleUniverse = {
+    [role1]: Array.from(new Set(weekCandidates.flatMap((entry) => entry[role1] || []))),
+    [role2]: Array.from(new Set(weekCandidates.flatMap((entry) => entry[role2] || [])))
+  };
+
+  const getRoleKey = (role, agent) => `${role}||${agent}`;
+  const getFutureScarcityPenalty = (agent, weekIndex) => {
+    let penalty = 0;
+    for (let offset = 1; offset <= 2; offset += 1) {
+      const next = weekCandidates[weekIndex + offset];
+      if (!next) continue;
+      [role1, role2].forEach((role) => {
+        const candidates = next[role] || [];
+        if (!candidates.includes(agent)) return;
+        if (candidates.length <= 1) penalty += offset === 1 ? 4200 : 2200;
+        else if (candidates.length === 2) penalty += offset === 1 ? 1500 : 800;
+      });
+    }
+    return penalty;
+  };
 
   const selectAgent = (role, week, weekIndex, usedThisWeek) => {
-    const key = agentName => `${role}||${agentName}`;
-    const exact = availability.filter(a => a.role === role && a.weekKey === week.startKey && !usedThisWeek.has(a.agent));
-    const nextWeekCandidates = weekCandidates[weekIndex + 1]?.[role] || [];
-    const nextWeekAnyCandidates = [
-      ...(weekCandidates[weekIndex + 1]?.[role1] || []),
-      ...(weekCandidates[weekIndex + 1]?.[role2] || [])
-    ];
-    const pool = exact.map(a => ({
-      a, key: key(a.agent),
-      score:
-        (assignmentCount[key(a.agent)] || 0) * 100 +
-        ((lastAssignedWeek[key(a.agent)] === weekIndex - 1) ? 2400 : 0) +
-        ((lastAssignedAnyWeek[a.agent] === weekIndex - 1) ? 6400 : 0) +
-        (nextWeekCandidates.includes(a.agent) ? 1800 : 0) +
-        (nextWeekAnyCandidates.includes(a.agent) ? 900 : 0)
-    })).sort((x, y) => x.score - y.score || x.a.agent.localeCompare(y.a.agent));
+    const exact = availability.filter((a) => a.role === role && a.weekKey === week.startKey && !usedThisWeek.has(a.agent));
+    const roleAgents = roleUniverse[role] || [];
+    const minRoleCount = roleAgents.length
+      ? Math.min(...roleAgents.map((agent) => roleAssignmentCount[getRoleKey(role, agent)] || 0))
+      : 0;
+    const pool = exact.map((a) => {
+      const roleKey = getRoleKey(role, a.agent);
+      const roleCount = roleAssignmentCount[roleKey] || 0;
+      const anyCount = anyAssignmentCount[a.agent] || 0;
+      const lastAny = lastAssignedWeek[a.agent];
+      return {
+        a,
+        score:
+          (roleCount - minRoleCount) * 5000 +
+          roleCount * 1200 +
+          anyCount * 180 +
+          (lastAny === weekIndex - 1 ? 18000 : 0) +
+          (lastAny === weekIndex - 2 ? 9000 : 0) +
+          getFutureScarcityPenalty(a.agent, weekIndex)
+      };
+    }).sort((x, y) => x.score - y.score || x.a.agent.localeCompare(y.a.agent, 'fr'));
     if (!pool.length) return null;
     const chosen = pool[0].a;
-    const k = key(chosen.agent);
-    assignmentCount[k] = (assignmentCount[k] || 0) + 1;
-    lastAssignedWeek[k] = weekIndex;
-    lastAssignedAnyWeek[chosen.agent] = weekIndex;
+    const roleKey = getRoleKey(role, chosen.agent);
+    roleAssignmentCount[roleKey] = (roleAssignmentCount[roleKey] || 0) + 1;
+    anyAssignmentCount[chosen.agent] = (anyAssignmentCount[chosen.agent] || 0) + 1;
+    lastAssignedWeek[chosen.agent] = weekIndex;
     usedThisWeek.add(chosen.agent);
     return { name: chosen.agent };
   };
 
   state.dutySchedule = periods.map((week, idx) => {
     const used = new Set();
-    return {
+    const slots = [
+      { key: 'agent1', role: role1, candidates: (weekCandidates[idx]?.[role1] || []).length },
+      { key: 'agent2', role: role2, candidates: (weekCandidates[idx]?.[role2] || []).length }
+    ].sort((a, b) => a.candidates - b.candidates || a.role.localeCompare(b.role, 'fr'));
+    const assignment = {
       id: uid('week'),
       start: week.startKey,
       end: week.endKey,
       carryHoliday: !!week.carryHoliday,
-      agent1: selectAgent(role1, week, idx, used),
-      agent2: selectAgent(role2, week, idx, used)
+      agent1: null,
+      agent2: null
     };
+    slots.forEach((slot) => {
+      assignment[slot.key] = selectAgent(slot.role, week, idx, used);
+    });
+    return assignment;
   });
   persist();
   renderDutySchedule();
@@ -5277,6 +5366,19 @@ function renderDutySchedule() {
 
 function updateDutyAssignment(index, key, value) {
   if (!state.dutySchedule?.[index]) return;
+  const row = state.dutySchedule[index];
+  const role = key === 'agent1' ? (getCurrentDutyRoles()[0] || 'Astreinte 1') : (getCurrentDutyRoles()[1] || 'Astreinte 2');
+  if (value && !getEligibleDutyAgents(role).includes(value)) {
+    showToast("Cet agent n'est pas habilité pour ce rôle d'astreinte.", 'error');
+    renderDutySchedule();
+    return;
+  }
+  const otherKey = key === 'agent1' ? 'agent2' : 'agent1';
+  if (value && row[otherKey]?.name === value) {
+    showToast("Le même agent ne peut pas être affecté aux deux astreintes de la même semaine.", 'error');
+    renderDutySchedule();
+    return;
+  }
   state.dutySchedule[index][key] = value ? { name: value } : null;
   persist();
   renderDutySchedule();
@@ -6137,7 +6239,6 @@ function ensureGeneralPasswordSettingsUI() {
         <div><label for="settingConfirmPassword">Confirmation</label><input id="settingConfirmPassword" type="password" autocomplete="new-password"></div>
       </div>
       <p class="help">Laissez ces champs vides pour conserver le mot de passe actuel. Politique minimale : ${passwordPolicy.minLength} caractères, avec majuscule, minuscule, chiffre et caractère spécial.</p>
-      <p class="help">La sécurité repose sur des comptes nominatifs, des mots de passe robustes et une gestion des accès strictement réservée aux administrateurs.</p>
     </div>
   `;
   generalGrid.appendChild(card);
@@ -6439,6 +6540,7 @@ function ensureSettingsEnhancements() {
   ensureGeneralPasswordSettingsUI();
   ensureUserAdminSettingsUI();
   ensureMergedEventSettingsUI();
+  ensureDutySettingsUI();
   ensureSettingsCleanupUI();
   ensureSettingsFooterActions();
   bindCloudStateImport();
@@ -6507,6 +6609,10 @@ function loadSettingsForm() {
   if (get('settingPlanStatuses')) get('settingPlanStatuses').value = getDynamicList('planStatuses').join('\n');
   if (get('settingDutyRoles')) get('settingDutyRoles').value = getDynamicList('dutyRoles').join('\n');
   if (get('settingDutyAgents')) get('settingDutyAgents').value = getDynamicList('dutyAgents').join('\n');
+  const dutyRoleAgentMap = getDutyRoleAgentMap();
+  const dutyRoles = getCurrentDutyRoles();
+  if (get('settingDutyRole1Agents')) get('settingDutyRole1Agents').value = (dutyRoleAgentMap[dutyRoles[0] || ''] || []).join('\n');
+  if (get('settingDutyRole2Agents')) get('settingDutyRole2Agents').value = (dutyRoleAgentMap[dutyRoles[1] || ''] || []).join('\n');
   if (get('settingReflexFamilies')) get('settingReflexFamilies').value = getDynamicList('reflexFamilies').join('\n');
   if (get('settingPlanExpiryRules')) get('settingPlanExpiryRules').value = Object.entries(state.settings.planExpiryYears || {}).map(([k, v]) => `${k} = ${v}`).join('\n');
   showSettingsTab(activeTab);
@@ -6551,6 +6657,12 @@ async function saveSettings() {
   window.SICODDataModel?.setReferenceLabels(state, 'dutyRoles', parseList('settingDutyRoles'));
   window.SICODDataModel?.setReferenceLabels(state, 'dutyAgents', parseList('settingDutyAgents'));
   window.SICODDataModel?.setReferenceLabels(state, 'reflexFamilies', parseList('settingReflexFamilies'));
+  const nextDutyRoles = getCurrentDutyRoles();
+  const nextDutyAgents = new Set(getCurrentDutyAgents());
+  state.settings.dutyRoleAgents = {
+    [nextDutyRoles[0] || 'Astreinte 1']: parseList('settingDutyRole1Agents').filter((agent, index, arr) => nextDutyAgents.has(agent) && arr.indexOf(agent) === index),
+    [nextDutyRoles[1] || 'Astreinte 2']: parseList('settingDutyRole2Agents').filter((agent, index, arr) => nextDutyAgents.has(agent) && arr.indexOf(agent) === index)
+  };
   if (get('settingPlanExpiryRules')) {
     const rules = {};
     parseList('settingPlanExpiryRules').forEach(line => {
