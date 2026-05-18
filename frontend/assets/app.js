@@ -759,11 +759,11 @@ function buildSelectionHeaderCheckbox(type, ids, renderFnName) {
   const cleanIds = (Array.isArray(ids) ? ids : []).filter(Boolean);
   const selectedCount = cleanIds.filter((id) => isSelectionChecked(type, id)).length;
   const checked = cleanIds.length > 0 && selectedCount === cleanIds.length;
-  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="event.stopPropagation();setVisibleSelection('${type}', ${toJsStringArrayLiteral(cleanIds)}, this.checked, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="setVisibleSelection('${type}', ${toJsStringArrayLiteral(cleanIds)}, this.checked, '${renderFnName}')">`;
 }
 
 function buildSelectionRowCheckbox(type, id, renderFnName) {
-  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="event.stopPropagation();toggleSingleSelection('${type}', '${id}', this.checked, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="toggleSingleSelection('${type}', '${id}', this.checked, '${renderFnName}')">`;
 }
 
 function handleSelectableRowClick(event, callback) {
