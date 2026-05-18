@@ -696,6 +696,13 @@ function getSelectionSet(type) {
   return selectionState[type] instanceof Set ? selectionState[type] : new Set();
 }
 
+function queueSelectionRender(renderFnName) {
+  if (!renderFnName || typeof window[renderFnName] !== 'function') return;
+  window.setTimeout(() => {
+    if (typeof window[renderFnName] === 'function') window[renderFnName]();
+  }, 0);
+}
+
 function setVisibleSelection(type, ids, checked, renderFnName) {
   const set = getSelectionSet(type);
   (Array.isArray(ids) ? ids : []).forEach((id) => {
@@ -703,7 +710,7 @@ function setVisibleSelection(type, ids, checked, renderFnName) {
     if (checked) set.add(id);
     else set.delete(id);
   });
-  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+  queueSelectionRender(renderFnName);
 }
 
 function toggleSingleSelection(type, id, checked, renderFnName) {
@@ -711,12 +718,12 @@ function toggleSingleSelection(type, id, checked, renderFnName) {
   const set = getSelectionSet(type);
   if (checked) set.add(id);
   else set.delete(id);
-  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+  queueSelectionRender(renderFnName);
 }
 
 function clearSelection(type, renderFnName) {
   getSelectionSet(type).clear();
-  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+  queueSelectionRender(renderFnName);
 }
 
 function isSelectionChecked(type, id) {
@@ -752,11 +759,11 @@ function buildSelectionHeaderCheckbox(type, ids, renderFnName) {
   const cleanIds = (Array.isArray(ids) ? ids : []).filter(Boolean);
   const selectedCount = cleanIds.filter((id) => isSelectionChecked(type, id)).length;
   const checked = cleanIds.length > 0 && selectedCount === cleanIds.length;
-  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="handleSelectionHeaderToggle(event, '${type}', ${toJsStringArrayLiteral(cleanIds)}, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="handleSelectionHeaderToggle(event, '${type}', ${toJsStringArrayLiteral(cleanIds)}, '${renderFnName}')">`;
 }
 
 function buildSelectionRowCheckbox(type, id, renderFnName) {
-  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="handleSelectionRowToggle(event, '${type}', '${id}', '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="handleSelectionRowToggle(event, '${type}', '${id}', '${renderFnName}')">`;
 }
 
 function handleSelectionHeaderToggle(event, type, ids, renderFnName) {
