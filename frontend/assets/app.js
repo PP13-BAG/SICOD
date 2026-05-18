@@ -759,23 +759,11 @@ function buildSelectionHeaderCheckbox(type, ids, renderFnName) {
   const cleanIds = (Array.isArray(ids) ? ids : []).filter(Boolean);
   const selectedCount = cleanIds.filter((id) => isSelectionChecked(type, id)).length;
   const checked = cleanIds.length > 0 && selectedCount === cleanIds.length;
-  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="handleSelectionHeaderToggle(event, '${type}', ${toJsStringArrayLiteral(cleanIds)}, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="event.stopPropagation();setVisibleSelection('${type}', ${toJsStringArrayLiteral(cleanIds)}, this.checked, '${renderFnName}')">`;
 }
 
 function buildSelectionRowCheckbox(type, id, renderFnName) {
-  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="handleSelectionRowToggle(event, '${type}', '${id}', '${renderFnName}')">`;
-}
-
-function handleSelectionHeaderToggle(event, type, ids, renderFnName) {
-  event?.stopPropagation?.();
-  const checked = !!event?.currentTarget?.checked;
-  setVisibleSelection(type, ids, checked, renderFnName);
-}
-
-function handleSelectionRowToggle(event, type, id, renderFnName) {
-  event?.stopPropagation?.();
-  const checked = !!event?.currentTarget?.checked;
-  toggleSingleSelection(type, id, checked, renderFnName);
+  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="event.stopPropagation()" onchange="event.stopPropagation();toggleSingleSelection('${type}', '${id}', this.checked, '${renderFnName}')">`;
 }
 
 function handleSelectableRowClick(event, callback) {
