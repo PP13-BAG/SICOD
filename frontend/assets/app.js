@@ -24,10 +24,6 @@ function slugify(str){
     .replace(/-+/g, '-');
 }
 
-function isLikelyFilePath(src){
-  return /^(file:|[a-zA-Z]:\\|\.\.\/|\.\/|[^:]+\.(png|jpg|jpeg|webp|gif|svg)$)/i.test(String(src || ''));
-}
-
 // ============================================================
 // SICOD — Script principal consolidé
 // Version : refactorée — aucune fonctionnalité supprimée
@@ -131,6 +127,14 @@ const DEFAULT_SETTINGS = {
   dynamicLists: {}
 };
 
+const UI_STATE_KEYS = Object.freeze([
+  'selectedCommandId',
+  'currentEventId',
+  'currentEventWorkspaceTab',
+  'selectedPSId',
+  'selectedFiche'
+]);
+
 function buildDefaultState() {
   return {
     events: [],
@@ -204,7 +208,19 @@ clearLocalStateCache();
 
 // persist() — unique, stable
 function persist() {
-  Storage.save(state);
+  Storage.save(createPersistedStateSnapshot(state));
+}
+
+function canWriteApplicationState() {
+  const authState = window.SICODApi?.system?.getAuthState?.() || {};
+  if (!authState.configured) return true;
+  return !!authState.canWrite;
+}
+
+function ensureWriteAccess(message = "Votre compte est en lecture seule. Les modifications ne peuvent pas être enregistrées.") {
+  if (canWriteApplicationState()) return true;
+  showToast(message, 'error');
+  return false;
 }
 
 function clearLocalStateCache() {
@@ -222,10 +238,23 @@ function resetStateToDefaults() {
   ensureStateIntegrity();
 }
 
+function createPersistedStateSnapshot(snapshot) {
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+  const persisted = JSON.parse(JSON.stringify(source));
+  UI_STATE_KEYS.forEach((key) => {
+    delete persisted[key];
+  });
+  return persisted;
+}
+
 function normalizeRemoteStateSnapshot(snapshot) {
   const source = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {};
   const defaults = buildDefaultState();
-  const normalized = Object.assign({}, defaults, source);
+  const persistedSource = Object.assign({}, source);
+  UI_STATE_KEYS.forEach((key) => {
+    delete persistedSource[key];
+  });
+  const normalized = Object.assign({}, defaults, persistedSource);
   const arrayKeys = [
     'events',
     'ps',
@@ -242,8 +271,8 @@ function normalizeRemoteStateSnapshot(snapshot) {
   arrayKeys.forEach((key) => {
     if (!Array.isArray(normalized[key])) normalized[key] = defaults[key];
   });
-  normalized.settings = Object.assign({}, DEFAULT_SETTINGS, source.settings && typeof source.settings === 'object' ? source.settings : {});
-  normalized.settings.dynamicLists = Object.assign({}, source.settings?.dynamicLists && typeof source.settings.dynamicLists === 'object' ? source.settings.dynamicLists : {});
+  normalized.settings = Object.assign({}, DEFAULT_SETTINGS, persistedSource.settings && typeof persistedSource.settings === 'object' ? persistedSource.settings : {});
+  normalized.settings.dynamicLists = Object.assign({}, persistedSource.settings?.dynamicLists && typeof persistedSource.settings.dynamicLists === 'object' ? persistedSource.settings.dynamicLists : {});
   normalized.settings.remoteSync = Object.assign({}, DEFAULT_SETTINGS.remoteSync, normalized.settings.remoteSync || {});
   normalized.settings.pdfAppearance = Object.assign({}, DEFAULT_SETTINGS.pdfAppearance, normalized.settings.pdfAppearance || {});
   normalized.settings.planExpiryYears = normalized.settings.planExpiryYears && typeof normalized.settings.planExpiryYears === 'object'
@@ -344,10 +373,6 @@ function actionIconButton(icon, label, onclick, options = {}) {
   return `<button class="fr-btn ${variant} small icon-action${extraClass}" type="button" onclick="${onclick}" title="${esc(label)}" aria-label="${esc(label)}"${disabled}><img src="${esc(ACTION_ICONS[icon] || ACTION_ICONS.open)}" alt=""></button>`;
 }
 
-function actionIconLink(icon, label, href) {
-  return `<a class="fr-btn small icon-action" href="${esc(href || '#')}" target="_blank" rel="noopener" title="${esc(label)}" aria-label="${esc(label)}"><img src="${esc(ACTION_ICONS[icon] || ACTION_ICONS.open)}" alt=""></a>`;
-}
-
 function getTableSort(tableKey, fallbackKey, fallbackDirection = 'asc') {
   const value = state.tableSorts?.[tableKey];
   if (value?.key) return value;
@@ -397,18 +422,12 @@ function handleSortHeaderKey(event, tableKey, key) {
 
 /** Parse une date locale ISO en objet Date (à midi pour éviter les décalages TZ) */
 const PS_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
-const COMMAND_ALLOWED_STATUSES = ['Brouillon', 'Diffusé'];
-
 function normalizePublishStatus(status, fallback = 'Brouillon') {
   const value = String(status || '').trim();
   if (!value) return fallback;
   if (value === 'Diffusé' || value === 'Validé') return 'Diffusé';
   if (value === 'Brouillon' || value === 'Ouvert') return 'Brouillon';
   return fallback;
-}
-
-function isPublishedStatus(status) {
-  return normalizePublishStatus(status) === 'Diffusé';
 }
 
 function buildFixedSignatureLines(signature) {
@@ -489,14 +508,6 @@ function startOfMonday(dt) {
   return d;
 }
 
-/** Retourne le dimanche (fin inclusive) d'une semaine démarrant le lundi */
-function weekEndInclusive(monday) {
-  const d = new Date(monday);
-  d.setDate(d.getDate() + 6);
-  d.setHours(12, 0, 0, 0);
-  return d;
-}
-
 function nextWeekBoundary(monday) {
   const d = new Date(monday);
   d.setDate(d.getDate() + 7);
@@ -538,14 +549,6 @@ function isFrenchPublicHoliday(date) {
   const easter = getEasterSunday(year);
   const movable = [1, 39, 50].map((offset) => toLocalISO(addDays(easter, offset)));
   return movable.includes(toLocalISO(date));
-}
-
-function computeDutyCarryEnd(monday) {
-  const boundary = nextWeekBoundary(monday);
-  if (isFrenchPublicHoliday(boundary)) {
-    return addDays(boundary, 1);
-  }
-  return boundary;
 }
 
 function getDutyActualStart(anchorDate) {
@@ -757,6 +760,7 @@ function buildSelectionRowCheckbox(type, id, renderFnName) {
 }
 
 function handleSelectableRowClick(event, callback) {
+  if (event?.target?.closest?.('.table-select-col')) return;
   if (isInteractiveTableTarget(event?.target)) return;
   if (typeof callback === 'function') callback();
 }
@@ -765,6 +769,7 @@ async function deleteSelectedContacts() {
   const ids = Array.from(getSelectionSet('contacts'));
   if (!ids.length) return;
   if (!await confirmAsync(`Supprimer ${ids.length} contact(s) sélectionné(s) ?`)) return;
+  if (!ensureWriteAccess()) return;
   ids.forEach((id) => window.SICODDataModel?.archiveRecord(state.contacts, id));
   clearSelection('contacts');
   persist();
@@ -775,6 +780,7 @@ async function deleteSelectedPlanItems() {
   const ids = Array.from(getSelectionSet('planItems'));
   if (!ids.length) return;
   if (!await confirmAsync(`Supprimer ${ids.length} planification(s) sélectionnée(s) ?`)) return;
+  if (!ensureWriteAccess()) return;
   ids.forEach((id) => window.SICODDataModel?.archiveRecord(state.planItems, id));
   clearSelection('planItems');
   persist();
@@ -783,13 +789,6 @@ async function deleteSelectedPlanItems() {
 
 /** Marque binaire pour les exports PDF */
 function mark(v) { return v ? '[X]' : '[ ]'; }
-
-/** Échappe une valeur pour CSV */
-function csvEscape(v) {
-  const s = String(v ?? '');
-  return (s.includes('"') || s.includes(';') || s.includes(',') || s.includes('\n'))
-    ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
 
 /** Télécharge un Blob sous forme de fichier */
 function downloadBlob(blob, name) {
@@ -805,6 +804,71 @@ function downloadBlob(blob, name) {
 function downloadCSV(filename, rows) {
   const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
   downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename);
+}
+
+function countDelimiterOutsideQuotes(line, delimiter) {
+  let count = 0;
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && char === delimiter) count += 1;
+  }
+  return count;
+}
+
+function detectCsvDelimiter(text) {
+  const firstLine = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .find((line) => line.trim());
+  if (!firstLine) return ';';
+  return countDelimiterOutsideQuotes(firstLine, ';') >= countDelimiterOutsideQuotes(firstLine, ',') ? ';' : ',';
+}
+
+function parseCsvRows(text, delimiter = detectCsvDelimiter(text)) {
+  const source = String(text || '').replace(/^\uFEFF/, '');
+  const rows = [];
+  let row = [];
+  let value = '';
+  let inQuotes = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '"') {
+      if (inQuotes && source[i + 1] === '"') {
+        value += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && char === delimiter) {
+      row.push(value.trim());
+      value = '';
+      continue;
+    }
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && source[i + 1] === '\n') i += 1;
+      row.push(value.trim());
+      if (row.some((cell) => cell !== '')) rows.push(row);
+      row = [];
+      value = '';
+      continue;
+    }
+    value += char;
+  }
+  row.push(value.trim());
+  if (row.some((cell) => cell !== '')) rows.push(row);
+  return rows;
 }
 
 const DOCX_TEMPLATE_FILES = {
@@ -1464,10 +1528,6 @@ function normalizeStaticAssetPath(value) {
 
 function currentLogoSrc() {
   return DEFAULT_BRAND_LOGO;
-}
-
-function currentDashboardBannerSrc() {
-  return DEFAULT_DASHBOARD_BANNER;
 }
 
 function refreshDashboardBanner() {
@@ -2890,14 +2950,12 @@ function ensureEventWorkspaceUI() {
 function closeEventDetail() {
   state.currentEventId = null;
   state.currentEventWorkspaceTab = 'timeline';
-  persist();
   goPage('events');
 }
 
 function showEventWorkspaceTab(tab) {
   const normalizedTab = ['timeline', 'ps', 'command'].includes(tab) ? tab : 'timeline';
   state.currentEventWorkspaceTab = normalizedTab;
-  persist();
   document.querySelectorAll('#eventWorkspaceTabs .page-subtab').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.workspaceTab === state.currentEventWorkspaceTab);
   });
@@ -3039,6 +3097,7 @@ function saveEvent() {
     updatedAt: new Date().toISOString(),
     logEntries: existing?.logEntries || []
   };
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.events.unshift(data);
   persist();
@@ -3049,6 +3108,7 @@ function saveEvent() {
 function archiveEvent(id) {
   const e = byId(state.events, id);
   if (!e) return;
+  if (!ensureWriteAccess()) return;
   e.status = 'Archivé';
   e.updatedAt = new Date().toISOString();
   if (state.currentEventId === id) state.currentEventId = null;
@@ -3059,6 +3119,7 @@ function archiveEvent(id) {
 function reactivateEvent(id) {
   const e = byId(state.events, id);
   if (!e) return;
+  if (!ensureWriteAccess()) return;
   e.status = 'Actif';
   e.updatedAt = new Date().toISOString();
   persist();
@@ -3067,6 +3128,7 @@ function reactivateEvent(id) {
 
 async function deleteEvent(id) {
   if (!await confirmAsync('Supprimer cet événement et les points de situation rattachés ?')) return;
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.events, id);
   getActiveItems(state.ps).filter(ps => ps.eventId === id).forEach(ps => {
     window.SICODDataModel?.archiveRecord(state.ps, ps.id);
@@ -3088,7 +3150,6 @@ function openEvent(id) {
   if (!e) return;
   state.currentEventId = id;
   state.currentEventWorkspaceTab = 'timeline';
-  persist();
   goPage('event-detail');
 }
 
@@ -3114,6 +3175,7 @@ function saveEventLogEntry() {
   const detail = (document.getElementById('eventLogDetail').value || '').trim();
   const author = (document.getElementById('eventLogAuthor').value || '').trim() || 'SIRACEDPC';
   if (!title) { showToast('Le titre est requis.', 'error'); return; }
+  if (!ensureWriteAccess()) return;
   e.logEntries = Array.isArray(e.logEntries) ? e.logEntries : [];
   e.logEntries.unshift({ id: uid('log'), createdAt: new Date().toISOString(), title, detail, author });
   e.updatedAt = new Date().toISOString();
@@ -3452,6 +3514,7 @@ function savePS() {
     return;
   }
 
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.ps.unshift(data);
   state.selectedPSId = id;
@@ -3464,6 +3527,7 @@ function savePS() {
 
 async function deletePS(id) {
   if (!await confirmAsync('Supprimer ce point de situation ?')) return;
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.ps, id);
   if (state.selectedPSId === id) state.selectedPSId = getActiveItems(state.ps)[0]?.id || null;
   persist();
@@ -3472,13 +3536,13 @@ async function deletePS(id) {
 
 function selectPS(id) {
   state.selectedPSId = state.selectedPSId === id ? null : id;
-  persist();
   renderPSList();
 }
 
 function duplicatePS(id) {
   const src = byId(state.ps, id);
   if (!src) return;
+  if (!ensureWriteAccess()) return;
   const siblings = state.ps.filter(p => p.eventId === src.eventId);
   const copy = Object.assign({}, src, {
     id: uid('ps'),
@@ -3554,7 +3618,7 @@ function renderPSList() {
     buildRowActions: (ps) => `
       ${actionIconButton('edit', 'Modifier', `openPSForm('${ps.id}')`)}
       ${actionIconButton('duplicate', 'Dupliquer', `duplicatePS('${ps.id}')`)}
-      ${actionIconButton('export', 'Exporter', `state.selectedPSId='${ps.id}';persist();exportPSPDF()`)}
+      ${actionIconButton('export', 'Exporter', `state.selectedPSId='${ps.id}';exportPSPDF()`)}
       ${actionIconButton('delete', 'Supprimer', `deletePS('${ps.id}')`, { variant: 'danger' })}
     `,
     selectedId: state.selectedPSId
@@ -3686,9 +3750,6 @@ function bindPSMediaInputs() {
 }
 
 // Export PS PDF
-
-// openPrintWindow : alias vers exportPSPDF
-function openPrintWindow() { exportPSPDF(); }
 
 async function exportPSDocx() {
   const ps = state.selectedPSId ? byId(state.ps, state.selectedPSId) : null;
@@ -3965,6 +4026,7 @@ function saveCommandMessage() {
     showToast(validation.message, 'error');
     return;
   }
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, payload);
   else state.commandMessages.unshift(payload);
   state.selectedCommandId = id;
@@ -3980,6 +4042,7 @@ async function deleteSelectedCommand() {
   const record = byId(state.commandMessages, state.selectedCommandId);
   if (!record) return;
   if (!await confirmAsync('Supprimer ce message de commandement ?')) return;
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.commandMessages, state.selectedCommandId);
   state.selectedCommandId = getActiveItems(state.commandMessages)[0]?.id || null;
   persist();
@@ -4012,7 +4075,7 @@ function renderCommandList() {
     buildRowActions: (item) => `
       ${actionIconButton('edit', 'Modifier', `openCommandForm('${item.id}')`)}
       ${actionIconButton('duplicate', 'Dupliquer', `duplicateCommand('${item.id}')`)}
-      ${actionIconButton('export', 'Exporter', `state.selectedCommandId='${item.id}';persist();exportCommandPDF()`)}
+      ${actionIconButton('export', 'Exporter', `state.selectedCommandId='${item.id}';exportCommandPDF()`)}
       ${actionIconButton('delete', 'Supprimer', `deleteCommandById('${item.id}')`, { variant: 'danger' })}
     `,
     selectedId: state.selectedCommandId
@@ -4022,6 +4085,7 @@ function renderCommandList() {
 function duplicateCommand(id) {
   const src = byId(state.commandMessages, id);
   if (!src) return;
+  if (!ensureWriteAccess()) return;
   const siblings = getActiveItems(state.commandMessages).filter(m => m.eventId === src.eventId);
   const copy = Object.assign({}, src, {
     id: uid('cmd'),
@@ -4038,7 +4102,6 @@ function duplicateCommand(id) {
 
 async function deleteCommandById(id) {
   state.selectedCommandId = id;
-  persist();
   return deleteSelectedCommand();
 }
 
@@ -4347,6 +4410,7 @@ function saveFiche() {
   if (!sections.length) { showToast('Ajoutez au moins une section avec du contenu.', 'error'); return; }
   const duplicate = fiches.find(f => f.code === code && f.code !== originalCode);
   if (duplicate) { showToast('Une fiche avec ce code existe déjà.', 'error'); return; }
+  if (!ensureWriteAccess()) return;
   const payload = { code, title, family: familySnapshot.label, familyId: familySnapshot.id, familyLabelSnapshot: familySnapshot.label, sections };
   const index = fiches.findIndex(f => f.code === originalCode);
   if (index >= 0) fiches[index] = payload;
@@ -4366,6 +4430,7 @@ async function deleteSelectedFiche() {
   const fiche = fiches.find(f => f.code === state.selectedFiche);
   if (!fiche) return;
   if (!await confirmAsync(`Supprimer la fiche ${fiche.code} · ${fiche.title} ?`)) return;
+  if (!ensureWriteAccess()) return;
   fiche.deletedAt = new Date().toISOString();
   fiche.updatedAt = new Date().toISOString();
   state.selectedFiche = (getReflexFiches()[0] || {}).code || 'glossary';
@@ -4411,7 +4476,6 @@ function renderFiches() {
 
 function selectFiche(code) {
   state.selectedFiche = code;
-  persist();
   renderFiches();
 }
 
@@ -4530,6 +4594,7 @@ function saveContact() {
     email2: document.getElementById('contactEmail2').value.trim()
   };
   if (!data.name) { showToast('Le nom du contact est requis.', 'error'); return; }
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.contacts.push(data);
   persist();
@@ -4539,6 +4604,7 @@ function saveContact() {
 
 async function deleteContact(id) {
   if (!await confirmAsync('Supprimer ce contact ?')) return;
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.contacts, id);
   getSelectionSet('contacts').delete(id);
   persist();
@@ -4597,35 +4663,40 @@ function exportContactsCSV() {
 
 function importContactsCSV(file) {
   if (!file) return;
-  file.text().then(text => {
-    const lines = text.replaceAll('\r', '').split('\n').filter(Boolean);
-    if (lines.length < 2) { showToast("Le fichier CSV d'annuaire est vide ou invalide.", 'error'); return; }
-    const data = lines.slice(1).map(line => line.split(/[;,]/).map(v => v.replace(/^"|"$/g, '')));
-    let imported = 0;
-    data.forEach(cols => {
-      const isExtendedFormat = cols.length >= 9;
-      const isCurrentFormat = cols.length >= 8;
-      const nameIndex = isCurrentFormat ? 3 : 1;
-      if (!cols[nameIndex]) return;
-      state.contacts.push({
-        id: uid('ct'),
-        group: cols[0] || getDynamicList('directoryGroups')[0],
-        entity: isCurrentFormat ? (cols[1] || '') : '',
-        function: isCurrentFormat ? (cols[2] || '') : '',
-        name: cols[nameIndex] || '',
-        firstName: isExtendedFormat ? (cols[4] || '') : '',
-        phone1: cols[isCurrentFormat ? (isExtendedFormat ? 5 : 4) : 2] || '',
-        phone2: cols[isCurrentFormat ? (isExtendedFormat ? 6 : 5) : 3] || '',
-        email1: cols[isCurrentFormat ? (isExtendedFormat ? 7 : 6) : 4] || '',
-        email2: cols[isCurrentFormat ? (isExtendedFormat ? 8 : 7) : 5] || ''
+  if (!ensureWriteAccess()) return;
+  file.text()
+    .then(text => {
+      const rows = parseCsvRows(text);
+      if (rows.length < 2) { showToast("Le fichier CSV d'annuaire est vide ou invalide.", 'error'); return; }
+      const data = rows.slice(1);
+      let imported = 0;
+      data.forEach(cols => {
+        const isExtendedFormat = cols.length >= 9;
+        const isCurrentFormat = cols.length >= 8;
+        const nameIndex = isCurrentFormat ? 3 : 1;
+        if (!cols[nameIndex]) return;
+        state.contacts.push({
+          id: uid('ct'),
+          group: cols[0] || getDynamicList('directoryGroups')[0],
+          entity: isCurrentFormat ? (cols[1] || '') : '',
+          function: isCurrentFormat ? (cols[2] || '') : '',
+          name: cols[nameIndex] || '',
+          firstName: isExtendedFormat ? (cols[4] || '') : '',
+          phone1: cols[isCurrentFormat ? (isExtendedFormat ? 5 : 4) : 2] || '',
+          phone2: cols[isCurrentFormat ? (isExtendedFormat ? 6 : 5) : 3] || '',
+          email1: cols[isCurrentFormat ? (isExtendedFormat ? 7 : 6) : 4] || '',
+          email2: cols[isCurrentFormat ? (isExtendedFormat ? 8 : 7) : 5] || ''
+        });
+        imported += 1;
       });
-      imported += 1;
+      if (!imported) { showToast("Aucun contact exploitable n'a été trouvé dans ce fichier CSV.", 'error'); return; }
+      persist();
+      renderDirectory();
+      showToast(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
+    })
+    .catch((error) => {
+      showToast(`Import CSV impossible : ${error.message || String(error)}`, 'error');
     });
-    if (!imported) { showToast("Aucun contact exploitable n'a été trouvé dans ce fichier CSV.", 'error'); return; }
-    persist();
-    renderDirectory();
-    showToast(`Import CSV terminé : ${imported} contact(s) ajouté(s).`);
-  });
 }
 
 function exportContactsPDF() {
@@ -4734,6 +4805,7 @@ function saveTool() {
     logo
   };
   if (!data.name || !data.url) { showToast("Le nom et l'URL de l'outil sont requis.", 'error'); return; }
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.tools.unshift(data);
   persist();
@@ -4743,6 +4815,7 @@ function saveTool() {
 
 async function deleteTool(id) {
   if (!await confirmAsync('Supprimer cet outil ?')) return;
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.tools, id);
   persist();
   renderTools();
@@ -4845,6 +4918,7 @@ function savePlanItem() {
     url: document.getElementById('planUrl').value.trim()
   };
   if (!data.item) { showToast("L'item de planification est requis.", 'error'); return; }
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.planItems.unshift(data);
   persist();
@@ -4853,6 +4927,7 @@ function savePlanItem() {
 }
 
 function deletePlanItem(id) {
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.planItems, id);
   getSelectionSet('planItems').delete(id);
   persist();
@@ -5102,6 +5177,7 @@ function ensurePlanningStatsUI() {
 
 function handleTableRowKey(event, callback) {
   if (!event || typeof callback !== 'function') return;
+  if (event.target?.closest?.('.table-select-col')) return;
   if (isInteractiveTableTarget(event.target)) return;
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
@@ -5194,6 +5270,7 @@ function saveDutyAvailability() {
     showToast("Cet agent a déjà une disponibilité enregistrée pour cette semaine.", 'error');
     return;
   }
+  if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
   persist();
@@ -5210,6 +5287,7 @@ async function deleteDutyAvailabilityFromDialog() {
 }
 
 function deleteDutyAvailability(id) {
+  if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, id);
   persist();
   renderDutyCalendar();
@@ -5924,12 +6002,27 @@ function applyRemoteStateSnapshot(snapshot) {
 }
 
 async function restoreRemoteStateAfterLogin() {
-  const remoteState = await window.SICODApi?.system?.hydrateState?.();
-  if (remoteState && typeof remoteState === 'object') {
-    applyRemoteStateSnapshot(remoteState);
-  } else {
-    refreshStorageStatus();
+  const remoteState = await hydrateRemoteStateAndReferences(() => window.SICODApi?.system?.hydrateState?.());
+  if (remoteState.kind !== 'loaded') refreshStorageStatus();
+}
+
+function normalizeHydratedRemoteStateResult(result) {
+  if (result && typeof result === 'object' && typeof result.kind === 'string') {
+    return result;
   }
+  if (result && typeof result === 'object') {
+    return { kind: 'loaded', state: result };
+  }
+  return { kind: 'unavailable', state: null };
+}
+
+async function hydrateRemoteStateAndReferences(loadRemoteState) {
+  const result = normalizeHydratedRemoteStateResult(await Promise.resolve(loadRemoteState?.()));
+  if (result.kind === 'loaded' && result.state && typeof result.state === 'object') {
+    applyRemoteStateSnapshot(result.state);
+  }
+  await hydrateReferenceCatalogFromSupabase();
+  return result;
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -6175,7 +6268,7 @@ function updateCloudStateStatus(message, tone = 'info') {
 }
 
 function serializeCurrentState() {
-  return JSON.stringify(state, null, 2);
+  return JSON.stringify(createPersistedStateSnapshot(state), null, 2);
 }
 
 function exportCurrentStateJson() {
@@ -6228,7 +6321,7 @@ async function pushCurrentStateToSupabase() {
   try {
     ensureStateIntegrity();
     await pushReferenceCatalogToSupabase();
-    await window.SICODApi.system.pushRemoteState(state);
+    await window.SICODApi.system.pushRemoteState(createPersistedStateSnapshot(state));
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
       <strong>Synchronisation terminée.</strong><br>
@@ -6251,8 +6344,7 @@ async function reloadStateFromSupabase() {
       refreshStorageStatus();
       return;
     }
-    applyRemoteStateSnapshot(payload.state);
-    await hydrateReferenceCatalogFromSupabase();
+    await hydrateRemoteStateAndReferences(() => payload.state);
     renderAll();
     const counts = countStateRecords(state);
     updateCloudStateStatus(`
@@ -6277,8 +6369,8 @@ function bindCloudStateImport() {
       const raw = await file.text();
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') throw new Error('Le fichier JSON ne contient pas un état valide.');
-      await window.SICODApi.system.pushRemoteState(parsed);
-      const fresh = Object.assign(buildDefaultState(), parsed);
+      await window.SICODApi.system.pushRemoteState(createPersistedStateSnapshot(parsed));
+      const fresh = normalizeRemoteStateSnapshot(parsed);
       Object.keys(state).forEach((key) => delete state[key]);
       Object.assign(state, fresh);
       ensureStateIntegrity();
@@ -6757,6 +6849,7 @@ async function saveSettings() {
       return;
     }
   }
+  if (!ensureWriteAccess()) return;
   state.settings.theme = get('settingTheme')?.value || 'light';
   state.settings.dashboardBanner = '';
   state.settings.psFormat = get('settingPsFormat')?.value || 'detail';
@@ -6926,15 +7019,11 @@ async function resumeApplicationAfterInactivity(force = false) {
       const authState = window.SICODApi?.system?.getAuthState?.() || {};
       if (authState.authenticated) {
         try {
-          const remoteState = await withTimeout(
-            Promise.resolve(window.SICODApi?.system?.hydrateState?.()),
+          await withTimeout(
+            hydrateRemoteStateAndReferences(() => window.SICODApi?.system?.hydrateState?.()),
             12000,
             "Le rechargement distant a expiré."
           );
-          if (remoteState && typeof remoteState === 'object') {
-            applyRemoteStateSnapshot(remoteState);
-          }
-          await withTimeout(Promise.resolve(hydrateReferenceCatalogFromSupabase()), 12000, "Le rechargement du référentiel a expiré.");
         } catch (error) {
           console.warn('[Resume] Reprise distante incomplète :', error.message || error);
         }
@@ -6970,20 +7059,17 @@ refreshAuthGate();
 window.SICODApi?.auth?.restoreSession?.()
   .then(() => {
     refreshAuthGate();
-  
-    return Promise.all([
-      window.SICODApi?.system?.hydrateState?.(),
-      hydrateReferenceCatalogFromSupabase()
-    ]);
+    return hydrateRemoteStateAndReferences(() => window.SICODApi?.system?.hydrateState?.());
   })
-  .then(async ([remoteState]) => {
-    if (remoteState && typeof remoteState === 'object') {
-      applyRemoteStateSnapshot(remoteState);
-      await hydrateReferenceCatalogFromSupabase();
+  .then((remoteState) => {
+    if (remoteState.kind === 'loaded') {
+      renderAll();
+    } else if (remoteState.kind === 'empty') {
+      refreshStorageStatus();
+      persist();
       renderAll();
     } else {
       refreshStorageStatus();
-      persist();
       renderAll();
     }
   })
@@ -7021,11 +7107,3 @@ window.addEventListener('pageshow', () => {
 });
 
 
-function editSelectedPS(){
- if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
- openPSForm(state.selectedPSId);
-}
-function deleteSelectedPS(){
- if(!state.selectedPSId){showToast('Sélectionnez un point de situation','error');return;}
- deletePS(state.selectedPSId);
-}

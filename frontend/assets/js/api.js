@@ -24,6 +24,13 @@
     dutyAgents: 'reference_duty_agents',
     reflexFamilies: 'reference_reflex_families'
   };
+  const UI_STATE_KEYS = Object.freeze([
+    'selectedCommandId',
+    'currentEventId',
+    'currentEventWorkspaceTab',
+    'selectedPSId',
+    'selectedFiche'
+  ]);
   const runtimeConfig = sanitizeRemoteConfig(global.SICODConfig || {});
   let storageMode = runtimeConfig.enabled ? 'auth-required' : 'local-browser';
   let saveTimer = null;
@@ -256,6 +263,15 @@
 
   function setRemoteMode(mode) {
     storageMode = mode;
+  }
+
+  function sanitizeAppStatePayload(state) {
+    const source = state && typeof state === 'object' ? state : {};
+    const payload = JSON.parse(JSON.stringify(source));
+    UI_STATE_KEYS.forEach((key) => {
+      delete payload[key];
+    });
+    return payload;
   }
 
   function getStorageModeLabel() {
@@ -723,13 +739,14 @@
       notifyWriteDenied();
       return;
     }
-    const serialized = JSON.stringify(data || {});
+    const payload = sanitizeAppStatePayload(data);
+    const serialized = JSON.stringify(payload);
     if (serialized === lastSerializedState) return;
     lastSerializedState = serialized;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       try {
-        await upsertSupabaseAppState(data);
+        await upsertSupabaseAppState(payload);
       } catch (error) {
         console.warn('[Storage] Synchronisation Supabase impossible :', error.message);
       }
@@ -739,17 +756,20 @@
   async function hydrateRemoteState() {
     if (!isSupabaseConfigured()) {
       setRemoteMode('local-browser');
-      return null;
+      return { kind: 'disabled', state: null };
     }
     const session = await ensureSupabaseSession();
-    if (!session?.accessToken) return null;
+    if (!session?.accessToken) return { kind: 'auth-required', state: null };
     try {
       const payload = await getSupabaseAppState();
       setRemoteMode('supabase');
-      return payload?.state && typeof payload.state === 'object' ? payload.state : null;
+      if (payload?.state && typeof payload.state === 'object') {
+        return { kind: 'loaded', state: payload.state, updatedAt: payload.updatedAt || null };
+      }
+      return { kind: 'empty', state: null, updatedAt: payload?.updatedAt || null };
     } catch {
       setRemoteMode('auth-required');
-      return null;
+      return { kind: 'error', state: null };
     }
   }
 
@@ -771,9 +791,10 @@
     if (!isSupabaseConfigured()) throw new Error('Supabase n’est pas configuré.');
     const session = await ensureSupabaseSession();
     if (!session?.accessToken) throw new Error('Connexion Supabase requise.');
-    const payload = await upsertSupabaseAppState(state);
+    const sanitizedState = sanitizeAppStatePayload(state);
+    const payload = await upsertSupabaseAppState(sanitizedState);
     setRemoteMode('supabase');
-    lastSerializedState = JSON.stringify(state || {});
+    lastSerializedState = JSON.stringify(sanitizedState);
     return payload;
   }
 
