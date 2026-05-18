@@ -261,6 +261,16 @@
     });
   }
 
+  async function supabaseRpc(functionName, args = {}, requireAuth = true) {
+    return supabaseRequest(`/rest/v1/rpc/${encodeURIComponent(functionName)}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(args || {})
+    }, requireAuth);
+  }
+
   function setRemoteMode(mode) {
     storageMode = mode;
   }
@@ -547,6 +557,39 @@
     }));
   }
 
+  async function findSupabaseManagedUserByEmail(email) {
+    ensureRequiredRole('admin', 'AccÃ¨s rÃ©servÃ© aux administrateurs.');
+    const cleanEmail = String(email || '').trim();
+    if (!cleanEmail) return null;
+    const payload = await supabaseRpc('admin_find_auth_user_by_email', {
+      target_email: cleanEmail
+    }, true);
+    const row = Array.isArray(payload) ? payload[0] : payload;
+    if (!row?.user_id) return null;
+    return {
+      userId: String(row.user_id),
+      email: String(row.email || cleanEmail),
+      displayName: String(row.display_name || row.email || cleanEmail)
+    };
+  }
+
+  async function setSupabaseManagedUserPassword(userId, password) {
+    ensureRequiredRole('admin', 'AccÃ¨s rÃ©servÃ© aux administrateurs.');
+    const targetUserId = String(userId || '').trim();
+    const cleanPassword = String(password || '');
+    if (!targetUserId) throw new Error('Utilisateur cible manquant.');
+    const passwordError = validatePasswordStrength(cleanPassword, { requireValue: true });
+    if (passwordError) throw new Error(passwordError);
+    await supabaseRpc('admin_set_auth_user_password', {
+      target_user_id: targetUserId,
+      new_password: cleanPassword
+    }, true);
+    return {
+      success: true,
+      userId: targetUserId
+    };
+  }
+
   async function saveSupabaseManagedUserRoles(userId, roles) {
     ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const targetUserId = String(userId || '').trim();
@@ -583,11 +626,20 @@
     const password = String(value.password || '');
     const lastSeenAt = String(value.lastSeenAt || '').trim() || new Date().toISOString();
     const roles = normalizeRoleList([value.role || 'lecture']);
+    const hadUserId = !!userId;
     if (!email) throw new Error('E-mail utilisateur requis.');
+    const existingAuthUser = !userId ? await findSupabaseManagedUserByEmail(email) : null;
+    if (existingAuthUser?.userId) {
+      userId = existingAuthUser.userId;
+      if (password) await setSupabaseManagedUserPassword(userId, password);
+    }
     if (!userId) {
       const created = await signUpManagedUser(email, password, displayName);
       userId = String(created?.id || '').trim();
       if (!userId) throw new Error("Création Auth impossible : identifiant utilisateur non retourné.");
+    }
+    if (hadUserId && password) {
+      await setSupabaseManagedUserPassword(userId, password);
     }
     await supabaseRequest('/rest/v1/app_user_directory?on_conflict=user_id', {
       method: 'POST',
@@ -615,11 +667,8 @@
     ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const targetUserId = String(userId || '').trim();
     if (!targetUserId) throw new Error('Utilisateur cible manquant.');
-    await supabaseRequest(`/rest/v1/app_user_roles?user_id=eq.${encodeURIComponent(targetUserId)}`, {
-      method: 'DELETE'
-    }, true);
-    await supabaseRequest(`/rest/v1/app_user_directory?user_id=eq.${encodeURIComponent(targetUserId)}`, {
-      method: 'DELETE'
+    await supabaseRpc('admin_delete_auth_user', {
+      target_user_id: targetUserId
     }, true);
     return {
       success: true,

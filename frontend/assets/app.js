@@ -6747,9 +6747,9 @@ function ensureManagedUserDialog() {
           <div><label for="managedUserEmail">E-mail</label><input id="managedUserEmail" type="email" autocomplete="off"></div>
           <div><label for="managedUserName">Nom affiché</label><input id="managedUserName" autocomplete="off"></div>
           <div><label for="managedUserRole">Rôle</label><select id="managedUserRole"><option value="lecture">Lecteur</option><option value="redacteur">Contributeur</option><option value="admin">Administrateur</option></select></div>
-          <div><label for="managedUserPassword">Mot de passe initial</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Requis uniquement à la création"></div>
+          <div><label for="managedUserPassword">Mot de passe</label><input id="managedUserPassword" type="password" autocomplete="new-password" placeholder="Laisser vide pour conserver le mot de passe actuel"></div>
         </div>
-        <p class="help">Mot de passe minimal : 12 caractères avec majuscule, minuscule, chiffre et caractère spécial. Les comptes sont créés par un administrateur et le mot de passe oublié doit être géré manuellement par réinitialisation administrative.</p>
+        <p class="help">Mot de passe minimal : 12 caractères avec majuscule, minuscule, chiffre et caractère spécial. Il est requis à la création et facultatif en modification : si vous en saisissez un nouveau, il remplace immédiatement l'ancien mot de passe du compte.</p>
         <div class="tool-actions">
           <button class="fr-btn" type="button" onclick="saveManagedUserAccount()">Enregistrer</button>
         </div>

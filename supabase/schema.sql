@@ -296,10 +296,108 @@ as $$
   );
 $$;
 
+create or replace function public.admin_find_auth_user_by_email(target_email text)
+returns table (
+  user_id uuid,
+  email text,
+  display_name text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_app_admin(auth.uid()) then
+    raise exception 'Accès réservé aux administrateurs.';
+  end if;
+
+  return query
+  select
+    u.id,
+    u.email::text,
+    coalesce(u.raw_user_meta_data ->> 'display_name', u.email::text) as display_name
+  from auth.users u
+  where lower(u.email::text) = lower(trim(target_email))
+  limit 1;
+end;
+$$;
+
+create or replace function public.admin_set_auth_user_password(target_user_id uuid, new_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  normalized_password text := trim(coalesce(new_password, ''));
+begin
+  if not public.is_app_admin(auth.uid()) then
+    raise exception 'Accès réservé aux administrateurs.';
+  end if;
+  if target_user_id is null then
+    raise exception 'Utilisateur cible manquant.';
+  end if;
+  if normalized_password = '' then
+    raise exception 'Mot de passe manquant.';
+  end if;
+
+  update auth.users
+  set
+    encrypted_password = crypt(normalized_password, gen_salt('bf')),
+    updated_at = timezone('utc'::text, now()),
+    recovery_token = '',
+    recovery_sent_at = null,
+    reauthentication_token = '',
+    reauthentication_sent_at = null
+  where id = target_user_id;
+
+  if not found then
+    raise exception 'Utilisateur introuvable dans auth.users.';
+  end if;
+
+  return jsonb_build_object('success', true, 'user_id', target_user_id);
+end;
+$$;
+
+create or replace function public.admin_delete_auth_user(target_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_app_admin(auth.uid()) then
+    raise exception 'Accès réservé aux administrateurs.';
+  end if;
+  if target_user_id is null then
+    raise exception 'Utilisateur cible manquant.';
+  end if;
+  if auth.uid() = target_user_id then
+    raise exception 'Le compte connecté ne peut pas être supprimé ici.';
+  end if;
+
+  delete from public.app_user_roles where user_id = target_user_id;
+  delete from public.app_user_directory where user_id = target_user_id;
+  delete from auth.users where id = target_user_id;
+
+  if not found then
+    raise exception 'Utilisateur introuvable dans auth.users.';
+  end if;
+
+  return jsonb_build_object('success', true, 'user_id', target_user_id);
+end;
+$$;
+
 revoke all on function public.is_app_admin(uuid) from public;
 revoke all on function public.has_app_admin() from public;
+revoke all on function public.admin_find_auth_user_by_email(text) from public;
+revoke all on function public.admin_set_auth_user_password(uuid, text) from public;
+revoke all on function public.admin_delete_auth_user(uuid) from public;
 grant execute on function public.is_app_admin(uuid) to authenticated;
 grant execute on function public.has_app_admin() to authenticated;
+grant execute on function public.admin_find_auth_user_by_email(text) to authenticated;
+grant execute on function public.admin_set_auth_user_password(uuid, text) to authenticated;
+grant execute on function public.admin_delete_auth_user(uuid) to authenticated;
 
 drop policy if exists "app_settings_authenticated_rw" on public.app_settings;
 create policy "app_settings_authenticated_rw"
