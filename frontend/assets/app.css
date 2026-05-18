@@ -839,12 +839,12 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .directory-group{margin-bottom:1rem}
 .directory-group .card-body{overflow-x:auto}
 .directory-group .table{min-width:100%}
-.directory-group .table th:nth-child(1){width:14%}
-.directory-group .table th:nth-child(1){width:18%}
+.directory-group .table th:nth-child(1){width:3rem}
 .directory-group .table th:nth-child(2){width:18%}
-.directory-group .table th:nth-child(3){width:24%}
-.directory-group .table th:nth-child(4){width:18%}
-.directory-group .table th:nth-child(5){width:22%}
+.directory-group .table th:nth-child(3){width:18%}
+.directory-group .table th:nth-child(4){width:24%}
+.directory-group .table th:nth-child(5){width:18%}
+.directory-group .table th:nth-child(6){width:22%}
 #directorySearch{border-radius:.75rem}
 #page-directory .page-inner{max-width:96rem}
 .compact-list{margin:0;padding-left:1rem}
@@ -862,13 +862,14 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .user-admin-table th:nth-child(2){width:18%}
 .user-admin-table th:nth-child(3){width:24%}
 .user-admin-table th:nth-child(4){width:5rem}
-.planning-table th:nth-child(1){width:10%}
-.planning-table th:nth-child(2){width:12%}
-.planning-table th:nth-child(3){width:30%}
-.planning-table th:nth-child(4){width:8%}
-.planning-table th:nth-child(5){width:10%}
-.planning-table th:nth-child(6){width:14%}
-.planning-table th:nth-child(7){width:16%}
+.planning-table th:nth-child(1){width:3rem}
+.planning-table th:nth-child(2){width:10%}
+.planning-table th:nth-child(3){width:12%}
+.planning-table th:nth-child(4){width:30%}
+.planning-table th:nth-child(5){width:8%}
+.planning-table th:nth-child(6){width:10%}
+.planning-table th:nth-child(7){width:14%}
+.planning-table th:nth-child(8){width:16%}
 .event-workspace .table th:last-child,
 .event-workspace .table td:last-child{width:9rem;white-space:nowrap}
 .duty-availability-table th:last-child,
@@ -889,6 +890,11 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .table-row-clickable{cursor:pointer}
 .table-row-clickable:focus-visible{outline:2px solid var(--color-primary, #000091);outline-offset:-2px}
 .table-row-clickable:hover td{background:#f8f8ff}
+.table-row-clickable.is-selected td{background:#eef4ff}
+.table-select-col{width:3rem;text-align:center}
+.table-select-col input{margin:0}
+.bulk-toolbar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;margin:0 0 1rem}
+.bulk-toolbar-info{font-weight:600}
 #managedUserDialog{max-width:calc(100vw - 2rem);width:min(32rem,calc(100vw - 2rem))}
 #managedUserDialog form.card{width:100%}
 #managedUserDialog .grid-2{grid-template-columns:1fr}

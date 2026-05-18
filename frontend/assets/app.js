@@ -167,6 +167,10 @@ const userAdminState = {
   loaded: false,
   items: []
 };
+const selectionState = {
+  contacts: new Set(),
+  planItems: new Set()
+};
 if (isAuthLocked()) clearLocalStateCache();
 
 function ensureStateIntegrity() {
@@ -679,6 +683,102 @@ function confirmAsync(msg) {
     no.onclick = () => cleanup(false);
     dialog.showModal();
   });
+}
+
+function isInteractiveTableTarget(target) {
+  return !!target?.closest?.('input, button, a, label, select, textarea');
+}
+
+function getSelectionSet(type) {
+  return selectionState[type] instanceof Set ? selectionState[type] : new Set();
+}
+
+function setVisibleSelection(type, ids, checked, renderFnName) {
+  const set = getSelectionSet(type);
+  (Array.isArray(ids) ? ids : []).forEach((id) => {
+    if (!id) return;
+    if (checked) set.add(id);
+    else set.delete(id);
+  });
+  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+}
+
+function toggleSingleSelection(type, id, checked, renderFnName) {
+  if (!id) return;
+  const set = getSelectionSet(type);
+  if (checked) set.add(id);
+  else set.delete(id);
+  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+}
+
+function clearSelection(type, renderFnName) {
+  getSelectionSet(type).clear();
+  if (renderFnName && typeof window[renderFnName] === 'function') window[renderFnName]();
+}
+
+function isSelectionChecked(type, id) {
+  return getSelectionSet(type).has(id);
+}
+
+function sanitizeSelection(type, validIds) {
+  const valid = new Set((Array.isArray(validIds) ? validIds : []).filter(Boolean));
+  const set = getSelectionSet(type);
+  Array.from(set).forEach((id) => {
+    if (!valid.has(id)) set.delete(id);
+  });
+}
+
+function toJsStringArrayLiteral(values) {
+  return `[${(Array.isArray(values) ? values : []).filter(Boolean).map((value) => `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`).join(',')}]`;
+}
+
+function buildSelectionToolbar(type, visibleIds, selectedLabel, renderFnName, deleteFnName) {
+  const ids = (Array.isArray(visibleIds) ? visibleIds : []).filter(Boolean);
+  const selectedCount = ids.filter((id) => isSelectionChecked(type, id)).length;
+  const allSelected = ids.length > 0 && selectedCount === ids.length;
+  return `<div class="bulk-toolbar">
+    <div class="bulk-toolbar-info">${selectedCount} ${esc(selectedLabel)} sélectionnée(s)</div>
+    <div class="list-actions">
+      <button class="fr-btn secondary small" type="button" onclick="${allSelected ? `clearSelection('${type}','${renderFnName}')` : `setVisibleSelection('${type}', ${toJsStringArrayLiteral(ids)}, true, '${renderFnName}')`}">${allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}</button>
+      <button class="fr-btn danger small" type="button" onclick="${deleteFnName}()" ${selectedCount ? '' : 'disabled'}>Supprimer la sélection</button>
+    </div>
+  </div>`;
+}
+
+function buildSelectionHeaderCheckbox(type, ids, renderFnName) {
+  const cleanIds = (Array.isArray(ids) ? ids : []).filter(Boolean);
+  const selectedCount = cleanIds.filter((id) => isSelectionChecked(type, id)).length;
+  const checked = cleanIds.length > 0 && selectedCount === cleanIds.length;
+  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onclick="event.stopPropagation()" onchange="setVisibleSelection('${type}', ${toJsStringArrayLiteral(cleanIds)}, this.checked, '${renderFnName}')">`;
+}
+
+function buildSelectionRowCheckbox(type, id, renderFnName) {
+  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleSingleSelection('${type}','${id}', this.checked, '${renderFnName}')">`;
+}
+
+function handleSelectableRowClick(event, callback) {
+  if (isInteractiveTableTarget(event?.target)) return;
+  if (typeof callback === 'function') callback();
+}
+
+async function deleteSelectedContacts() {
+  const ids = Array.from(getSelectionSet('contacts'));
+  if (!ids.length) return;
+  if (!await confirmAsync(`Supprimer ${ids.length} contact(s) sélectionné(s) ?`)) return;
+  ids.forEach((id) => window.SICODDataModel?.archiveRecord(state.contacts, id));
+  clearSelection('contacts');
+  persist();
+  renderDirectory();
+}
+
+async function deleteSelectedPlanItems() {
+  const ids = Array.from(getSelectionSet('planItems'));
+  if (!ids.length) return;
+  if (!await confirmAsync(`Supprimer ${ids.length} planification(s) sélectionnée(s) ?`)) return;
+  ids.forEach((id) => window.SICODDataModel?.archiveRecord(state.planItems, id));
+  clearSelection('planItems');
+  persist();
+  renderPlanning();
 }
 
 /** Marque binaire pour les exports PDF */
@@ -1306,7 +1406,7 @@ function buildDirectoryDocxSections() {
     if (!entityMap.has(entityName)) entityMap.set(entityName, []);
     entityMap.get(entityName).push({
       fonction: contact.function || '',
-      identity: contact.name || '',
+      identity: formatContactFullName(contact),
       tel1: contact.phone1 || '',
       tel2: contact.phone2 || '',
       email1: contact.email1 || '',
@@ -2494,7 +2594,7 @@ function buildReflexSheetHtmlTokens() {
 function buildDirectoryHtmlTokens() {
   const groups = getDynamicList('directoryGroups');
   const contacts = [...getActiveItems(state.contacts)].sort((a, b) =>
-    [a.group || '', a.entity || '', a.name || ''].join('|').localeCompare([b.group || '', b.entity || '', b.name || ''].join('|'), 'fr')
+    [a.group || '', a.entity || '', formatContactFullName(a)].join('|').localeCompare([b.group || '', b.entity || '', formatContactFullName(b)].join('|'), 'fr')
   );
   let renderedGroups = 0;
   const directory = groups.map(group => {
@@ -2506,7 +2606,7 @@ function buildDirectoryHtmlTokens() {
       entities.map(entity => {
         const entityItems = groupItems.filter(c => ((c.entity || '').trim() || 'Sans entité') === entity);
         const rows = entityItems.map(c => `<tr>
-          <td>${esc(c.function || '')}</td><td>${esc(c.name || '')}</td><td>${esc(c.entity || '')}</td>
+          <td>${esc(c.function || '')}</td><td>${esc(formatContactFullName(c))}</td><td>${esc(c.entity || '')}</td>
           <td>${esc(c.phone1 || '')}</td><td>${esc(c.phone2 || '')}</td><td>${esc([c.email1 || '', c.email2 || ''].filter(Boolean).join(' / '))}</td>
         </tr>`).join('');
         return `<section class="sicod-keep-together"><h3>${esc(entity)}</h3><table class="table"><thead><tr><th>Fonction</th><th>Nom</th><th>Entité</th><th>Téléphone 1</th><th>Téléphone 2</th><th>E-mail</th></tr></thead><tbody>${rows}</tbody></table></section>`;
@@ -4376,6 +4476,12 @@ function triggerContactImport() {
   if (el) { el.value = ''; el.click(); }
 }
 
+function formatContactFullName(contact) {
+  const lastName = String(contact?.name || '').trim();
+  const firstName = String(contact?.firstName || '').trim();
+  return [lastName, firstName].filter(Boolean).join(' ') || lastName || firstName || '—';
+}
+
 
 function getDirectoryEntityOptions(extra) {
   return Array.from(new Set([
@@ -4392,6 +4498,7 @@ function openContactForm(id) {
   setSelectOptions(document.getElementById('contactEntity'), getDirectoryEntityOptions(c?.entity || ''), c?.entity || getDirectoryEntityOptions()[0] || '');
   document.getElementById('contactFunction').value = c?.function || '';
   document.getElementById('contactName').value = c?.name || '';
+  document.getElementById('contactFirstName').value = c?.firstName || '';
   document.getElementById('contactPhone1').value = c?.phone1 || '';
   document.getElementById('contactPhone2').value = c?.phone2 || '';
   document.getElementById('contactEmail1').value = c?.email1 || '';
@@ -4416,6 +4523,7 @@ function saveContact() {
     entityLabelSnapshot: entitySnapshot.label,
     function: document.getElementById('contactFunction').value.trim(),
     name: document.getElementById('contactName').value.trim(),
+    firstName: document.getElementById('contactFirstName').value.trim(),
     phone1: document.getElementById('contactPhone1').value.trim(),
     phone2: document.getElementById('contactPhone2').value.trim(),
     email1: document.getElementById('contactEmail1').value.trim(),
@@ -4432,6 +4540,7 @@ function saveContact() {
 async function deleteContact(id) {
   if (!await confirmAsync('Supprimer ce contact ?')) return;
   window.SICODDataModel?.archiveRecord(state.contacts, id);
+  getSelectionSet('contacts').delete(id);
   persist();
   renderDirectory();
 }
@@ -4448,36 +4557,41 @@ function renderDirectory() {
   if (!directoryList) return;
   const q = (document.getElementById('directorySearch')?.value || '').toLowerCase().trim();
   const groups = getDynamicList('directoryGroups');
-  const contacts = getActiveItems(state.contacts).filter(c => !q || [c.group, c.entity, c.function, c.name, c.phone1, c.phone2, c.email1, c.email2].join(' ').toLowerCase().includes(q));
+  const contacts = getActiveItems(state.contacts).filter(c => !q || [c.group, c.entity, c.function, c.name, c.firstName, c.phone1, c.phone2, c.email1, c.email2].join(' ').toLowerCase().includes(q));
+  sanitizeSelection('contacts', contacts.map((c) => c.id));
   const countEl = document.getElementById('directoryCount');
   if (countEl) countEl.textContent = `${contacts.length} contact(s)`;
 
-  directoryList.innerHTML = groups.map(group => {
+  const groupBlocks = groups.map(group => {
     const items = contacts.filter(c => (c.group || '') === group);
     if (!items.length) return '';
     const sortedItems = sortItems(items, 'directory', 'entity', 'asc', {
       entity: (c) => c.entity || '',
       function: (c) => c.function || '',
-      name: (c) => c.name || '',
+      name: (c) => formatContactFullName(c),
       phone1: (c) => c.phone1 || '',
       email1: (c) => c.email1 || ''
     });
+    const groupIds = sortedItems.map((c) => c.id);
     return `<div class="card directory-group">
       <div class="card-header"><h2 class="card-title">${esc(group)}</h2></div>
-      <div class="card-body"><table class="table directory-table"><thead><tr>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphones','entity','asc')}${sortableTh('directory','email1','E-mails','entity','asc')}</tr></thead><tbody>${
-        sortedItems.map(c => `<tr class="table-row-clickable" tabindex="0" role="button" onclick="openContactForm('${c.id}')" onkeydown="handleTableRowKey(event, () => openContactForm('${c.id}'))">
-          <td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(c.name)}</td>
+      <div class="card-body"><table class="table directory-table"><thead><tr><th class="table-select-col">${buildSelectionHeaderCheckbox('contacts', groupIds, 'renderDirectory')}</th>${sortableTh('directory','entity','Entité','entity','asc')}${sortableTh('directory','function','Fonction','entity','asc')}${sortableTh('directory','name','Nom','entity','asc')}${sortableTh('directory','phone1','Téléphones','entity','asc')}${sortableTh('directory','email1','E-mails','entity','asc')}</tr></thead><tbody>${
+        sortedItems.map(c => `<tr class="table-row-clickable ${isSelectionChecked('contacts', c.id) ? 'is-selected' : ''}" tabindex="0" role="button" onclick="handleSelectableRowClick(event, () => openContactForm('${c.id}'))" onkeydown="handleTableRowKey(event, () => openContactForm('${c.id}'))">
+          <td class="table-select-col">${buildSelectionRowCheckbox('contacts', c.id, 'renderDirectory')}</td><td>${esc(c.entity||'')}</td><td>${esc(c.function||'')}</td><td>${esc(formatContactFullName(c))}</td>
           <td><div class="table-stack"><span>${esc(c.phone1||'—')}</span>${c.phone2 ? `<span>${esc(c.phone2)}</span>` : ''}</div></td>
           <td><div class="table-stack"><span>${esc(c.email1||'—')}</span>${c.email2 ? `<span>${esc(c.email2)}</span>` : ''}</div></td>
         </tr>`).join('')
       }</tbody></table></div>
     </div>`;
-  }).join('') || '<p class="help">Aucun contact enregistré.</p>';
+  }).join('');
+  directoryList.innerHTML = contacts.length
+    ? `${buildSelectionToolbar('contacts', contacts.map((c) => c.id), 'contact', 'renderDirectory', 'deleteSelectedContacts')}${groupBlocks}`
+    : '<p class="help">Aucun contact enregistré.</p>';
 }
 
 function exportContactsCSV() {
-  const rows = [['Groupe','Entité','Fonction','Nom','Téléphone 1','Téléphone 2','e-mail 1','e-mail 2'],
-    ...getActiveItems(state.contacts).map(c => [c.group,c.entity||'',c.function||'',c.name,c.phone1||'',c.phone2||'',c.email1||'',c.email2||''])];
+  const rows = [['Groupe','Entité','Fonction','Nom','Prénom','Téléphone 1','Téléphone 2','e-mail 1','e-mail 2'],
+    ...getActiveItems(state.contacts).map(c => [c.group,c.entity||'',c.function||'',c.name,c.firstName||'',c.phone1||'',c.phone2||'',c.email1||'',c.email2||''])];
   downloadCSV('annuaire.csv', rows);
 }
 
@@ -4489,19 +4603,21 @@ function importContactsCSV(file) {
     const data = lines.slice(1).map(line => line.split(/[;,]/).map(v => v.replace(/^"|"$/g, '')));
     let imported = 0;
     data.forEach(cols => {
-      const isNewFormat = cols.length >= 8;
-      const nameIndex = isNewFormat ? 3 : 1;
+      const isExtendedFormat = cols.length >= 9;
+      const isCurrentFormat = cols.length >= 8;
+      const nameIndex = isCurrentFormat ? 3 : 1;
       if (!cols[nameIndex]) return;
       state.contacts.push({
         id: uid('ct'),
         group: cols[0] || getDynamicList('directoryGroups')[0],
-        entity: isNewFormat ? (cols[1] || '') : '',
-        function: isNewFormat ? (cols[2] || '') : '',
+        entity: isCurrentFormat ? (cols[1] || '') : '',
+        function: isCurrentFormat ? (cols[2] || '') : '',
         name: cols[nameIndex] || '',
-        phone1: cols[isNewFormat ? 4 : 2] || '',
-        phone2: cols[isNewFormat ? 5 : 3] || '',
-        email1: cols[isNewFormat ? 6 : 4] || '',
-        email2: cols[isNewFormat ? 7 : 5] || ''
+        firstName: isExtendedFormat ? (cols[4] || '') : '',
+        phone1: cols[isCurrentFormat ? (isExtendedFormat ? 5 : 4) : 2] || '',
+        phone2: cols[isCurrentFormat ? (isExtendedFormat ? 6 : 5) : 3] || '',
+        email1: cols[isCurrentFormat ? (isExtendedFormat ? 7 : 6) : 4] || '',
+        email2: cols[isCurrentFormat ? (isExtendedFormat ? 8 : 7) : 5] || ''
       });
       imported += 1;
     });
@@ -4738,6 +4854,7 @@ function savePlanItem() {
 
 function deletePlanItem(id) {
   window.SICODDataModel?.archiveRecord(state.planItems, id);
+  getSelectionSet('planItems').delete(id);
   persist();
   renderPlanning();
 }
@@ -4767,6 +4884,7 @@ function renderPlanning() {
   const items = q
     ? allItems.filter(p => [p.type, p.risk, p.item, p.priority, p.status, p.observation].join(' ').toLowerCase().includes(q))
     : allItems;
+  sanitizeSelection('planItems', items.map((p) => p.id));
   const ordered = sortItems(items, 'planning', 'approvalDate', 'desc', {
     type: (p) => p.type || '',
     risk: (p) => p.risk || '',
@@ -4776,9 +4894,11 @@ function renderPlanning() {
     approvalDate: (p) => p.approvalDate || '',
     observation: (p) => p.observation || ''
   });
+  const orderedIds = ordered.map((p) => p.id);
   planningList.innerHTML = ordered.length
-    ? `<div class="table-wrap"><table class="table planning-table"><thead><tr>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}</tr></thead><tbody>${
-      ordered.map(p => `<tr class="table-row-clickable" tabindex="0" role="button" onclick="openPlanForm('${p.id}')" onkeydown="handleTableRowKey(event, () => openPlanForm('${p.id}'))">
+    ? `${buildSelectionToolbar('planItems', orderedIds, 'planification', 'renderPlanning', 'deleteSelectedPlanItems')}<div class="table-wrap"><table class="table planning-table"><thead><tr><th class="table-select-col">${buildSelectionHeaderCheckbox('planItems', orderedIds, 'renderPlanning')}</th>${sortableTh('planning','type','Type','approvalDate','desc')}${sortableTh('planning','risk','Risque','approvalDate','desc')}${sortableTh('planning','item','Item','approvalDate','desc')}${sortableTh('planning','priority','Priorité','approvalDate','desc')}${sortableTh('planning','status','Statut','approvalDate','desc')}${sortableTh('planning','approvalDate',"Date d'approbation",'approvalDate','desc')}${sortableTh('planning','observation','Observation','approvalDate','desc')}</tr></thead><tbody>${
+      ordered.map(p => `<tr class="table-row-clickable ${isSelectionChecked('planItems', p.id) ? 'is-selected' : ''}" tabindex="0" role="button" onclick="handleSelectableRowClick(event, () => openPlanForm('${p.id}'))" onkeydown="handleTableRowKey(event, () => openPlanForm('${p.id}'))">
+          <td class="table-select-col">${buildSelectionRowCheckbox('planItems', p.id, 'renderPlanning')}</td>
           <td>${esc(p.type || '')}</td>
           <td>${esc(p.risk || '')}</td>
           <td><div class="event-title-block"><span class="event-label">${esc(p.item || '')}</span><span class="table-meta">${p.url ? 'Lien Resana disponible' : ''}</span></div></td>
@@ -4982,6 +5102,7 @@ function ensurePlanningStatsUI() {
 
 function handleTableRowKey(event, callback) {
   if (!event || typeof callback !== 'function') return;
+  if (isInteractiveTableTarget(event.target)) return;
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     callback();
