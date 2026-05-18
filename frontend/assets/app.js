@@ -752,11 +752,23 @@ function buildSelectionHeaderCheckbox(type, ids, renderFnName) {
   const cleanIds = (Array.isArray(ids) ? ids : []).filter(Boolean);
   const selectedCount = cleanIds.filter((id) => isSelectionChecked(type, id)).length;
   const checked = cleanIds.length > 0 && selectedCount === cleanIds.length;
-  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onclick="event.stopPropagation()" onchange="setVisibleSelection('${type}', ${toJsStringArrayLiteral(cleanIds)}, this.checked, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner toutes les lignes visibles" ${checked ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="handleSelectionHeaderToggle(event, '${type}', ${toJsStringArrayLiteral(cleanIds)}, '${renderFnName}')">`;
 }
 
 function buildSelectionRowCheckbox(type, id, renderFnName) {
-  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleSingleSelection('${type}','${id}', this.checked, '${renderFnName}')">`;
+  return `<input type="checkbox" aria-label="Sélectionner la ligne" ${isSelectionChecked(type, id) ? 'checked' : ''} onpointerdown="event.stopPropagation()" onclick="handleSelectionRowToggle(event, '${type}', '${id}', '${renderFnName}')">`;
+}
+
+function handleSelectionHeaderToggle(event, type, ids, renderFnName) {
+  event?.stopPropagation?.();
+  const checked = !!event?.currentTarget?.checked;
+  setVisibleSelection(type, ids, checked, renderFnName);
+}
+
+function handleSelectionRowToggle(event, type, id, renderFnName) {
+  event?.stopPropagation?.();
+  const checked = !!event?.currentTarget?.checked;
+  toggleSingleSelection(type, id, checked, renderFnName);
 }
 
 function handleSelectableRowClick(event, callback) {
@@ -3034,7 +3046,7 @@ function renderDashboard() {
   const dashDuty = document.getElementById('dashboardDutyPair');
   if (dashDuty) {
     const today = todayISO();
-    const week = (state.dutySchedule || []).find(w => w.start <= today && w.end >= today);
+    const week = (state.dutySchedule || []).find((entry) => entry.start <= today && entry.end >= today);
     if (week) {
       const roles = getDynamicList('dutyRoles');
       dashDuty.innerHTML = `<table class="table"><tbody>
@@ -4761,11 +4773,86 @@ function handleToolLogoFile(file) {
   r.readAsDataURL(file);
 }
 
-function updateToolThumb(src) {
+function normalizeToolUrl(url) {
+  try {
+    return new URL(String(url || '').trim());
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildToolLogoCandidates(url, logo = '') {
+  const candidates = [];
+  const pushCandidate = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized || candidates.includes(normalized)) return;
+    candidates.push(normalized);
+  };
+  pushCandidate(logo);
+  const parsed = normalizeToolUrl(url);
+  if (!parsed) return candidates;
+  pushCandidate(`${parsed.origin}/favicon.ico`);
+  pushCandidate(`https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(parsed.href)}`);
+  pushCandidate(`https://icons.duckduckgo.com/ip3/${encodeURIComponent(parsed.hostname)}.ico`);
+  return candidates;
+}
+
+function resolveToolLogoSrc(toolOrUrl, logo = '') {
+  if (toolOrUrl && typeof toolOrUrl === 'object') {
+    const candidates = buildToolLogoCandidates(toolOrUrl.url || '', toolOrUrl.logo || '');
+    return candidates[0] || 'assets/icons/Icones/System/apps-2-line.svg';
+  }
+  const candidates = buildToolLogoCandidates(toolOrUrl, logo);
+  return candidates[0] || 'assets/icons/Icones/System/apps-2-line.svg';
+}
+
+function buildToolLogoFallbackAttr(toolOrUrl, logo = '') {
+  const candidates = toolOrUrl && typeof toolOrUrl === 'object'
+    ? buildToolLogoCandidates(toolOrUrl.url || '', toolOrUrl.logo || '')
+    : buildToolLogoCandidates(toolOrUrl, logo);
+  return esc(JSON.stringify(candidates));
+}
+
+function handleToolLogoError(img, fallbackSources) {
+  if (!img) return;
+  let sources = [];
+  if (Array.isArray(fallbackSources)) {
+    sources = fallbackSources.slice();
+  } else {
+    try {
+      sources = JSON.parse(img.dataset.fallbackSources || '[]');
+    } catch (error) {
+      sources = [];
+    }
+  }
+  const current = String(img.currentSrc || img.src || '').trim();
+  const next = sources.find((source) => String(source || '').trim() && String(source).trim() !== current);
+  if (next) {
+    img.dataset.fallbackSources = JSON.stringify(sources.filter((source) => source !== next));
+    img.src = next;
+    return;
+  }
+  img.onerror = null;
+  img.src = 'assets/icons/Icones/System/apps-2-line.svg';
+}
+
+function updateToolThumb(src, url = '') {
   const thumb = document.getElementById('toolLogoThumb');
   if (!thumb) return;
-  if (src) { thumb.src = src; thumb.style.display = 'block'; }
-  else { thumb.removeAttribute('src'); thumb.style.display = 'none'; }
+  const resolvedUrl = String(url || document.getElementById('toolUrl')?.value || '').trim();
+  const fallbackSources = buildToolLogoCandidates(resolvedUrl, src);
+  const initialSrc = fallbackSources[0] || '';
+  if (initialSrc) {
+    thumb.dataset.fallbackSources = JSON.stringify(fallbackSources.slice(1));
+    thumb.onerror = function() {
+      handleToolLogoError(this);
+    };
+    thumb.src = initialSrc;
+    thumb.style.display = 'block';
+  } else {
+    thumb.removeAttribute('src');
+    thumb.style.display = 'none';
+  }
 }
 
 function autoFillToolLogo() {
@@ -4773,7 +4860,7 @@ function autoFillToolLogo() {
   const toolUrl = document.getElementById('toolUrl');
   if (!toolLogo || toolLogo.value.trim()) return;
   const guessed = guessFavicon(toolUrl?.value.trim() || '');
-  if (guessed) { toolLogo.value = guessed; updateToolThumb(guessed); }
+  if (guessed) { toolLogo.value = guessed; updateToolThumb(guessed, toolUrl?.value.trim() || ''); }
 }
 
 function openToolForm(id) {
@@ -4786,7 +4873,7 @@ function openToolForm(id) {
   document.getElementById('toolPassword').value = t?.password || '';
   const logoVal = t?.logo || '';
   document.getElementById('toolLogo').value = logoVal;
-  updateToolThumb(logoVal);
+  updateToolThumb(logoVal, t?.url || '');
   document.getElementById('toolDialog').showModal();
 }
 
@@ -4854,7 +4941,7 @@ function renderTools() {
   toolsGrid.innerHTML = tools.length
     ? tools.map(t => `<div class="tool-card">
         <div class="tool-card-head">
-          <img class="tool-logo" src="${esc(t.logo || 'assets/icons/Icones/System/apps-2-line.svg')}" alt="" onerror="this.onerror=null;this.src='assets/icons/Icones/System/apps-2-line.svg'">
+          <img class="tool-logo" src="${esc(resolveToolLogoSrc(t))}" alt="" data-fallback-sources="${buildToolLogoFallbackAttr(t)}" onerror="handleToolLogoError(this)">
           <h3 class="tool-title">${esc(t.name)}</h3>
         </div>
         <div class="tool-desc">${esc(t.description || '')}</div>
@@ -5273,8 +5360,12 @@ function saveDutyAvailability() {
   if (!ensureWriteAccess()) return;
   if (existing) Object.assign(existing, data);
   else state.dutyAvailabilities.push(data);
+  regenerateDutyScheduleIfPresent();
   persist();
   document.getElementById('dutyDialog').close();
+  renderDashboard();
+  renderDutySchedule();
+  renderDutyStats();
   renderDutyCalendar();
 }
 
@@ -5289,7 +5380,11 @@ async function deleteDutyAvailabilityFromDialog() {
 function deleteDutyAvailability(id) {
   if (!ensureWriteAccess()) return;
   window.SICODDataModel?.archiveRecord(state.dutyAvailabilities, id);
+  regenerateDutyScheduleIfPresent();
   persist();
+  renderDashboard();
+  renderDutySchedule();
+  renderDutyStats();
   renderDutyCalendar();
 }
 
@@ -5432,12 +5527,7 @@ function ensureDutySettingsUI() {
   `;
 }
 
-function generateDutySchedule() {
-  const startVal = document.getElementById('dutyPeriodStart')?.value || todayISO();
-  const endVal = document.getElementById('dutyPeriodEnd')?.value || startVal;
-  const startInput = parseDateLocal(startVal), endInput = parseDateLocal(endVal);
-  if (!startInput || !endInput || endInput < startInput) { showToast('Définissez une période de planning valide.', 'error'); return; }
-
+function buildDutySchedule(startInput, endInput) {
   cleanupInvalidDutyAvailabilities();
   const roles = getCurrentDutyRoles();
   const role1 = roles[0] || 'Astreinte 1', role2 = roles[1] || 'Astreinte 2';
@@ -5526,7 +5616,27 @@ function generateDutySchedule() {
     });
     return assignment;
   });
+}
+
+function regenerateDutyScheduleIfPresent() {
+  const currentRows = state.dutySchedule || [];
+  if (!currentRows.length) return false;
+  const startInput = parseDateLocal(currentRows[0]?.start || '');
+  const endInput = parseDateLocal(currentRows[currentRows.length - 1]?.end || '');
+  if (!startInput || !endInput || endInput < startInput) return false;
+  state.dutySchedule = buildDutySchedule(startInput, endInput);
+  return true;
+}
+
+function generateDutySchedule() {
+  const startVal = document.getElementById('dutyPeriodStart')?.value || todayISO();
+  const endVal = document.getElementById('dutyPeriodEnd')?.value || startVal;
+  const startInput = parseDateLocal(startVal), endInput = parseDateLocal(endVal);
+  if (!startInput || !endInput || endInput < startInput) { showToast('Définissez une période de planning valide.', 'error'); return; }
+
+  state.dutySchedule = buildDutySchedule(startInput, endInput);
   persist();
+  renderDashboard();
   renderDutySchedule();
   renderDutyStats();
 }
@@ -5580,6 +5690,7 @@ function updateDutyAssignment(index, key, value) {
   }
   state.dutySchedule[index][key] = value ? { name: value } : null;
   persist();
+  renderDashboard();
   renderDutySchedule();
 }
 
