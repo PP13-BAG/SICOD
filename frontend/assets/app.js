@@ -1653,6 +1653,19 @@ function resolvePlanExpiryDate(item) {
   return shiftIsoDateByYears(item.approvalDate, years);
 }
 
+function refreshPlanExpiryDatesFromSettings() {
+  getActiveItems(state.planItems).forEach((item) => {
+    if (!item) return;
+    const approvalDate = String(item.approvalDate || '').trim();
+    if (!approvalDate) {
+      item.expiryDate = '';
+      return;
+    }
+    const years = getPlanExpiryYearsForType(item.type) || 4;
+    item.expiryDate = shiftIsoDateByYears(approvalDate, years);
+  });
+}
+
 function syncPlanExpiryFromApproval(force = false) {
   const approvalEl = document.getElementById('planApproval');
   const expiryEl = document.getElementById('planExpiry');
@@ -6995,6 +7008,7 @@ async function saveSettings() {
       }
     });
     state.settings.planExpiryYears = rules;
+    refreshPlanExpiryDatesFromSettings();
   }
 
   if (nextPassword) {
