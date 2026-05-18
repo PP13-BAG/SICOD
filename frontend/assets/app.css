@@ -892,7 +892,22 @@ dialog .list-actions > .fr-btn.danger{order:3}
 .table-row-clickable:hover td{background:#f8f8ff}
 .table-row-clickable.is-selected td{background:#eef4ff}
 .table-select-col{width:3rem;text-align:center}
-.table-select-col input{margin:0}
+.table-select-col input[type="checkbox"]{
+  width:1.1rem;
+  min-width:1.1rem;
+  height:1.1rem;
+  min-height:1.1rem;
+  margin:0;
+  padding:0;
+  border:0;
+  box-shadow:none;
+  appearance:auto;
+  -webkit-appearance:checkbox;
+  accent-color:var(--blue-france);
+  cursor:pointer;
+  vertical-align:middle;
+  background:transparent;
+}
 .bulk-toolbar{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;margin:0 0 1rem}
 .bulk-toolbar-info{font-weight:600}
 #managedUserDialog{max-width:calc(100vw - 2rem);width:min(32rem,calc(100vw - 2rem))}
