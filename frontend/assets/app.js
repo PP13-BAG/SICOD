@@ -879,6 +879,29 @@ function parseCsvRows(text, delimiter = detectCsvDelimiter(text)) {
   return rows;
 }
 
+function normalizeCsvHeaderLabel(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizeImportedDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const fr = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (fr) {
+    const [, d, m, y] = fr;
+    return `${y}-${String(Number(m)).padStart(2, '0')}-${String(Number(d)).padStart(2, '0')}`;
+  }
+  return '';
+}
+
 const DOCX_TEMPLATE_FILES = {
   mainCourante: 'assets/templates/docx/main-courante.docx',
   psDetail: 'assets/templates/docx/ps-detail.docx',
@@ -4971,6 +4994,131 @@ function renderTools() {
 // 13. MODULE PLANIFICATION
 // ────────────────────────────────────────────────────────────────────────────
 
+function triggerPlanningImport() {
+  const el = document.getElementById('planningImportFile');
+  if (el) { el.value = ''; el.click(); }
+}
+
+function getPlanningCsvValue(cols, headerMap, names, fallbackIndex = -1) {
+  const normalizedNames = Array.isArray(names) ? names.map(normalizeCsvHeaderLabel) : [normalizeCsvHeaderLabel(names)];
+  if (headerMap) {
+    const matchedKey = normalizedNames.find((name) => Object.prototype.hasOwnProperty.call(headerMap, name));
+    if (matchedKey != null) return String(cols[headerMap[matchedKey]] || '').trim();
+  }
+  return fallbackIndex >= 0 ? String(cols[fallbackIndex] || '').trim() : '';
+}
+
+function buildImportedPlanItemFromCsv(cols, headerMap) {
+  const rawType = getPlanningCsvValue(cols, headerMap, ['type de plan', 'type plan', 'type'], 0);
+  const rawRisk = getPlanningCsvValue(cols, headerMap, ['typologie de risque', 'type de risque', 'risque'], 1);
+  const rawItem = getPlanningCsvValue(cols, headerMap, ['item', 'intitule', 'intitule du plan', 'plan', 'nom'], 2);
+  const rawPriority = getPlanningCsvValue(cols, headerMap, ['priorite'], 3);
+  const rawStatus = getPlanningCsvValue(cols, headerMap, ['statut de planification', 'statut'], 4);
+  const rawApprovalDate = getPlanningCsvValue(cols, headerMap, ['date d approbation', 'date approbation', 'approbation'], 5);
+  const rawExpiryDate = getPlanningCsvValue(cols, headerMap, ['date d expiration', 'date expiration', 'expiration'], cols.length >= 9 ? 6 : -1);
+  const rawObservation = getPlanningCsvValue(cols, headerMap, ['observation', 'observations', 'commentaire', 'commentaires'], cols.length >= 9 ? 7 : 6);
+  const rawUrl = getPlanningCsvValue(cols, headerMap, ['url resana lien vers le plan', 'url resana', 'lien vers le plan', 'url', 'lien'], cols.length >= 9 ? 8 : -1);
+
+  if (!rawItem) return null;
+
+  const typeSnapshot = getReferenceSnapshot('planTypes', rawType || getDynamicList('planTypes')[0] || '');
+  const riskSnapshot = getReferenceSnapshot('planRiskTypes', rawRisk);
+  const prioritySnapshot = getReferenceSnapshot('planPriorities', rawPriority || getDynamicList('planPriorities')[0] || '');
+  const statusSnapshot = getReferenceSnapshot('planStatuses', rawStatus || getDynamicList('planStatuses')[0] || '');
+  const approvalDate = normalizeImportedDate(rawApprovalDate);
+  const importedExpiryDate = normalizeImportedDate(rawExpiryDate);
+  const expiryDate = approvalDate
+    ? (shiftIsoDateByYears(approvalDate, getPlanExpiryYearsForType(typeSnapshot.label) || 4) || importedExpiryDate)
+    : importedExpiryDate;
+
+  return {
+    id: uid('plan'),
+    type: typeSnapshot.label,
+    typeId: typeSnapshot.id,
+    typeLabelSnapshot: typeSnapshot.label,
+    risk: riskSnapshot.label,
+    riskTypeId: riskSnapshot.id,
+    riskLabelSnapshot: riskSnapshot.label,
+    item: rawItem,
+    priority: prioritySnapshot.label,
+    priorityId: prioritySnapshot.id,
+    priorityLabelSnapshot: prioritySnapshot.label,
+    status: statusSnapshot.label,
+    statusId: statusSnapshot.id,
+    statusLabelSnapshot: statusSnapshot.label,
+    approvalDate,
+    expiryDate,
+    observation: rawObservation,
+    url: rawUrl
+  };
+}
+
+function importPlanningCSV(file) {
+  if (!file) return;
+  if (!ensureWriteAccess()) return;
+  file.text()
+    .then(text => {
+      const rows = parseCsvRows(text);
+      if (!rows.length) { showToast("Le fichier CSV de planification est vide ou invalide.", 'error'); return; }
+      const normalizedHeaders = (rows[0] || []).map(normalizeCsvHeaderLabel);
+      const knownHeaders = new Set([
+        'type de plan',
+        'type plan',
+        'type',
+        'typologie de risque',
+        'type de risque',
+        'risque',
+        'item',
+        'intitule',
+        'intitule du plan',
+        'plan',
+        'priorite',
+        'statut',
+        'statut de planification',
+        'date d approbation',
+        'date approbation',
+        'approbation',
+        'date d expiration',
+        'date expiration',
+        'expiration',
+        'observation',
+        'observations',
+        'commentaire',
+        'commentaires',
+        'url',
+        'lien',
+        'url resana',
+        'lien vers le plan',
+        'url resana lien vers le plan'
+      ]);
+      const hasHeader = normalizedHeaders.some((header) => knownHeaders.has(header));
+      const headerMap = hasHeader
+        ? normalizedHeaders.reduce((acc, header, index) => {
+          if (header && !(header in acc)) acc[header] = index;
+          return acc;
+        }, {})
+        : null;
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+      let imported = 0;
+      dataRows.forEach((cols) => {
+        const record = buildImportedPlanItemFromCsv(cols, headerMap);
+        if (!record) return;
+        state.planItems.unshift(record);
+        imported += 1;
+      });
+      if (!imported) { showToast("Aucune planification exploitable n'a été trouvée dans ce fichier CSV.", 'error'); return; }
+      applyPlanExpiryRules();
+      persist();
+      renderPlanning();
+      renderPlanningStats();
+      renderDashboard();
+      showToast(`Import CSV terminé : ${imported} planification(s) ajoutée(s).`);
+    })
+    .catch((error) => {
+      showToast(`Import CSV impossible : ${error.message || String(error)}`, 'error');
+    });
+}
+
 function openPlanForm(id) {
   const p = id ? byId(state.planItems, id) : null;
   document.getElementById('planId').value = p?.id || '';
@@ -5014,7 +5162,7 @@ function savePlanItem() {
     statusId: statusSnapshot.id,
     statusLabelSnapshot: statusSnapshot.label,
     approvalDate: document.getElementById('planApproval').value,
-    expiryDate: document.getElementById('planExpiry').value || shiftIsoDateByYears(document.getElementById('planApproval').value, 4),
+    expiryDate: document.getElementById('planExpiry').value || shiftIsoDateByYears(document.getElementById('planApproval').value, getPlanExpiryYearsForType(typeSnapshot.label) || 4),
     observation: document.getElementById('planObservation').value.trim(),
     url: document.getElementById('planUrl').value.trim()
   };
@@ -5097,8 +5245,8 @@ function renderPlanning() {
 }
 
 function exportPlanningCSV() {
-  const rows = [['Type de plan','Risque','Item','Priorité','Statut',"Date d'approbation",'Observation'],
-    ...getActiveItems(state.planItems).map(p => [p.type||'',p.risk||'',p.item||'',p.priority||'',p.status||'',p.approvalDate||'',p.observation||''])];
+  const rows = [['Type de plan','Risque','Item','Priorité','Statut',"Date d'approbation","Date d'expiration",'Observation','URL Resana / Lien vers le plan'],
+    ...getActiveItems(state.planItems).map(p => [p.type||'',p.risk||'',p.item||'',p.priority||'',p.status||'',p.approvalDate||'',resolvePlanExpiryDate(p)||'',p.observation||'',p.url||''])];
   downloadCSV('planification.csv', rows);
 }
 
