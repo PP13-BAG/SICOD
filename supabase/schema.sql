@@ -326,7 +326,7 @@ create or replace function public.admin_set_auth_user_password(target_user_id uu
 returns jsonb
 language plpgsql
 security definer
-set search_path = ''
+set search_path = public, extensions
 as $$
 declare
   normalized_password text := trim(coalesce(new_password, ''));
@@ -343,7 +343,7 @@ begin
 
   update auth.users
   set
-    encrypted_password = crypt(normalized_password, gen_salt('bf')),
+    encrypted_password = extensions.crypt(normalized_password, extensions.gen_salt('bf')),
     updated_at = timezone('utc'::text, now()),
     recovery_token = '',
     recovery_sent_at = null,

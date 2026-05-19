@@ -4946,7 +4946,12 @@ function openToolAccess(id) {
 function renderTools() {
   const toolsGrid = document.getElementById('toolsGrid');
   if (!toolsGrid) return;
-  const tools = getActiveItems(state.tools);
+  const q = (document.getElementById('toolsSearch')?.value || '').toLowerCase().trim();
+  const activeTools = getActiveItems(state.tools);
+  const tools = (q
+    ? activeTools.filter((t) => [t.name, t.description, t.url, t.username].join(' ').toLowerCase().includes(q))
+    : activeTools
+  ).slice().sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'fr', { sensitivity: 'base' }));
   toolsGrid.innerHTML = tools.length
     ? tools.map(t => `<div class="tool-card">
         <div class="tool-card-head">

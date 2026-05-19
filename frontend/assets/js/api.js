@@ -271,6 +271,11 @@
     }, requireAuth);
   }
 
+  function isMissingSupabaseRpc(error, functionName) {
+    const message = String(error?.message || error || '');
+    return message.includes('schema cache') && message.includes(`public.${functionName}`);
+  }
+
   function setRemoteMode(mode) {
     storageMode = mode;
   }
@@ -561,9 +566,15 @@
     ensureRequiredRole('admin', 'AccÃ¨s rÃ©servÃ© aux administrateurs.');
     const cleanEmail = String(email || '').trim();
     if (!cleanEmail) return null;
-    const payload = await supabaseRpc('admin_find_auth_user_by_email', {
-      target_email: cleanEmail
-    }, true);
+    let payload = null;
+    try {
+      payload = await supabaseRpc('admin_find_auth_user_by_email', {
+        target_email: cleanEmail
+      }, true);
+    } catch (error) {
+      if (isMissingSupabaseRpc(error, 'admin_find_auth_user_by_email')) return null;
+      throw error;
+    }
     const row = Array.isArray(payload) ? payload[0] : payload;
     if (!row?.user_id) return null;
     return {
@@ -580,10 +591,17 @@
     if (!targetUserId) throw new Error('Utilisateur cible manquant.');
     const passwordError = validatePasswordStrength(cleanPassword, { requireValue: true });
     if (passwordError) throw new Error(passwordError);
-    await supabaseRpc('admin_set_auth_user_password', {
-      target_user_id: targetUserId,
-      new_password: cleanPassword
-    }, true);
+    try {
+      await supabaseRpc('admin_set_auth_user_password', {
+        target_user_id: targetUserId,
+        new_password: cleanPassword
+      }, true);
+    } catch (error) {
+      if (isMissingSupabaseRpc(error, 'admin_set_auth_user_password')) {
+        throw new Error("La mise a jour du mot de passe necessite d'appliquer la migration SQL Supabase des fonctions d'administration.");
+      }
+      throw error;
+    }
     return {
       success: true,
       userId: targetUserId
@@ -667,9 +685,16 @@
     ensureRequiredRole('admin', 'Accès réservé aux administrateurs.');
     const targetUserId = String(userId || '').trim();
     if (!targetUserId) throw new Error('Utilisateur cible manquant.');
-    await supabaseRpc('admin_delete_auth_user', {
-      target_user_id: targetUserId
-    }, true);
+    try {
+      await supabaseRpc('admin_delete_auth_user', {
+        target_user_id: targetUserId
+      }, true);
+    } catch (error) {
+      if (isMissingSupabaseRpc(error, 'admin_delete_auth_user')) {
+        throw new Error("La suppression complete du compte necessite d'appliquer la migration SQL Supabase des fonctions d'administration.");
+      }
+      throw error;
+    }
     return {
       success: true,
       userId: targetUserId
